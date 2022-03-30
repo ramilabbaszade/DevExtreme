@@ -45,12 +45,56 @@ const tableMarkup = '\
     </table>\
     <br><br>';
 
+const tableMarkupWithHeaderRow = '\
+    <table>\
+        <thead>\
+            <tr>\
+                <th>0</th>\
+                <th>1</th>\
+                <th>2</th>\
+                <th>3</th>\
+            </tr>\
+        </thead>\
+        <tbody>\
+            <tr>\
+                <td>0_0 content</td>\
+                <td>0_1</td>\
+                <td>0_2</td>\
+                <td style="text-align: right;">0_3</td>\
+            </tr>\
+            <tr>\
+                <td>1_0</td>\
+                <td>1_1</td>\
+                <td>1_2</td>\
+                <td style="text-align: right;">1_3</td>\
+            </tr>\
+            <tr>\
+                <td>2_0</td>\
+                <td>2_1</td>\
+                <td>2_2</td>\
+                <td style="text-align: right;">2_3</td>\
+            </tr>\
+        </tbody>\
+    </table>\
+    <br><br>';
+
 const tableMarkupWidth = '\
     <table>\
         <tr>\
             <td width="50px">0_0</td>\
             <td width="100px">0_1</td>\
             <td width="50px">0_2</td>\
+            <td width="50px">0_3</td>\
+        </tr>\
+    </table>\
+    <br><br>';
+
+const tableMarkupAutoWidth = '\
+    <table>\
+        <tr>\
+            <td width="50px">0_0</td>\
+            <td>0_1</td>\
+            <td>0_2</td>\
             <td width="50px">0_3</td>\
         </tr>\
     </table>\
@@ -73,7 +117,7 @@ const tableMarkupHeight = '\
 function getColumnBordersOffset($table) {
     const columnBorderOffsets = [];
 
-    $table.find('tr').eq(0).find('td').each((i, column) => {
+    $table.find('tr').eq(0).find('th, td').each((i, column) => {
         const columnWidth = $(column).outerWidth();
 
         columnBorderOffsets.push(i === 0 ? columnWidth : columnBorderOffsets[i - 1] + columnWidth);
@@ -85,7 +129,7 @@ function getColumnBordersOffset($table) {
 function getRowBordersOffset($table) {
     const rowBorderOffsets = [];
 
-    $table.find('td:first-child').each((i, row) => {
+    $table.find('th:first-child, td:first-child').each((i, row) => {
         const rowHeight = $(row).outerHeight();
 
         rowBorderOffsets.push(i === 0 ? rowHeight : rowBorderOffsets[i - 1] + rowHeight);
@@ -94,7 +138,7 @@ function getRowBordersOffset($table) {
     return rowBorderOffsets;
 }
 
-function checkColumnResizerPositions(assert, $lineResizerElements, lineBorderOffsets, cssProperty = 'left') {
+function checkResizerPositions(assert, $lineResizerElements, lineBorderOffsets, cssProperty = 'left') {
     $lineResizerElements.each((i, item) => {
         const resizerLeftPosition = parseInt($(item).css(cssProperty));
         assert.roughEqual(resizerLeftPosition, lineBorderOffsets[i] - DRAGGABLE_ELEMENT_OFFSET, 1.01, 'Resizer has the same offset as the column border, index = ' + i);
@@ -184,6 +228,22 @@ module('Table resizing integration', {
             const $resizeFrame = this.$element.find(`.${DX_COLUMN_RESIZE_FRAME_CLASS}`);
 
             assert.strictEqual($resizeFrame.length, 0, 'Frame is not created for table');
+        });
+
+        test('Table resuizing should support value change to null at runtime', function(assert) {
+            this.createWidget();
+            this.clock.tick(TIME_TO_WAIT);
+
+            try {
+                this.instance.option('tableResizing', null);
+                this.clock.tick(TIME_TO_WAIT);
+
+                const $resizeFrame = this.$element.find(`.${DX_COLUMN_RESIZE_FRAME_CLASS}`);
+
+                assert.strictEqual($resizeFrame.length, 0, 'Frame is not created for table');
+            } catch(e) {
+                assert.ok(false);
+            }
         });
 
         test('Frame is removed if tableResizing.enabled option is disabled at runtime', function(assert) {
@@ -292,6 +352,24 @@ module('Table resizing integration', {
 
             assert.strictEqual($resizeFrame.length, 1, 'Frame is created');
         });
+
+        test('Table with fixed width should not change size after tableResizing is enabled', function(assert) {
+            this.createWidget({
+                width: 700,
+                tableResizing: { enabled: false },
+                value: tableMarkupAutoWidth
+            });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $table = this.$element.find('table').eq(0);
+            $table.css('width', 400);
+
+            this.instance.option('tableResizing', { enabled: true });
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            assert.roughEqual($table.outerWidth(), 400, 2, 'Table width is correct');
+        });
     });
 
     module('frame position', {}, () => {
@@ -328,7 +406,7 @@ module('Table resizing integration', {
             assert.strictEqual(tablePosition.height, framePosition.height, 'Height is correrct');
             assert.strictEqual(tablePosition.width, framePosition.width, 'Width is correrct');
 
-            checkColumnResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
+            checkResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
         });
 
         test('Check table resize frames positions for a two tables', function(assert) {
@@ -374,7 +452,7 @@ module('Table resizing integration', {
             const $table = this.$element.find('table');
             const columnBorderOffsets = getColumnBordersOffset($table);
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
         });
 
         test('Check column resizers elements and border positions after drag', function(assert) {
@@ -399,7 +477,71 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($table);
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+
+            assert.roughEqual(columnBorderOffsets[0], 150, 2.01);
+            assert.roughEqual(columnBorderOffsets[1], 200, 2.01);
+        });
+
+        test('The widget raise valueChange event after resizing (T1041884)', function(assert) {
+            assert.expect(4);
+            const done = assert.async();
+            const valueChangedSpy = sinon.spy();
+            this.createWidget({ onValueChanged: valueChangedSpy, width: 430 });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+            const initialEditorValue = this.instance.option('value');
+
+            $columnResizerElements.eq(0)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(20, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+            const history = this.quillInstance.getModule('history').stack;
+
+            this.clock.restore();
+
+            setTimeout(() => {
+                assert.strictEqual(valueChangedSpy.callCount, 1, 'value change event is raised');
+                assert.ok(valueChangedSpy.getCall(0).args[0].event, 'event is saved');
+                assert.notStrictEqual(this.instance.option('value'), initialEditorValue, 'value was changed');
+                assert.strictEqual(history.undo.length, 1, 'history modul detect resizing');
+
+                done();
+            }, TIME_TO_WAIT);
+        });
+
+        test('Check column resizers elements and border positions after drag if the table has a header row (T1028207)', function(assert) {
+            this.createWidget({ width: 430, value: tableMarkupWithHeaderRow });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+            const $table = this.$element.find('table');
+
+            $columnResizerElements.eq(0)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(50, 10)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            const columnBorderOffsets = getColumnBordersOffset($table);
+
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
 
             assert.roughEqual(columnBorderOffsets[0], 150, 2.01);
             assert.roughEqual(columnBorderOffsets[1], 200, 2.01);
@@ -693,8 +835,8 @@ module('Table resizing integration', {
             const $columns = $table.find('tr').eq(0).find('td');
 
             each($columns, (_, element) => {
-                const styleAttr = $(element).attr('width') || '';
-                assert.ok(styleAttr.length >= 0);
+                const styleStyle = $(element).css('width') || '';
+                assert.ok(styleStyle.length >= 0);
             });
         });
 
@@ -747,6 +889,35 @@ module('Table resizing integration', {
                 .dragEnd();
 
             this.clock.tick(TIME_TO_WAIT);
+
+            assert.roughEqual($table.outerHeight(), startTableHeight + offset, 3);
+        });
+
+        test('Height of the table with header row was changed if we drag the row height resizer (T1028207)', function(assert) {
+            this.createWidget({ height: 300, value: tableMarkupWithHeaderRow });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $rowResizerElements = this.$element.find(`.${DX_ROW_RESIZER_CLASS}`);
+            const $table = this.$element.find('table');
+            const startTableHeight = $table.outerHeight();
+            const offset = 20;
+
+            $rowResizerElements.eq(1)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(0, offset)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            const rowBorderOffsets = getRowBordersOffset(this.$element.find('table').eq(0));
+
+            checkResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
 
             assert.roughEqual($table.outerHeight(), startTableHeight + offset, 3);
         });
@@ -921,7 +1092,7 @@ module('Table resizing integration', {
                 }
             });
 
-            checkColumnResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
+            checkResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
         });
     });
 
@@ -972,7 +1143,7 @@ module('Table resizing integration', {
     });
 
     module('API', {}, () => {
-        test('Table and columns width was saved if we apply new markup with td width attributes', function(assert) {
+        test('Table and columns width was saved if we apply new markup with td width styles', function(assert) {
             this.createWidget({ width: 630 });
             this.clock.tick(TIME_TO_WAIT);
 
@@ -1008,7 +1179,7 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($table);
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
         });
 
         test('Check columns widths and resizers positions after window resize', function(assert) {
@@ -1050,10 +1221,10 @@ module('Table resizing integration', {
 
             $table.find('tr').eq(0).find('td').each((i, columnElement) => {
                 assert.roughEqual($(columnElement).outerWidth(), expectedColumnsWidths[i], 2.01, 'Column has expected width, index = ' + i);
-                assert.roughEqual(parseInt($(columnElement).attr('width')), expectedColumnsWidths[i], 2.01, 'Column has expected width attr, index = ' + i);
+                assert.roughEqual(parseInt($(columnElement).css('width')), expectedColumnsWidths[i], 2.01, 'Column has expected width style, index = ' + i);
             });
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
         });
     });
 
@@ -1080,7 +1251,7 @@ module('Table resizing integration', {
             rowBorderOffsets = getRowBordersOffset(this.$element.find('table').eq(1));
             $rowResizerElements = $resizeFrames.eq(1).find(`.${DX_ROW_RESIZER_CLASS}`);
 
-            checkColumnResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
+            checkResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
 
             assert.strictEqual($resizeFrames.length, 2);
         });
@@ -1102,7 +1273,7 @@ module('Table resizing integration', {
             const rowBorderOffsets = getRowBordersOffset(this.$element.find('table').eq(0));
             const $rowResizerElements = $resizeFrames.eq(0).find(`.${DX_ROW_RESIZER_CLASS}`);
 
-            checkColumnResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
+            checkResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
 
             assert.strictEqual($resizeFrames.length, 1);
         });
@@ -1124,7 +1295,7 @@ module('Table resizing integration', {
             const rowBorderOffsets = getRowBordersOffset(this.$element.find('table').eq(0));
             const $rowResizerElements = $resizeFrames.eq(0).find(`.${DX_ROW_RESIZER_CLASS}`);
 
-            checkColumnResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
+            checkResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
         });
 
         test('Row resizers should be updated after some rows insert', function(assert) {
@@ -1146,7 +1317,7 @@ module('Table resizing integration', {
             const rowBorderOffsets = getRowBordersOffset(this.$element.find('table').eq(0));
             const $rowResizerElements = $resizeFrames.eq(0).find(`.${DX_ROW_RESIZER_CLASS}`);
 
-            checkColumnResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
+            checkResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
         });
 
         test('Row resizers should be updated after a row delete', function(assert) {
@@ -1166,7 +1337,7 @@ module('Table resizing integration', {
             const rowBorderOffsets = getRowBordersOffset(this.$element.find('table').eq(0));
             const $rowResizerElements = $resizeFrames.eq(0).find(`.${DX_ROW_RESIZER_CLASS}`);
 
-            checkColumnResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
+            checkResizerPositions(assert, $rowResizerElements, rowBorderOffsets, 'top');
         });
 
         test('Table should save custom column width after the first column deletion', function(assert) {
@@ -1226,7 +1397,7 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($tables.eq(0));
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
         });
 
         test('Columns widths should be updated after a some columns insert', function(assert) {
@@ -1344,7 +1515,7 @@ module('Table resizing integration', {
 
             $table.find('tr').eq(0).find('td').each((i, columnElement) => {
                 assert.roughEqual($(columnElement).outerWidth(), expectedColumnsWidths[i], 1.01, 'Column has expected width, index = ' + i);
-                assert.roughEqual(parseInt($(columnElement).attr('width')), expectedColumnsWidths[i], 1.01, 'Column has expected width attr, index = ' + i);
+                assert.roughEqual(parseInt($(columnElement).css('width')), expectedColumnsWidths[i], 1.01, 'Column has expected width style, index = ' + i);
             });
         });
 
@@ -1396,7 +1567,7 @@ module('Table resizing integration', {
 
             $table.find('tr').eq(0).find('td').each((i, columnElement) => {
                 assert.roughEqual($(columnElement).outerWidth(), expectedColumnsWidths[i], 1.01, 'Column has expected width, index = ' + i);
-                assert.roughEqual(parseInt($(columnElement).attr('width')), expectedColumnsWidths[i], 1.01, 'Column has expected width attr, index = ' + i);
+                assert.roughEqual(parseInt($(columnElement).css('width')), expectedColumnsWidths[i], 1.01, 'Column has expected width style, index = ' + i);
             });
         });
 
@@ -1421,7 +1592,7 @@ module('Table resizing integration', {
             const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
             const columnBorderOffsets = getColumnBordersOffset($table);
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
 
             assert.roughEqual($table.outerWidth(), tableWidth, 2, 'Table width is not changed');
         });
@@ -1557,7 +1728,7 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($tables.eq(0));
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
         });
 
         test('Column resizers should works correctly after the table structure update after resize', function(assert) {
@@ -1604,7 +1775,7 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($tables.eq(0));
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets);
         });
 
         test('Table should have a correct width if it has not anough place after insert rows', function(assert) {
@@ -1634,10 +1805,352 @@ module('Table resizing integration', {
 
             $table.find('tr').eq(0).find('td').each((i, columnElement) => {
                 assert.roughEqual($(columnElement).outerWidth(), minColumnWidth, 1.01, 'Column has expected width, index = ' + i);
-                assert.roughEqual(parseInt($(columnElement).attr('width')), minColumnWidth, 1.01, 'Column has expected width attr, index = ' + i);
+                assert.roughEqual(parseInt($(columnElement).css('width')), minColumnWidth, 1.01, 'Column has expected width style, index = ' + i);
             });
 
             assert.roughEqual($table.outerWidth(), minColumnWidth * 8, 2, 'Table width');
+        });
+    });
+
+    module('history integration', {}, () => {
+        test('The widget can revert table resizing by undo if table has columns with auto width', function(assert) {
+            assert.expect(6);
+            const done = assert.async();
+            this.createWidget({ width: 432 });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+
+            $columnResizerElements.eq(2)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(-40, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            this.clock.restore();
+
+            setTimeout(() => {
+                this.instance.undo();
+                const $table = this.$element.find('table');
+
+                setTimeout(() => {
+                    $table.find('tr').eq(0).find('td').each((i, columnElement) => {
+                        assert.roughEqual($(columnElement).outerWidth(), 100, 2, 'Column has expected width, index = ' + i);
+                    });
+
+                    const history = this.quillInstance.getModule('history');
+                    assert.strictEqual(history.stack.undo.length, 0, 'undo history stack is correct');
+                    assert.strictEqual(history.stack.redo.length, 1, 'redo history stack is correct');
+
+                    done();
+                }, TIME_TO_WAIT);
+
+            }, TIME_TO_WAIT);
+        });
+
+        test('The widget can revert table resizing by redo if table has columns with auto width', function(assert) {
+            assert.expect(3);
+            const done = assert.async();
+            this.createWidget({ width: 432 });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+
+            $columnResizerElements.eq(2)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(-40, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            this.clock.restore();
+
+            setTimeout(() => {
+
+                this.instance.undo();
+                this.instance.redo();
+
+                const $table = this.$element.find('table');
+
+                const $columns = $table.find('tr').eq(0).find('td');
+
+
+                setTimeout(() => {
+                    assert.roughEqual($columns.eq(2).outerWidth(), 60, 2, 'Changes is reverted for the resized column');
+                    assert.roughEqual($columns.eq(3).outerWidth(), 140, 2, 'Changes is reverted for the next column');
+                    assert.roughEqual($table.outerWidth(), 400, 2, 'Table width is correct');
+
+                    done();
+                }, TIME_TO_WAIT);
+
+            }, TIME_TO_WAIT);
+        });
+
+        test('The widget can revert whole table resizing by undo if table has columns with auto width', function(assert) {
+            assert.expect(5);
+            const done = assert.async();
+            this.createWidget({ width: 432 });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+
+            $columnResizerElements.eq(3)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(-40, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            this.clock.restore();
+
+            setTimeout(() => {
+
+                this.instance.undo();
+
+                const $table = this.$element.find('table');
+
+                setTimeout(() => {
+                    $table.find('tr').eq(0).find('td').each((i, columnElement) => {
+                        assert.roughEqual($(columnElement).outerWidth(), 100, 2, 'Column has expected width, index = ' + i);
+                    });
+
+                    assert.roughEqual($table.outerWidth(), 400, 2, 'Table width is correct');
+
+                    done();
+                }, TIME_TO_WAIT);
+
+            }, TIME_TO_WAIT);
+        });
+
+        test('The widget can revert whole table resizing by undo and redo if table has columns with auto width', function(assert) {
+            assert.expect(5);
+            const done = assert.async();
+            this.createWidget({ width: 432 });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+
+            $columnResizerElements.eq(3)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(-40, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            this.clock.restore();
+
+            setTimeout(() => {
+
+                this.instance.undo();
+                this.instance.redo();
+
+                const $table = this.$element.find('table');
+
+                const expectedWidths = [100, 100, 100, 60];
+
+                setTimeout(() => {
+                    $table.find('tr').eq(0).find('td').each((i, columnElement) => {
+                        assert.roughEqual($(columnElement).outerWidth(), expectedWidths[i], 2, 'Column has expected width, index = ' + i);
+                    });
+
+                    assert.roughEqual($table.outerWidth(), 360, 2, 'Table width is correct');
+
+                    done();
+                }, TIME_TO_WAIT);
+
+            }, TIME_TO_WAIT);
+        });
+
+        test('The widget can revert table resizing by undo if table has no columns with auto width', function(assert) {
+            assert.expect(4);
+            const done = assert.async();
+            this.createWidget({ value: tableMarkupWidth, width: 282 });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+
+            $columnResizerElements.eq(2)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(50, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            this.clock.restore();
+
+            setTimeout(() => {
+                this.instance.undo();
+                const $table = this.$element.find('table');
+
+                const expectedWidths = [50, 100, 50, 50];
+
+                setTimeout(() => {
+                    $table.find('tr').eq(0).find('td').each((i, columnElement) => {
+                        assert.roughEqual($(columnElement).outerWidth(), expectedWidths[i], 2, 'Column has expected width, index = ' + i);
+                    });
+
+                    done();
+                }, TIME_TO_WAIT);
+
+            }, TIME_TO_WAIT);
+        });
+
+        test('The widget can revert whole table resizing by undo if table has no columns with auto width', function(assert) {
+            assert.expect(5);
+            const done = assert.async();
+            this.createWidget({ value: tableMarkupWidth, width: 282 });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+
+            $columnResizerElements.eq(3)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(50, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            this.clock.restore();
+
+            setTimeout(() => {
+                this.instance.undo();
+                const $table = this.$element.find('table');
+
+                const expectedWidths = [50, 100, 50, 50];
+
+                setTimeout(() => {
+                    $table.find('tr').eq(0).find('td').each((i, columnElement) => {
+                        assert.roughEqual($(columnElement).outerWidth(), expectedWidths[i], 2, 'Column has expected width, index = ' + i);
+                    });
+
+                    assert.roughEqual($table.outerWidth(), 250, 2, 'Table width is correct');
+
+                    done();
+                }, TIME_TO_WAIT);
+
+            }, TIME_TO_WAIT);
+        });
+
+        test('The widget can revert whole table resizing by redo if table has no columns with auto width', function(assert) {
+            assert.expect(5);
+            const done = assert.async();
+            this.createWidget({ value: tableMarkupWidth, width: 282, tableResizing: { enabled: true, minColumnWidth: 0 } });
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $columnResizerElements = this.$element.find(`.${DX_COLUMN_RESIZER_CLASS}`);
+
+            $columnResizerElements.eq(3)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(-10, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            this.clock.restore();
+
+            setTimeout(() => {
+                this.instance.undo();
+                this.instance.redo();
+
+                const $table = this.$element.find('table');
+
+                const expectedWidths = [50, 100, 50, 40];
+
+                setTimeout(() => {
+                    $table.find('tr').eq(0).find('td').each((i, columnElement) => {
+                        assert.roughEqual($(columnElement).outerWidth(), expectedWidths[i], 2, 'Column has expected width, index = ' + i);
+                    });
+
+                    assert.roughEqual($table.outerWidth(), 240, 2, 'Table width is correct');
+
+                    done();
+                }, TIME_TO_WAIT);
+
+            }, TIME_TO_WAIT);
+        });
+
+        test('The widget can revert table vertical resizing by undo', function(assert) {
+            assert.expect(4);
+            const done = assert.async();
+            this.createWidget();
+            this.clock.tick(TIME_TO_WAIT);
+
+            const $rowResizerElements = this.$element.find(`.${DX_ROW_RESIZER_CLASS}`);
+
+            $rowResizerElements.eq(3)
+                .trigger('dxpointerdown');
+
+            const $draggableElements = this.$element.find(`.${DX_DRAGGABLE_CLASS}`);
+
+            PointerMock($draggableElements.eq(0))
+                .start()
+                .dragStart()
+                .drag(30, 0)
+                .dragEnd();
+
+            this.clock.tick(TIME_TO_WAIT);
+
+            this.clock.restore();
+
+            setTimeout(() => {
+                this.instance.undo();
+
+                const $table = this.$element.find('table');
+
+                setTimeout(() => {
+                    $table.find('tr').each((i, rowElement) => {
+                        assert.roughEqual($(rowElement).outerHeight(), 24, 2, 'Row has expected height, index = ' + i);
+                    });
+
+                    assert.roughEqual($table.outerHeight(), 74, 2, 'Table height is correct');
+
+                    done();
+                }, TIME_TO_WAIT);
+
+            }, TIME_TO_WAIT);
         });
     });
 
@@ -1651,7 +2164,7 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($table);
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets, 'right');
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets, 'right');
         });
 
         test('Columns should be resized correctly after drag at the rtl mode', function(assert) {
@@ -1676,7 +2189,7 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($table);
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets, 'right');
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets, 'right');
 
             assert.roughEqual(columnBorderOffsets[0], 70, 3);
             assert.roughEqual(columnBorderOffsets[1], 200, 3);
@@ -1695,7 +2208,7 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($table);
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets, 'right');
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets, 'right');
 
             assert.strictEqual($resizeFrames.length, 1);
         });
@@ -1725,7 +2238,7 @@ module('Table resizing integration', {
 
             const columnBorderOffsets = getColumnBordersOffset($table);
 
-            checkColumnResizerPositions(assert, $columnResizerElements, columnBorderOffsets, 'right');
+            checkResizerPositions(assert, $columnResizerElements, columnBorderOffsets, 'right');
 
             assert.roughEqual(columnBorderOffsets[0], 70, 3);
             assert.roughEqual(columnBorderOffsets[1], 200, 3);

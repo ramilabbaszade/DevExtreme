@@ -15,6 +15,7 @@ QUnit.testStart(function() {
 </div>';
 
     $('#qunit-fixture').html(markup);
+    // $('body').append(markup);
 });
 
 
@@ -35,6 +36,7 @@ import { setupDataGridModules, MockDataController, MockColumnsController } from 
 import gridCoreUtils from 'ui/grid_core/ui.grid_core.utils';
 import dataUtils from 'core/element_data';
 import translator from 'animation/translator';
+import { getOuterHeight } from 'core/utils/size';
 
 const device = devices.real();
 const expandCellTemplate = gridCoreUtils.getExpandCellTemplate();
@@ -154,7 +156,7 @@ QUnit.module('Fixed columns', {
         that.setupDataGrid();
         that.rowsView.render($testElement);
         that.rowsView.resize();
-        that.rowsView.height(200);
+        that.gridContainer.height(200);
 
         // assert
         // T248250
@@ -415,7 +417,7 @@ QUnit.module('Fixed columns', {
 
         that.setupDataGrid();
         that.rowsView.render(that.gridContainer);
-        that.rowsView.height(20);
+        that.gridContainer.height(20);
 
         // act
         that.rowsView._fixedTableElement.parent().scrollTop(30);
@@ -920,7 +922,7 @@ QUnit.module('Fixed columns', {
 
         that.setupDataGrid();
         that.rowsView.render(that.gridContainer);
-        that.rowsView.height(50);
+        that.gridContainer.height(50);
 
         // act
         that.rowsView.resize();
@@ -1244,7 +1246,7 @@ QUnit.module('Fixed columns', {
 
         that.setupDataGrid();
         that.rowsView.render(that.gridContainer);
-        that.rowsView.height(50);
+        that.gridContainer.height(50);
         that.rowsView.resize();
 
         const scrollableInstance = that.rowsView.element().dxScrollable('instance');
@@ -1252,7 +1254,7 @@ QUnit.module('Fixed columns', {
 
         // assert
         assert.ok(scrollableInstance, 'has scrollable');
-        assert.equal(that.rowsView.element().outerHeight(), 50, 'height rowsView');
+        assert.equal(getOuterHeight(that.rowsView.element()), 50, 'height rowsView');
         assert.equal(that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-scrollable-wrapper').find('.dx-datagrid-content').length, 1, 'has main content');
         assert.ok(that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').length, 'has fix content');
         assert.equal($fixTable.position().top, 0, 'fixed table - position top');
@@ -1289,7 +1291,7 @@ QUnit.module('Fixed columns', {
         };
 
         that.rowsView.render(that.gridContainer);
-        that.rowsView.height(50);
+        that.gridContainer.height(50);
         that.rowsView.resize();
 
         const scrollableInstance = that.rowsView.element().dxScrollable('instance');
@@ -1298,7 +1300,7 @@ QUnit.module('Fixed columns', {
 
         // assert
         assert.ok(scrollableInstance, 'has scrollable');
-        assert.equal(that.rowsView.element().outerHeight(), 50, 'height rowsView');
+        assert.equal(getOuterHeight(that.rowsView.element()), 50, 'height rowsView');
         assert.equal(that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-scrollable-wrapper').find('.dx-datagrid-content').length, 1, 'has main content');
         assert.ok(that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').length, 'has fix content');
         assert.equal($fixTable.position().top, 0, 'fixed table - position top');
@@ -1339,7 +1341,7 @@ QUnit.module('Fixed columns', {
         };
 
         that.rowsView.render($testElement);
-        that.rowsView.height(50);
+        $testElement.height(50);
         that.rowsView.resize();
 
         const $fixTable = $testElement.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').find('table');
@@ -1371,7 +1373,7 @@ QUnit.module('Fixed columns', {
             that.setupDataGrid();
             that.options.scrolling = { useNative: false };
             that.rowsView.render(that.gridContainer);
-            that.rowsView.height(50);
+            that.gridContainer.height(50);
             that.rowsView.resize();
 
 
@@ -1384,7 +1386,7 @@ QUnit.module('Fixed columns', {
 
             // assert
             assert.ok(scrollableInstance, 'has scrollable');
-            assert.equal(that.rowsView.element().outerHeight(), 50, 'height rowsView');
+            assert.equal(getOuterHeight(that.rowsView.element()), 50, 'height rowsView');
             assert.equal(that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-scrollable-wrapper').find('.dx-datagrid-content').length, 1, 'has main content');
             assert.ok(that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').length, 'has fix content');
             assert.equal($fixTable.position().top, 0, 'fixed table - position top');
@@ -1429,7 +1431,7 @@ QUnit.module('Fixed columns', {
             that.setupDataGrid();
             that.options.scrolling = { useNative: false };
             that.rowsView.render(that.gridContainer);
-            that.rowsView.height(50);
+            that.gridContainer.height(50);
             that.rowsView.resize();
 
             const $fixTable = that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').find('table');
@@ -1437,7 +1439,7 @@ QUnit.module('Fixed columns', {
 
             // assert
             assert.ok(scrollableInstance, 'has scrollable');
-            assert.equal(that.rowsView.element().outerHeight(), 50, 'height rowsView');
+            assert.equal(getOuterHeight(that.rowsView.element()), 50, 'height rowsView');
             assert.equal(that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-scrollable-wrapper').find('.dx-datagrid-content').length, 1, 'has main content');
             assert.ok(that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').length, 'has fix content');
             assert.equal($fixTable.position().top, 0, 'fixed table - position top');
@@ -1490,7 +1492,7 @@ QUnit.module('Fixed columns', {
                 }
             };
             this.rowsView.render(this.gridContainer);
-            this.rowsView.height(100);
+            this.gridContainer.height(100);
             this.rowsView.resize();
 
             // act
@@ -1522,7 +1524,7 @@ QUnit.module('Fixed columns', {
             that.setupDataGrid();
             that.options.scrolling = { useNative: false };
             that.rowsView.render($testElement);
-            that.rowsView.height(50);
+            $testElement.height(50);
             that.rowsView.resize();
 
             const $fixTable = $testElement.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').find('table');
@@ -1530,7 +1532,7 @@ QUnit.module('Fixed columns', {
 
             // assert
             assert.ok(scrollableInstance, 'has scrollable');
-            assert.equal(that.rowsView.element().outerHeight(), 50, 'height rowsView');
+            assert.equal(getOuterHeight(that.rowsView.element()), 50, 'height rowsView');
             assert.equal($testElement.find('.dx-datagrid-rowsview').children('.dx-scrollable-wrapper').find('.dx-datagrid-content').length, 1, 'has main content');
             assert.ok($testElement.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').length, 'has fix content');
             assert.equal($fixTable.position().top, 0, 'fixed table - position top');
@@ -1888,12 +1890,11 @@ QUnit.module('Fixed columns', {
         // arrange
         const that = this;
         let $fixedTable;
-        const done = assert.async();
 
         that.items = generateData(20);
         that.setupDataGrid();
         that.rowsView.render(that.gridContainer);
-        that.rowsView.height(100);
+        that.gridContainer.height(100);
         that.rowsView.resize();
 
         // assert
@@ -1901,19 +1902,18 @@ QUnit.module('Fixed columns', {
         assert.equal($fixedTable.position().top, 0, 'fixed table - position top');
 
         // arrange
-        that.rowsView.scrollTo(500);
+        const scrollable = that.rowsView.getScrollable();
+        scrollable.scrollTo(500);
+        $(scrollable.container()).trigger('scroll');
+        that.clock.tick();
 
-        that.clock.restore();
-        setTimeout(function() {
-            // act
-            that.rowsView.render(that.gridContainer);
-            that.rowsView.resize();
+        // act
+        that.rowsView.render(that.gridContainer);
+        that.rowsView.resize();
 
-            // assert
-            $fixedTable = that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').find('table');
-            assert.equal($fixedTable.parent().scrollTop(), 500, 'scroll top of the fixed table');
-            done();
-        });
+        // assert
+        $fixedTable = that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').find('table');
+        assert.equal($fixedTable.parent().scrollTop(), 500, 'scroll top of the fixed table');
     });
 
     // T310680
@@ -1927,7 +1927,7 @@ QUnit.module('Fixed columns', {
 
         that.setupDataGrid();
         that.rowsView.render(that.gridContainer);
-        that.rowsView.height(100);
+        that.gridContainer.height(100);
         that.rowsView.resize();
 
         const $fixedTable = that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').find('table');
@@ -1957,7 +1957,7 @@ QUnit.module('Fixed columns', {
 
             that.setupDataGrid();
             that.rowsView.render(that.gridContainer);
-            that.rowsView.height(100);
+            that.gridContainer.height(100);
             that.rowsView.resize();
 
             const $fixedTable = that.gridContainer.find('.dx-datagrid-rowsview').children('.dx-datagrid-content-fixed').find('table');
@@ -1999,12 +1999,11 @@ QUnit.module('Fixed columns', {
     QUnit.test('Updating position of the fixed table (when scrollbar at the bottom) after delete the row', function(assert) {
         // arrange
         const that = this;
-        const done = assert.async();
 
         that.items = generateData(20);
         that.setupDataGrid();
         that.rowsView.render(that.gridContainer);
-        that.rowsView.height(100);
+        that.gridContainer.height(100);
         that.rowsView.resize();
 
         // assert
@@ -2012,21 +2011,20 @@ QUnit.module('Fixed columns', {
         assert.equal($fixedTable.position().top, 0, 'fixed table - position top');
 
         // arrange
-        that.rowsView.scrollTo(600);
-        that.clock.restore();
+        const scrollable = that.rowsView.getScrollable();
+        scrollable.scrollTo(600);
+        $(scrollable.container()).trigger('scroll');
+        that.clock.tick();
 
-        setTimeout(function() {
-            const positionTop = $fixedTable.position().top;
+        const positionTop = $fixedTable.position().top;
 
-            // act
-            that.gridContainer.find('.dx-data-row').eq(1).remove(); // remove second row of the main table
-            that.gridContainer.find('.dx-data-row').eq(20).remove(); // remove second row of the fixed table
-            that.rowsView.resize();
+        // act
+        that.gridContainer.find('.dx-data-row').eq(1).remove(); // remove second row of the main table
+        that.gridContainer.find('.dx-data-row').eq(20).remove(); // remove second row of the fixed table
+        that.rowsView.resize();
 
-            // assert
-            assert.notStrictEqual($fixedTable.position().top, positionTop, 'scroll top of the fixed table is changed');
-            done();
-        });
+        // assert
+        assert.notStrictEqual($fixedTable.position().top, positionTop, 'scroll top of the fixed table is changed');
     });
 
     // T722330
@@ -2037,7 +2035,7 @@ QUnit.module('Fixed columns', {
         that.setupDataGrid();
         that.rowsView.render(that.gridContainer);
         that.rowsView.resize();
-        that.rowsView.height(50);
+        that.gridContainer.height(50);
 
         // act
         that.rowsView._handleScroll({
@@ -3108,7 +3106,7 @@ QUnit.module('Fixed columns with real dataController and columnController', {
 
         that.setupDataGrid();
         that.rowsView.render($testElement);
-        that.rowsView.height(440);
+        $testElement.height(440);
         that.rowsView.resize();
 
         that.expandRow(1); // expand detail of the first row
@@ -3240,7 +3238,7 @@ QUnit.module('Fixed columns with real dataController and columnController', {
 
         that.setupDataGrid();
         that.rowsView.render($testElement);
-        that.rowsView.height(400);
+        that.gridContainer.height(400);
         that.rowsView.resize();
 
         const scrollable = that.rowsView.getScrollable();

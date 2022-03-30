@@ -1,3 +1,4 @@
+import { getWidth, setWidth } from '../../core/utils/size';
 import registerComponent from '../../core/component_registrator';
 import devices from '../../core/devices';
 import $ from '../../core/renderer';
@@ -297,21 +298,15 @@ const Slider = TrackBar.inherit({
 
     _renderHandleImpl: function(value, $element) {
         const $handle = $element || $('<div>').appendTo(this._$range);
-        const format = this.option('tooltip.format');
-        const tooltipEnabled = this.option('tooltip.enabled');
-        const tooltipPosition = this.option('tooltip.position');
+        const tooltip = this.option('tooltip');
 
         this.$element()
-            .toggleClass(SLIDER_TOOLTIP_POSITION_CLASS_PREFIX + 'bottom', tooltipEnabled && tooltipPosition === 'bottom')
-            .toggleClass(SLIDER_TOOLTIP_POSITION_CLASS_PREFIX + 'top', tooltipEnabled && tooltipPosition === 'top');
+            .toggleClass(SLIDER_TOOLTIP_POSITION_CLASS_PREFIX + 'bottom', tooltip.enabled && tooltip.position === 'bottom')
+            .toggleClass(SLIDER_TOOLTIP_POSITION_CLASS_PREFIX + 'top', tooltip.enabled && tooltip.position === 'top');
 
         this._createComponent($handle, SliderHandle, {
             value,
-            tooltipEnabled,
-            tooltipPosition,
-            tooltipFormat: format,
-            tooltipShowMode: this.option('tooltip.showMode'),
-            tooltipFitIn: this.$element()
+            tooltip
         });
 
         return $handle;
@@ -324,16 +319,8 @@ const Slider = TrackBar.inherit({
         }, this._$handle);
     },
 
-    _hoverStartHandler: function(e) {
-        SliderHandle.getInstance($(e.currentTarget)).updateTooltip();
-    },
-
     _toggleActiveState: function($element, value) {
         this.callBase($element, value);
-
-        if(value) {
-            SliderHandle.getInstance($element).updateTooltip();
-        }
 
         this._renderInkWave($element, null, !!value, 1);
     },
@@ -436,12 +423,16 @@ const Slider = TrackBar.inherit({
         e.event.maxLeftOffset = rtlEnabled ? endOffset : startOffset;
         e.event.maxRightOffset = rtlEnabled ? startOffset : endOffset;
 
-        this._itemWidthRatio = this.$element().width() / this._swipePixelRatio();
+        this._itemWidthRatio = getWidth(this.$element()) / this._swipePixelRatio();
 
         this._needPreventAnimation = true;
     },
 
     _swipeEndHandler: function(e) {
+        if(this._isSingleValuePossible()) {
+            return;
+        }
+
         this._feedbackDeferred.resolve();
         this._toggleActiveState(this._activeHandle(), false);
 
@@ -458,6 +449,10 @@ const Slider = TrackBar.inherit({
     },
 
     _swipeUpdateHandler: function(e) {
+        if(this._isSingleValuePossible()) {
+            return;
+        }
+
         this._saveValueChangeEvent(e.event);
         this._updateHandlePosition(e);
     },
@@ -466,7 +461,7 @@ const Slider = TrackBar.inherit({
         const offsetDirection = this.option('rtlEnabled') ? -1 : 1;
         const newRatio = Math.min(this._startOffset + offsetDirection * e.event.offset / this._swipePixelRatio(), 1);
 
-        this._$range.width(newRatio * 100 + '%');
+        setWidth(this._$range, newRatio * 100 + '%');
 
         SliderHandle.getInstance(this._activeHandle())['fitTooltipPosition'];
 
@@ -529,10 +524,20 @@ const Slider = TrackBar.inherit({
         this._saveValueChangeEvent(undefined);
     },
 
+    _isSingleValuePossible: function() {
+        const { min, max } = this.option();
+
+        return min === max;
+    },
+
     _startHandler: function(args) {
+        if(this._isSingleValuePossible()) {
+            return;
+        }
+
         const e = args.event;
 
-        this._currentRatio = (eventData(e).x - this._$bar.offset().left) / this._$bar.width();
+        this._currentRatio = (eventData(e).x - this._$bar.offset().left) / getWidth(this._$bar);
 
         if(this.option('rtlEnabled')) {
             this._currentRatio = 1 - this._currentRatio;
@@ -564,7 +569,7 @@ const Slider = TrackBar.inherit({
     },
 
     _fitTooltip: function() {
-        this._callHandlerMethod('fitTooltipPosition');
+        this._callHandlerMethod('updateTooltipPosition');
     },
 
     _optionChanged: function(args) {

@@ -1,3 +1,4 @@
+import { getWidth, getHeight, getOuterHeight, getOuterWidth } from 'core/utils/size';
 import $ from 'jquery';
 import pointerMock from '../../helpers/pointerMock.js';
 import fx from 'animation/fx';
@@ -51,8 +52,8 @@ QUnit.module('general', moduleConfig, () => {
         assert.ok($wrapper.hasClass(TOAST_WRAPPER_CLASS));
         assert.ok($content.hasClass(TOAST_CONTENT_CLASS));
 
-        assert.ok($content.width() < $(window).width());
-        assert.ok($content.height() < $(window).height());
+        assert.ok(getWidth($content) < getWidth($(window)));
+        assert.ok(getHeight($content) < getHeight($(window)));
     });
 
     QUnit.test('default template', function(assert) {
@@ -81,7 +82,7 @@ QUnit.module('general', moduleConfig, () => {
         this.instance.show();
 
         const $content = this.instance.$content();
-        assert.roughEqual($content.offset().top + $content.outerHeight(), $(window).height(), 1.01);
+        assert.roughEqual($content.offset().top + getOuterHeight($content), getHeight($(window)), 1.01);
     });
 
     QUnit.test('position on mobile devices', function(assert) {
@@ -96,8 +97,8 @@ QUnit.module('general', moduleConfig, () => {
         this.instance = this.$element.dxToast({
             onShown: function(e) {
                 const $content = e.component.$content();
-                assert.roughEqual($content.offset().top + $content.outerHeight(), window.visualViewport.height, 1.01);
-                assert.roughEqual($content.outerWidth(), window.visualViewport.width, 1.01);
+                assert.roughEqual($content.offset().top + getOuterHeight($content), window.visualViewport.height, 1.01);
+                assert.roughEqual(getOuterWidth($content), window.visualViewport.width, 1.01);
 
                 done();
             }
@@ -233,29 +234,31 @@ QUnit.module('regression', moduleConfig, () => {
 });
 
 QUnit.module('overlay integration', moduleConfig, () => {
-    QUnit.test('toast should be closed on outside click if closeOnOutsideClick is true', function(assert) {
-        this.instance.option('closeOnOutsideClick', true);
-        this.instance.show();
+    ['closeOnOutsideClick', 'hideOnOutsideClick'].forEach(closeOnOutsideClickOptionName => {
+        QUnit.test(`toast should be closed on outside click if ${closeOnOutsideClickOptionName} is true`, function(assert) {
+            this.instance.option(closeOnOutsideClickOptionName, true);
+            this.instance.show();
 
-        $('#qunit-fixture').trigger('dxpointerdown');
+            $('#qunit-fixture').trigger('dxpointerdown');
 
-        assert.equal(this.instance.option('visible'), false, 'toast was hidden should be hiding');
-    });
+            assert.equal(this.instance.option('visible'), false, 'toast was hidden should be hiding');
+        });
 
-    QUnit.test('toast does not prevent closeOnOutsideClick handler of other overlays', function(assert) {
-        const $overlay = $('<div>').appendTo(viewPort);
+        QUnit.test(`toast does not prevent ${closeOnOutsideClickOptionName} handler of other overlays`, function(assert) {
+            const $overlay = $('<div>').appendTo(viewPort);
 
-        const overlay = $overlay.dxOverlay({
-            closeOnOutsideClick: true
-        }).dxOverlay('instance');
+            const overlay = $overlay.dxOverlay({
+                [closeOnOutsideClickOptionName]: true
+            }).dxOverlay('instance');
 
 
-        overlay.show();
-        this.instance.show();
+            overlay.show();
+            this.instance.show();
 
-        $('#qunit-fixture').trigger('dxpointerdown');
+            $('#qunit-fixture').trigger('dxpointerdown');
 
-        assert.equal(overlay.option('visible'), false, 'dxOverlay should be hiding');
+            assert.equal(overlay.option('visible'), false, 'dxOverlay should be hiding');
+        });
     });
 
     QUnit.test('it should be possible to select a message in the toast by the mouse', function(assert) {
@@ -306,7 +309,9 @@ QUnit.module('base z-index', () => {
 
 QUnit.module('close events handling', () => {
     QUnit.test('closeOnSwipe option', function(assert) {
-        const $element = $('#toast').dxToast({ visible: true }); const instance = $element.dxToast('instance'); const pointer = pointerMock($element.find('.dx-toast-content'));
+        const $element = $('#toast').dxToast({ visible: true });
+        const instance = $element.dxToast('instance');
+        const pointer = pointerMock($('.dx-toast-content'));
 
         pointer.start().swipe(-0.5);
         assert.ok(!instance.option('visible'), 'toast should hide on swipe');
@@ -319,7 +324,9 @@ QUnit.module('close events handling', () => {
     });
 
     QUnit.test('closeOnClick option', function(assert) {
-        const $element = $('#toast').dxToast({ visible: true }); const instance = $element.dxToast('instance'); const $content = $element.find('.dx-toast-content');
+        const $element = $('#toast').dxToast({ visible: true });
+        const instance = $element.dxToast('instance');
+        const $content = $('.dx-toast-content');
 
         $($content).trigger('dxclick');
         assert.ok(instance.option('visible'), 'toast should not hide on click if option is false');

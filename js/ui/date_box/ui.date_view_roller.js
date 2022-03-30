@@ -1,3 +1,4 @@
+import { getHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import registerComponent from '../../core/component_registrator';
@@ -260,7 +261,7 @@ class DateViewRoller extends Scrollable {
     _itemHeight() {
         const $item = this._$items.first();
 
-        return $item.height();
+        return getHeight($item);
     }
 
     _toggleActive(state) {
@@ -286,7 +287,7 @@ class DateViewRoller extends Scrollable {
 
     _visibilityChangedHandler(visible) {
         if(visible) {
-            // TODO: for renovated code, avoid async
+            // uses for purposes of renovated scrollable widget
             this._visibilityTimer = setTimeout(() => {
                 this._renderSelectedValue(this.option('selectedIndex'));
             });

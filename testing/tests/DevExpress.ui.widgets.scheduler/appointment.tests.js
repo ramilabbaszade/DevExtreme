@@ -1,6 +1,5 @@
 import $ from 'jquery';
 import { Appointment } from 'ui/scheduler/appointments/appointment';
-import { createFactoryInstances, getResourceManager, getAppointmentDataProvider } from 'ui/scheduler/instanceFactory';
 import { Deferred } from 'core/utils/deferred';
 import fx from 'animation/fx';
 
@@ -15,6 +14,10 @@ testStart(function() {
 });
 
 const createInstance = () => {
+    const dataAccessorsMock = {
+        getter: {},
+        setter: {}
+    };
     const observer = {
         fire: (command) => {
             switch(command) {
@@ -24,27 +27,17 @@ const createInstance = () => {
                     return CELL_WIDTH;
                 case 'isGroupedByDate':
                     return false;
-                case 'getAppointmentColor':
-                    return new Deferred().resolve().promise();
-                case 'getResourceManager':
-                    return getResourceManager(key);
-                case 'getAppointmentDataProvider':
-                    return getAppointmentDataProvider(key);
                 default:
                     break;
             }
         }
     };
 
-    const key = createFactoryInstances({
-        getIsVirtualScrolling: () => false,
-        getDataAccessors: () => ({
-            getter: {},
-            setter: {}
-        })
-    });
-
-    return $('#scheduler-appointment').dxSchedulerAppointment({ key, observer }).dxSchedulerAppointment('instance');
+    return $('#scheduler-appointment').dxSchedulerAppointment({
+        observer,
+        getAppointmentColor: () => new Deferred(),
+        dataAccessors: dataAccessorsMock
+    }).dxSchedulerAppointment('instance');
 };
 
 const moduleOptions = {

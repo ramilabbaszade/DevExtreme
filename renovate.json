@@ -3,11 +3,11 @@
         "config:base"
     ],
     "baseBranches": [
+        "22_1",
         "21_2"
     ],
     "labels": [
-        "dependencies",
-        "21_2"
+        "dependencies"
     ],
     "lockFileMaintenance": {
         "enabled": true,
@@ -28,10 +28,14 @@
             "enabled": false
         }
     ],
+    "assignAutomerge": true,
     "reviewers": [
-        "team:@DevExpress/devextreme-core"
+        "team:devextreme-core"
     ],
     "ignorePaths": [
         ".github"
-    ]
+    ],
+    "constraints": {
+        "node": "^16.3.0"
+    }
 }

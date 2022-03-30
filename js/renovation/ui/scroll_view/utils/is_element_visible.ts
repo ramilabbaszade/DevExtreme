@@ -1,4 +1,7 @@
-/* istanbul ignore next */
-export function isVisible(element: HTMLElement): boolean {
-  return element.offsetWidth > 0 || element.offsetHeight > 0;
+export function isElementVisible(element: HTMLElement | undefined | null): boolean {
+  if (element) {
+    return !!(element.offsetWidth || element.offsetHeight || element.getClientRects?.().length);
+  }
+
+  return false;
 }

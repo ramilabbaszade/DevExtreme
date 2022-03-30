@@ -31,6 +31,7 @@ import gridCoreUtils from 'ui/grid_core/ui.grid_core.utils';
 import dataUtils from 'core/element_data';
 import commonUtils from 'core/utils/common';
 import typeUtils from 'core/utils/type';
+import { getHeight, setHeight, setWidth, getOuterHeight, getWidth } from 'core/utils/size';
 import devices from 'core/devices';
 import config from 'core/config';
 import support from 'core/utils/support';
@@ -647,6 +648,54 @@ QUnit.module('Rows view', {
         assert.equal(getNormalizeMarkup(cells.eq(1)), '11', 'cell 1');
         assert.equal(getNormalizeMarkup(cells.eq(2)), '1/01/2001', 'cell 2');
     });
+
+    QUnit.test('Highlight searchText for non-first text node if encodeHtml is false (T1037909)', function(assert) {
+        this.items = [
+            { data: { name: 'test1a<br>test1b' }, values: ['test1a<br>test1b'], rowType: 'data', dataIndex: 0 },
+            { data: { name: 'test2' }, values: ['test2'], rowType: 'data', dataIndex: 1 },
+            { data: { name: 'test3' }, values: ['test3'], rowType: 'data', dataIndex: 2 }
+        ];
+        const columns = [
+            { allowFiltering: true, dataType: 'string', encodeHtml: false }
+        ];
+        const dataController = new MockDataController({ items: this.items });
+        const rowsView = this.createRowsView(this.items, dataController, columns);
+        const $testElement = $('#container');
+        const searchTextClass = 'dx-datagrid-search-text';
+
+        // act
+        this.options.searchPanel = { highlightSearchText: true, text: '1b' };
+
+        rowsView.render($testElement);
+        const cells = $testElement.find('td');
+
+        // assert
+        assert.equal(getNormalizeMarkup(cells.eq(0)), 'test1a<br>test<span class=' + searchTextClass + '>1b</span>', 'cell 0');
+    });
+
+    QUnit.test('Highlight searchText in bold text node if encodeHtml is false (T1040425)', function(assert) {
+        this.items = [
+            { data: { name: '<b>Super</b>Super' }, values: ['<b>Super</b>Super'], rowType: 'data', dataIndex: 0 },
+        ];
+        const columns = [
+            { allowFiltering: true, dataType: 'string', encodeHtml: false }
+        ];
+        const dataController = new MockDataController({ items: this.items });
+        const rowsView = this.createRowsView(this.items, dataController, columns);
+        const $testElement = $('#container');
+        const searchTextClass = 'dx-datagrid-search-text';
+
+        // act
+        this.options.searchPanel = { highlightSearchText: true, text: 'p' };
+
+        rowsView.render($testElement);
+        const cells = $testElement.find('td');
+
+        // assert
+        const searchHtml = '<span class=' + searchTextClass + '>p</span>';
+        assert.equal(getNormalizeMarkup(cells.eq(0)), `<b>Su${searchHtml}er</b>Su${searchHtml}er`, 'cell 0');
+    });
+
     function getNormalizeMarkup($element) {
         const quoteRE = new RegExp('"', 'g');
         const spanRE = new RegExp('span', 'gi');
@@ -697,6 +746,35 @@ QUnit.module('Rows view', {
         };
 
         this.options.rowTemplate = function(container, options) {
+            const data = options.data;
+
+            $(container).append('<tr class=\'dx-row\'><td>' + data.name + '</td><td>' + data.id + '</td></tr>');
+        };
+
+        // act
+        rowsView.render(testElement);
+        const cells = testElement.find('td');
+
+        // assert
+        assert.equal(getNormalizeMarkup(cells.eq(0)), 'test<span class=' + searchTextClass + '>1</span>', 'cell 1');
+        assert.equal(getNormalizeMarkup(cells.eq(1)), '<span class=' + searchTextClass + '>1</span>', 'cell 2');
+    });
+
+    // T103538
+    QUnit.test('Highlight searchText with dataRowTemplate', function(assert) {
+        // arrange
+        const columns = [{ allowFiltering: true, dataType: 'string' }, { allowFiltering: true, dataType: 'number' }, { allowFiltering: true, dataType: 'date' }];
+        const dataController = new MockDataController({ items: this.items });
+        const rowsView = this.createRowsView(this.items, dataController, columns);
+        const testElement = $('#container');
+        const searchTextClass = 'dx-datagrid-search-text';
+
+        this.options.searchPanel = {
+            highlightSearchText: true,
+            text: '1'
+        };
+
+        this.options.dataRowTemplate = function(container, options) {
             const data = options.data;
 
             $(container).append('<tr class=\'dx-row\'><td>' + data.name + '</td><td>' + data.id + '</td></tr>');
@@ -1980,8 +2058,8 @@ QUnit.module('Rows view', {
         const $testElement = $('#container');
 
         // act
-        $testElement.height(300);
-        $testElement.width(300);
+        setHeight($testElement, 300);
+        setWidth($testElement, 300);
         rowsView.render($testElement);
         rowsView.resize();
 
@@ -1992,7 +2070,7 @@ QUnit.module('Rows view', {
         assert.equal(scrollable.scrollWidth(), 400, 'scroll width');
         // T210256
         assert.ok(rowsView._getFreeSpaceRowElements().is(':visible'), 'visible free space row');
-        assert.equal(rowsView._getFreeSpaceRowElements().height(), 0, 'height free space row');
+        assert.equal(getHeight(rowsView._getFreeSpaceRowElements()), 0, 'height free space row');
     });
 
     QUnit.test('Render additional row for free space_B232625', function(assert) {
@@ -2002,10 +2080,10 @@ QUnit.module('Rows view', {
         const $testElement = $('#container');
 
         // act
-        $testElement.height(300);
+        setHeight($testElement, 300);
         const oldFunc = rowsView._renderScrollable;
         rowsView._renderScrollable = function() {
-            oldTableHeight = this.getTableElement().height();
+            oldTableHeight = getHeight(this.getTableElement());
             oldFunc.call(rowsView);
         };
 
@@ -2030,7 +2108,7 @@ QUnit.module('Rows view', {
 
         // assert
         assert.equal(rowsView._getFreeSpaceRowElements().css('display'), 'table-row', 'display style is table-row');
-        assert.ok(oldTableHeight < $testElement.height(), 'old table height');
+        assert.ok(oldTableHeight < getHeight($testElement), 'old table height');
         assert.ok(Math.abs($table[0].offsetHeight - $testElement[0].offsetHeight) <= 1);
         assert.ok(rowsView._getFreeSpaceRowElements()[0].style.height, 'free space rows height');
     });
@@ -2038,10 +2116,10 @@ QUnit.module('Rows view', {
     // B253540
     QUnit.test('Render additional row for free space after resize', function(assert) {
     // arrange
-        const rowsView = this.createRowsView(this.items, null, [{ resizedCallbacks: $.Callbacks().add(function() { $('#container').find('tbody > tr').height(200); }) }, {}, {}]);
+        const rowsView = this.createRowsView(this.items, null, [{ resizedCallbacks: $.Callbacks().add(function() { setHeight($('#container').find('tbody > tr'), 200); }) }, {}, {}]);
         const $testElement = $('#container');
 
-        $testElement.height(300);
+        setHeight($testElement, 300);
 
         rowsView.render($testElement);
         this.setColumnWidths({ widths: [100] });
@@ -2246,12 +2324,12 @@ QUnit.module('Rows view', {
         rowsView.resize();
 
         const freeSpaceRow = testElement.find('.dx-freespace-row').first();
-        const expectedHeight = freeSpaceRow.height();
+        const expectedHeight = getHeight(freeSpaceRow);
 
         rowsView.updateFreeSpaceRowHeight();
 
         // assert
-        assert.equal(freeSpaceRow.height(), expectedHeight, 'height of freeSpaceRow');
+        assert.equal(getHeight(freeSpaceRow), expectedHeight, 'height of freeSpaceRow');
         assert.equal(testElement.find('.dx-last-row-border').length, 0);
     });
 
@@ -2267,7 +2345,7 @@ QUnit.module('Rows view', {
         rowsView.resize();
 
         // assert
-        const oldFreeSpaceRowHeight = rowsView._getFreeSpaceRowElements().height();
+        const oldFreeSpaceRowHeight = getHeight(rowsView._getFreeSpaceRowElements());
 
         assert.equal(rowsView._getFreeSpaceRowElements().css('display'), 'table-row', 'display style is table-row');
         assert.ok(oldFreeSpaceRowHeight > 0);
@@ -2284,8 +2362,8 @@ QUnit.module('Rows view', {
         // assert
         const freeSpaceRowElement = rowsView._getFreeSpaceRowElements();
         assert.equal(freeSpaceRowElement.css('display'), 'table-row', 'display style is table-row');
-        assert.ok(freeSpaceRowElement.height() > 0);
-        assert.ok(freeSpaceRowElement.height() < oldFreeSpaceRowHeight);
+        assert.ok(getHeight(freeSpaceRowElement) > 0);
+        assert.ok(getHeight(freeSpaceRowElement) < oldFreeSpaceRowHeight);
     });
 
     // T354748
@@ -3283,7 +3361,7 @@ QUnit.module('Rows view', {
         this.options.onCellPrepared = function(options) {
             countCallCellPrepared++;
 
-            if(options.rowIndex === 0 && options.rowType === 'group' && options.columnIndex === 0) {
+            if(options.rowIndex === 0 && options.rowType === 'group' && options.columnIndex === 1) {
                 resultOptions = options;
             }
         };
@@ -3296,14 +3374,14 @@ QUnit.module('Rows view', {
         // assert
         assert.equal(countCallCellPrepared, 8, 'countCallCellPrepared');
         assert.equal(resultOptions.rowIndex, 0, 'rowIndex');
-        assert.equal(resultOptions.columnIndex, 0, 'columnIndex');
+        assert.equal(resultOptions.columnIndex, 1, 'columnIndex');
         assert.deepEqual(resultOptions.values, [1], 'values');
         assert.strictEqual(resultOptions.value, 1, 'value');
         assert.strictEqual(resultOptions.text, '1', 'text');
         assert.strictEqual(resultOptions.displayValue, 1, 'displayValue');
         assert.deepEqual(resultOptions.data, { isContinuationOnNextPage: true }, 'data');
         assert.strictEqual(resultOptions.rowType, 'group', 'rowType');
-        assert.deepEqual(resultOptions.column, { groupIndex: 0, caption: 'column 1', allowCollapsing: true, command: null, width: null, colspan: 2, 'alignment': 'left', 'index': 0, 'cssClass': null, showWhenGrouped: false }, 'column');
+        assert.deepEqual(resultOptions.column, { groupIndex: 0, caption: 'column 1', allowCollapsing: true, command: null, width: null, colspan: 2, 'alignment': 'left', 'index': 0, 'cssClass': null, showWhenGrouped: false, type: null }, 'column');
     });
 
     QUnit.test('onCellPrepared for group rows (RTL)', function(assert) {
@@ -3319,7 +3397,7 @@ QUnit.module('Rows view', {
         this.options.onCellPrepared = function(options) {
             countCallCellPrepared++;
 
-            if(options.rowIndex === 0 && options.rowType === 'group' && options.columnIndex === 0) {
+            if(options.rowIndex === 0 && options.rowType === 'group' && options.columnIndex === 1) {
                 resultOptions = options;
             }
         };
@@ -3332,14 +3410,14 @@ QUnit.module('Rows view', {
         // assert
         assert.equal(countCallCellPrepared, 8, 'countCallCellPrepared');
         assert.equal(resultOptions.rowIndex, 0, 'rowIndex');
-        assert.equal(resultOptions.columnIndex, 0, 'columnIndex');
+        assert.equal(resultOptions.columnIndex, 1, 'columnIndex');
         assert.deepEqual(resultOptions.values, [1], 'values');
         assert.strictEqual(resultOptions.value, 1, 'value');
         assert.strictEqual(resultOptions.text, '1', 'text');
         assert.strictEqual(resultOptions.displayValue, 1, 'displayValue');
         assert.deepEqual(resultOptions.data, { isContinuationOnNextPage: true }, 'data');
         assert.strictEqual(resultOptions.rowType, 'group', 'rowType');
-        assert.deepEqual(resultOptions.column, { groupIndex: 0, caption: 'column 1', allowCollapsing: true, command: null, width: null, colspan: 2, 'alignment': 'right', 'index': 0, 'cssClass': null, showWhenGrouped: false }, 'column');
+        assert.deepEqual(resultOptions.column, { groupIndex: 0, caption: 'column 1', allowCollapsing: true, command: null, width: null, colspan: 2, 'alignment': 'right', 'index': 0, 'cssClass': null, showWhenGrouped: false, type: null }, 'column');
     });
 
     QUnit.test('onCellPrepared for called for command columns', function(assert) {
@@ -3530,7 +3608,7 @@ QUnit.module('Rows view', {
 
     QUnit.test('Show summary items in a group row', function(assert) {
     // arrange
-        const items = [{ rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [
+        const items = [{ rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [[],
             [{
                 column: 'Column1',
                 summaryType: 'sum',
@@ -3560,7 +3638,7 @@ QUnit.module('Rows view', {
 
     QUnit.test('Show only one summary item in a group row', function(assert) {
     // arrange
-        const items = [{ rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [
+        const items = [{ rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [[],
             [{
                 column: 'Column1',
                 summaryType: 'sum',
@@ -3583,7 +3661,7 @@ QUnit.module('Rows view', {
     QUnit.test('Show summary in a group row when alignByColumn', function(assert) {
     // arrange
         const items = [{
-            rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [
+            rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [[],
                 [{
                     column: 'Column1',
                     summaryType: 'sum',
@@ -3591,7 +3669,7 @@ QUnit.module('Rows view', {
                     customizeText: function(itemInfo) {
                         return 'Column1 ' + itemInfo.valueText;
                     }
-                }], [], [], [{
+                }], [], [{
                     column: 'Column3',
                     summaryType: 'sum',
                     alignByColumn: true,
@@ -3615,7 +3693,7 @@ QUnit.module('Rows view', {
     QUnit.test('Show summary in a group row when two alignByColumn summary items', function(assert) {
     // arrange
         const items = [{
-            rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [
+            rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [[],
                 [{
                     column: 'Column1',
                     summaryType: 'sum',
@@ -3623,7 +3701,7 @@ QUnit.module('Rows view', {
                     customizeText: function(itemInfo) {
                         return 'Column1 ' + itemInfo.valueText;
                     }
-                }], [], [{
+                }], [{
                     column: 'Column2',
                     summaryType: 'sum',
                     alignByColumn: true,
@@ -3654,7 +3732,7 @@ QUnit.module('Rows view', {
     QUnit.test('Show summary in a group row when two alignByColumn summary items and groupIndex is null for all non-grouped columns', function(assert) {
     // arrange
         const items = [{
-            rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [
+            rowType: 'group', groupIndex: 0, isExpanded: true, values: [1], summaryCells: [[],
                 [{
                     column: 'Column1',
                     summaryType: 'sum',
@@ -3662,7 +3740,7 @@ QUnit.module('Rows view', {
                     customizeText: function(itemInfo) {
                         return 'Column1 ' + itemInfo.valueText;
                     }
-                }], [], [{
+                }], [{
                     column: 'Column2',
                     summaryType: 'sum',
                     alignByColumn: true,
@@ -3943,9 +4021,10 @@ QUnit.module('Rows view', {
         // act
         rowsView.render($testElement);
         rowsView.height(10000);
+        rowsView.setLoading(true, 'some text');
 
         // assert
-        const options = rowsView._loadPanel.option('position')();
+        const options = rowsView._loadPanel.option('position');
         assert.deepEqual(options.of[0], window);
         // need when "grid.height > window.height" and grid places with vertical offset
         assert.deepEqual(options.boundary[0], $testElement.find('.dx-datagrid-rowsview')[0]);
@@ -4499,7 +4578,7 @@ QUnit.module('Rows view with real dataController and columnController', {
         // assert
         assert.ok(!that.rowsView._hasHeight, 'not has height');
         assert.ok(that.rowsView._rowHeight > 0, 'row height > 0');
-        assert.equal(that.rowsView._getFreeSpaceRowElements().height(), 0, 'height free space row');
+        assert.equal(getHeight(that.rowsView._getFreeSpaceRowElements()), 0, 'height free space row');
     });
 
     // B254492
@@ -4524,7 +4603,7 @@ QUnit.module('Rows view with real dataController and columnController', {
         assert.equal(that.dataController.pageCount(), 3, 'page count = 3');
         assert.ok(!that.rowsView._hasHeight, 'not has height');
         assert.ok(that.rowsView._rowHeight > 0, 'row height > 0');
-        assert.equal(Math.round(that.rowsView._getFreeSpaceRowElements().height()), Math.round(that.rowsView._rowHeight * 2), 'height free space row');
+        assert.equal(Math.round(getHeight(that.rowsView._getFreeSpaceRowElements())), Math.round(that.rowsView._rowHeight * 2), 'height free space row');
     });
 
     // T142464
@@ -4550,7 +4629,7 @@ QUnit.module('Rows view with real dataController and columnController', {
         assert.equal(that.dataController.pageCount(), 3, 'page count = 3');
         assert.ok(!that.rowsView._hasHeight, 'not has height');
         assert.ok(that.rowsView._rowHeight > 0, 'row height > 0');
-        assert.equal(that.rowsView._getFreeSpaceRowElements().height(), 0, 'no height free space row');
+        assert.equal(getHeight(that.rowsView._getFreeSpaceRowElements()), 0, 'no height free space row');
     });
 
     // B254901
@@ -4572,7 +4651,7 @@ QUnit.module('Rows view with real dataController and columnController', {
         // assert
         assert.ok(that.rowsView._hasHeight, 'has height');
         assert.ok(that.rowsView._rowHeight > 0, 'row height > 0');
-        assert.equal(that.rowsView._getFreeSpaceRowElements().height(), 0, 'height free space row');
+        assert.equal(getHeight(that.rowsView._getFreeSpaceRowElements()), 0, 'height free space row');
     });
 
     QUnit.test('Rows with cssClass', function(assert) {
@@ -5553,6 +5632,9 @@ QUnit.module('Virtual scrolling', {
                 totalItemsCount: function() {
                     const virtualItemsCount = dataController.virtualItemsCount();
                     return items.length + virtualItemsCount.begin + virtualItemsCount.end;
+                },
+                itemsCount: function() {
+                    return items.length;
                 }
             };
 
@@ -5602,8 +5684,8 @@ QUnit.module('Virtual scrolling', {
         assert.equal(content.children().eq(0).find('tbody > tr').length, 6, '3 data row + 1 freespace row + 2 virtual row');
 
         const $virtualRows = content.children().eq(0).find('.dx-virtual-row');
-        assert.roughEqual($virtualRows.eq(0).height(), rowHeight * 10, 1);
-        assert.roughEqual($virtualRows.eq(1).height(), rowHeight * 7, 1);
+        assert.roughEqual(getHeight($virtualRows.eq(0)), rowHeight * 10, 1);
+        assert.roughEqual(getHeight($virtualRows.eq(1)), rowHeight * 7, 1);
         assert.equal(content.children().eq(1).find('.' + 'dx-datagrid-group-space').length, 0, 'group space class');
 
         // T720928
@@ -5646,8 +5728,8 @@ QUnit.module('Virtual scrolling', {
         assert.equal(content.children().length, 1);
         assert.equal(content.children().eq(0)[0].tagName, 'TABLE');
         assert.equal(content.children().eq(0).find('tbody > tr').length, 6, '3 data row + 1 freespace row + 2 virtual row');
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(0).height(), rowHeight * 10, 1);
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(1).height(), rowHeight * 7, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(0)), rowHeight * 10, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(1)), rowHeight * 7, 1);
         assert.equal(content.children().eq(1).find('.' + 'dx-datagrid-group-space').length, 0, 'group space class');
     });
 
@@ -5692,7 +5774,7 @@ QUnit.module('Virtual scrolling', {
         assert.equal(content.children().eq(0).find('tbody > tr').length, 6, '3 data row + 1 freespace row + 2 virtual row');
         assert.roughEqual(content.children().eq(0).find('.dx-virtual-row')[0].getBoundingClientRect().height, rowHeight * heightRatio * 7000000, 1);
         assert.roughEqual(content.children().eq(0).find('.dx-virtual-row')[1].getBoundingClientRect().height, rowHeight * heightRatio * 3000000, 1);
-        assert.ok(content.children().eq(0).height() < 16000000, 'height is less then height limit');
+        assert.ok(getHeight(content.children().eq(0)) < 16000000, 'height is less then height limit');
         assert.equal(content.children().eq(0).find('.' + 'dx-datagrid-group-space').length, 0, 'group space class');
     });
 
@@ -5754,6 +5836,7 @@ QUnit.module('Virtual scrolling', {
             useNative: false,
             timeout: 10,
             renderingThreshold: 0,
+            renderAsync: true,
             mode: 'virtual'
         };
         rowsView.render(testElement);
@@ -5967,8 +6050,8 @@ QUnit.module('Virtual scrolling', {
         assert.equal(content.children().length, 1);
         assert.equal(content.children().eq(0)[0].tagName, 'TABLE');
         assert.equal(content.children().eq(0).find('tbody > tr').length, 6, '3 data row + 1 freespace row + 2 virtual row');
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(0).height(), rowHeight * 10, 1);
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(1).height(), rowHeight * 7, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(0)), rowHeight * 10, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(1)), rowHeight * 7, 1);
     });
 
     QUnit.test('Render rows at end when virtual scrolling', function(assert) {
@@ -6023,8 +6106,8 @@ QUnit.module('Virtual scrolling', {
         assert.equal(content.children().length, 1);
         assert.equal(content.children().eq(0)[0].tagName, 'TABLE');
         assert.equal(content.children().eq(0).find('tbody > tr').length, 9, '3 data row + 3 data row + 1 freespace row + 2 virtual row');
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(0).height(), rowHeight * 10, 1);
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(1).height(), rowHeight * 4, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(0)), rowHeight * 10, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(1)), rowHeight * 4, 1);
     });
 
     // T423722
@@ -6093,8 +6176,8 @@ QUnit.module('Virtual scrolling', {
         assert.equal(content.children().eq(0)[0].tagName, 'TABLE');
         assert.equal(content.children().eq(0).find('tbody > tr').length, 9, '3 data row + 3 data row + 1 freespace row + 2 virtual row');
         assert.equal(content.children().eq(0).find('tbody > tr').eq(4).text(), '4', 'row 4 text');
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(0).height(), rowHeight * 10, 1);
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(1).height(), rowHeight * 4, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(0)), rowHeight * 10, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(1)), rowHeight * 4, 1);
     });
 
 
@@ -6319,8 +6402,8 @@ QUnit.module('Virtual scrolling', {
         assert.equal(content.length, 1);
         assert.equal(content.children().length, 1);
         assert.equal(content.children().eq(0).find('tbody > tr').length, 9);
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(0).height(), rowHeight * 12, 1);
-        assert.roughEqual(content.children().eq(0).find('.dx-virtual-row').eq(1).height(), rowHeight * 1, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(0)), rowHeight * 12, 1);
+        assert.roughEqual(getHeight(content.children().eq(0).find('.dx-virtual-row').eq(1)), rowHeight * 1, 1);
         assert.equal(getText(getCells(content.children().find('tbody > tr').eq(1))), '4');
     });
 
@@ -6577,7 +6660,7 @@ QUnit.module('Virtual scrolling', {
 
         rowsView._hasHeight = true;
         rowsView.render($testElement);
-        rowsView.height(100);
+        $testElement.height(100);
         rowsView.resize();
 
         // assert
@@ -6585,7 +6668,7 @@ QUnit.module('Virtual scrolling', {
         assert.equal($tableElement.find('tbody').length, 1, 'count page');
 
         // act
-        const scrollTop = $tableElement.find('.dx-virtual-row').eq(0).height() - 50;
+        const scrollTop = getHeight($tableElement.find('.dx-virtual-row').eq(0)) - 50;
         rowsView.scrollTo(scrollTop);
         options.items = [
             { rowType: 'data', values: [10] },
@@ -6914,7 +6997,35 @@ QUnit.module('Scrollbar', {
         rowsView.resize();
 
         // assert
-        assert.strictEqual(rowsView.getScrollable().$content().outerHeight(), $(rowsView.getScrollable().container()).outerHeight(), 'No vertical scroll');
+        assert.strictEqual(getOuterHeight(rowsView.getScrollable().$content()), getOuterHeight($(rowsView.getScrollable().container())), 'No vertical scroll');
+    });
+
+    QUnit.test('getCell outside viewport should not return last visible row if rowRenderingMode is virtual (T1046754)', function(assert) {
+        // arrange
+        const options = {
+            items: [
+                { values: [1] },
+                { values: [2] },
+                { values: [3] }
+            ],
+            virtualItemsCount: {
+                begin: 10,
+                end: 7
+            }
+        };
+        const dataController = new MockDataController(options);
+        const rowsView = this.createRowsView(options.items, dataController);
+        const testElement = $('#container');
+
+        // act
+        this.options.scrolling = {
+            rowRenderingMode: 'virtual'
+        };
+        rowsView.render(testElement);
+
+        // assert
+        assert.equal(rowsView.getCell({ rowIndex: 2, columnIndex: 0 }).text(), '3', 'getCell returns cell for visible cell');
+        assert.equal(rowsView.getCell({ rowIndex: 3, columnIndex: 0 }), undefined, 'getCell returns undefined for invisible cell');
     });
 });
 
@@ -7006,8 +7117,8 @@ QUnit.module('No data text', {
 
         assert.ok(noDataElement.is(':visible'), 'noDataElement is visible');
         assert.strictEqual(noDataElement.text(), noDataText);
-        assert.ok(noDataElement.width() > 0);
-        assert.ok(noDataElement.height() > 0);
+        assert.ok(getWidth(noDataElement) > 0);
+        assert.ok(getHeight(noDataElement) > 0);
     });
 
     // B252554

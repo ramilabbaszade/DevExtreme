@@ -1,10 +1,8 @@
 import { getWindow, hasWindow } from '../../core/utils/window';
 const window = getWindow();
-import registerComponent from '../../core/component_registrator';
 import { isDate as isDateType, isString, isNumeric } from '../../core/utils/type';
 import { createTextElementHiddenCopy } from '../../core/utils/dom';
 import { each } from '../../core/utils/iterator';
-import { compare as compareVersions } from '../../core/utils/version';
 import { extend } from '../../core/utils/extend';
 import { inputType } from '../../core/utils/support';
 import devices from '../../core/devices';
@@ -27,6 +25,7 @@ const DX_AUTO_WIDTH_CLASS = 'dx-auto-width';
 const DX_INVALID_BADGE_CLASS = 'dx-show-invalid-badge';
 const DX_CLEAR_BUTTON_CLASS = 'dx-clear-button-area';
 const DATEBOX_WRAPPER_CLASS = 'dx-datebox-wrapper';
+const DROPDOWNEDITOR_OVERLAY_CLASS = 'dx-dropdowneditor-overlay';
 
 const PICKER_TYPE = {
     calendar: 'calendar',
@@ -128,17 +127,6 @@ const DateBox = DropDownEditor.inherit({
                 },
                 options: {
                     pickerType: PICKER_TYPE.native
-                }
-            },
-            {
-                device: function(currentDevice) {
-                    const realDevice = devices.real();
-                    const platform = realDevice.platform;
-                    const version = realDevice.version;
-                    return platform === 'generic' && currentDevice.deviceType !== 'desktop' || (platform === 'android' && compareVersions(version, [4, 4]) < 0);
-                },
-                options: {
-                    pickerType: PICKER_TYPE.rollers
                 }
             },
             {
@@ -373,7 +361,8 @@ const DateBox = DropDownEditor.inherit({
 
         this._popup.$wrapper()
             .addClass(DATEBOX_WRAPPER_CLASS + '-' + this.option('type'))
-            .addClass(DATEBOX_WRAPPER_CLASS + '-' + this._pickerType);
+            .addClass(DATEBOX_WRAPPER_CLASS + '-' + this._pickerType)
+            .addClass(DROPDOWNEDITOR_OVERLAY_CLASS);
     },
 
     _renderPopupContent: function() {
@@ -484,7 +473,7 @@ const DateBox = DropDownEditor.inherit({
         if(text === this._getDisplayedText(currentValue)) {
             if(!validationError || validationError.editorSpecific) {
                 this._applyInternalValidation(currentValue);
-                this._applyCustomValidation();
+                this._applyCustomValidation(currentValue);
             }
             return;
         }
@@ -777,7 +766,5 @@ const DateBox = DropDownEditor.inherit({
         }
     }
 });
-
-registerComponent('dxDateBox', DateBox);
 
 export default DateBox;

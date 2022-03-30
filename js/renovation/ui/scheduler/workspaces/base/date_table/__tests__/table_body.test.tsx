@@ -1,66 +1,76 @@
 import React from 'react';
 import { shallow } from 'enzyme';
 import { VERTICAL_GROUP_ORIENTATION } from '../../../../consts';
-import { DateTableBodyProps, viewFunction as TableBodyView } from '../table_body';
+import { DateTableBody, DateTableBodyProps, viewFunction as TableBodyView } from '../table_body';
 import { Row } from '../../row';
 import { AllDayPanelTableBody } from '../all_day_panel/table_body';
-import * as utilsModule from '../../../utils';
+import * as combineClassesUtils from '../../../../../../utils/combine_classes';
 
-const getIsGroupedAllDayPanel = jest.spyOn(utilsModule, 'getIsGroupedAllDayPanel').mockImplementation(() => true);
-const getKeyByGroup = jest.spyOn(utilsModule, 'getKeyByGroup');
+const combineClasses = jest.spyOn(combineClassesUtils, 'combineClasses');
 
 describe('DateTableBody', () => {
   describe('Render', () => {
     const viewData = {
       groupedData: [{
-        dateTable: [[{
-          startDate: new Date(2020, 6, 9, 0),
-          endDate: new Date(2020, 6, 9, 0, 30),
-          groups: { id: 1 },
-          groupIndex: 1,
-          index: 4,
-          isFirstGroupCell: true,
-          isLastGroupCell: false,
-          key: 3,
-          text: 'test 1',
-          today: true,
-          otherMonth: true,
-          firstDayOfMonth: true,
-          isSelected: true,
-          isFocused: false,
-        }], [{
-          startDate: new Date(2020, 6, 9, 1),
-          endDate: new Date(2020, 6, 9, 1, 30),
-          groups: { id: 2 },
-          groupIndex: 2,
-          index: 5,
-          isFirstGroupCell: false,
-          isLastGroupCell: false,
-          key: 6,
-          text: 'test 2',
-          today: false,
-          otherMonth: false,
-          firstDayOfMonth: true,
-          isSelected: true,
-          isFocused: true,
-        }], [{
-          startDate: new Date(2020, 6, 9, 2),
-          endDate: new Date(2020, 6, 9, 2, 30),
-          groups: { id: 3 },
-          groupIndex: 3,
-          index: 6,
-          isFirstGroupCell: false,
-          isLastGroupCell: true,
-          key: 9,
-          text: 'test 3',
-          today: false,
-          otherMonth: false,
-          firstDayOfMonth: false,
-          isSelected: false,
-          isFocused: false,
-        }]],
+        dateTable: [{
+          cells: [{
+            startDate: new Date(2020, 6, 9, 0),
+            endDate: new Date(2020, 6, 9, 0, 30),
+            groups: { id: 1 },
+            groupIndex: 1,
+            index: 4,
+            isFirstGroupCell: true,
+            isLastGroupCell: false,
+            key: 3,
+            text: 'test 1',
+            today: true,
+            otherMonth: true,
+            firstDayOfMonth: true,
+            isSelected: true,
+            isFocused: false,
+          }],
+          key: 0,
+        }, {
+          cells: [{
+            startDate: new Date(2020, 6, 9, 1),
+            endDate: new Date(2020, 6, 9, 1, 30),
+            groups: { id: 2 },
+            groupIndex: 2,
+            index: 5,
+            isFirstGroupCell: false,
+            isLastGroupCell: false,
+            key: 6,
+            text: 'test 2',
+            today: false,
+            otherMonth: false,
+            firstDayOfMonth: true,
+            isSelected: true,
+            isFocused: true,
+          }],
+          key: 1,
+        }, {
+          cells: [{
+            startDate: new Date(2020, 6, 9, 2),
+            endDate: new Date(2020, 6, 9, 2, 30),
+            groups: { id: 3 },
+            groupIndex: 3,
+            index: 6,
+            isFirstGroupCell: false,
+            isLastGroupCell: true,
+            key: 9,
+            text: 'test 3',
+            today: false,
+            otherMonth: false,
+            firstDayOfMonth: false,
+            isSelected: false,
+            isFocused: false,
+          }],
+          key: 2,
+        }],
         allDayPanel: [{ startDate: new Date(), key: '1' }],
         groupIndex: 1,
+        key: '1',
+        isGroupedAllDayPanel: true,
       }],
       leftVirtualCellWidth: 100,
       rightVirtualCellWidth: 200,
@@ -71,6 +81,7 @@ describe('DateTableBody', () => {
 
     const render = (viewModel) => shallow(
       <TableBodyView
+        rowClasses="dx-scheduler-date-table-row"
         {...viewModel}
         props={{
           ...new DateTableBodyProps(),
@@ -94,12 +105,14 @@ describe('DateTableBody', () => {
 
       rows.forEach((row) => {
         expect(row.props())
-          .toMatchObject({
+          .toEqual({
             className: 'dx-scheduler-date-table-row',
             leftVirtualCellWidth: 100,
             rightVirtualCellWidth: 200,
             leftVirtualCellCount: 2,
             rightVirtualCellCount: 21,
+            children: expect.anything(),
+            isHeaderRow: false,
           });
       });
     });
@@ -115,7 +128,7 @@ describe('DateTableBody', () => {
         rowIndex: number,
       ): void => {
         const cell = cells.at(rowIndex);
-        const data = viewData.groupedData[0].dateTable[rowIndex][0];
+        const data = viewData.groupedData[0].dateTable[rowIndex].cells[0];
         const {
           startDate,
           endDate,
@@ -172,11 +185,11 @@ describe('DateTableBody', () => {
         .toBe(3);
 
       expect(rows.at(0).key())
-        .toBe('1');
+        .toBe('0');
       expect(rows.at(1).key())
-        .toBe('4');
+        .toBe('1');
       expect(rows.at(2).key())
-        .toBe('7');
+        .toBe('2');
     });
 
     it('should render AllDayPanelBody and pass correct arguments to it', () => {
@@ -208,50 +221,43 @@ describe('DateTableBody', () => {
         });
     });
 
-    [true, false].forEach((shouldRender) => {
-      it('should render AllDayPanelBody depending on getIsGroupedAllDayPanel result', () => {
-        (getIsGroupedAllDayPanel as jest.Mock).mockReturnValue(shouldRender);
-        const tableBody = render({});
+    [true, false].forEach((isGroupedAllDayPanel) => {
+      it(`should render AllDayPanelBody correctly when isGroupedAllDayPanel=${isGroupedAllDayPanel}`, () => {
+        const testViewData = {
+          ...viewData,
+          groupedData: [{
+            ...viewData.groupedData[0],
+            isGroupedAllDayPanel,
+          }],
+        };
+
+        const tableBody = render({ props: { viewData: testViewData } });
 
         const allDayPanelTableBody = tableBody.find(AllDayPanelTableBody);
         expect(allDayPanelTableBody.exists())
-          .toBe(shouldRender);
-
-        expect(getIsGroupedAllDayPanel)
-          .toHaveBeenCalledTimes(1);
-
-        expect(getIsGroupedAllDayPanel)
-          .toHaveBeenCalledWith(
-            viewData,
-            0,
-          );
+          .toBe(isGroupedAllDayPanel);
       });
     });
+  });
 
-    it('should provide correct key to a groups\'s Fragment depending on groupIndex', () => {
-      render({
-        props: {
-          viewData: {
-            groupedData: [{
-              dateTable: [],
-              groupIndex: 3,
-            }, {
-              dateTable: [],
-              groupIndex: 4,
-            }],
-            leftVirtualCellWidth: 100,
-            rightVirtualCellWidth: 200,
-            leftVirtualCellCount: 2,
-          },
-        },
+  describe('Logic', () => {
+    describe('Getters', () => {
+      describe('rowClasses', () => {
+        it('should call combine classes with correct parameters', () => {
+          const tableBody = new DateTableBody({
+            addVerticalSizesClassToRows: true,
+          } as any);
+
+          expect(tableBody.rowClasses)
+            .toBe('dx-scheduler-date-table-row dx-scheduler-cell-sizes-vertical');
+
+          expect(combineClasses)
+            .toHaveBeenCalledWith({
+              'dx-scheduler-date-table-row': true,
+              'dx-scheduler-cell-sizes-vertical': true,
+            });
+        });
       });
-
-      expect(getKeyByGroup)
-        .toHaveBeenCalledTimes(2);
-      expect(getKeyByGroup)
-        .toHaveBeenNthCalledWith(1, 3, VERTICAL_GROUP_ORIENTATION);
-      expect(getKeyByGroup)
-        .toHaveBeenNthCalledWith(2, 4, VERTICAL_GROUP_ORIENTATION);
     });
   });
 });

@@ -1,3 +1,4 @@
+import { getOuterHeight } from 'core/utils/size';
 import config from 'core/config';
 import devices from 'core/devices';
 import CustomStore from 'data/custom_store';
@@ -6,7 +7,6 @@ import { DataSource } from 'data/data_source/data_source';
 import { triggerHidingEvent, triggerShownEvent } from 'events/visibility_change';
 import $ from 'jquery';
 import dxSchedulerWorkSpaceDay from 'ui/scheduler/workspaces/ui.scheduler.work_space_day';
-import { getAppointmentDataProvider } from 'ui/scheduler/instanceFactory';
 import errors from 'ui/widget/ui.errors';
 import keyboardMock from '../../helpers/keyboardMock.js';
 import pointerMock from '../../helpers/pointerMock.js';
@@ -106,7 +106,7 @@ QUnit.module('Options', {
         const repaintStub = sinon.stub(instance, 'repaint');
 
         try {
-            const appointmentDataProvider = getAppointmentDataProvider(instance.key);
+            const { appointmentDataProvider } = instance;
 
             instance.option({
                 'startDateExpr': '_startDate',
@@ -122,9 +122,10 @@ QUnit.module('Options', {
 
             const dataAccessors = instance._dataAccessors;
 
-            assert.deepEqual($.extend({ resources: {} }, dataAccessors.getter), appointmentDataProvider.dataAccessors.getter, 'dataAccessors getters were passed to appointmentDataProvider');
-            assert.deepEqual($.extend({ resources: {} }, dataAccessors.setter), appointmentDataProvider.dataAccessors.setter, 'dataAccessors setters were passed to appointmentDataProvider');
+            assert.deepEqual(dataAccessors.getter, appointmentDataProvider.dataAccessors.getter, 'dataAccessors getters were passed to appointmentDataProvider');
+            assert.deepEqual(dataAccessors.setter, appointmentDataProvider.dataAccessors.setter, 'dataAccessors setters were passed to appointmentDataProvider');
             assert.deepEqual(dataAccessors.expr, appointmentDataProvider.dataAccessors.expr, 'dataExpressions were passed to appointmentDataProvider');
+            assert.deepEqual(dataAccessors.resources, appointmentDataProvider.dataAccessors.resources, 'resources were passed to appointmentDataProvider');
         } finally {
             repaintStub.restore();
         }
@@ -416,12 +417,12 @@ QUnit.module('Options', {
             width: 800
         });
 
-        const initialAppointmentHeight = scheduler.instance.$element().find('.dx-scheduler-appointment').eq(0).outerHeight();
+        const initialAppointmentHeight = getOuterHeight(scheduler.instance.$element().find('.dx-scheduler-appointment').eq(0));
 
         scheduler.instance.option('height', 200);
         this.clock.tick();
 
-        assert.notEqual(scheduler.instance.$element().find('.dx-scheduler-appointment').eq(0).outerHeight(), initialAppointmentHeight, 'Appointment was repainted');
+        assert.notEqual(getOuterHeight(scheduler.instance.$element().find('.dx-scheduler-appointment').eq(0)), initialAppointmentHeight, 'Appointment was repainted');
     });
 
     QUnit.test('appointments should be repainted after scheduler hiding/showing and dimensions changing', function(assert) {
@@ -438,7 +439,7 @@ QUnit.module('Options', {
             width: 800
         });
 
-        const initialAppointmentHeight = scheduler.instance.$element().find('.dx-scheduler-appointment').eq(0).outerHeight();
+        const initialAppointmentHeight = getOuterHeight(scheduler.instance.$element().find('.dx-scheduler-appointment').eq(0));
 
         triggerHidingEvent($('#scheduler'));
         $('#scheduler').hide();
@@ -447,7 +448,7 @@ QUnit.module('Options', {
         triggerShownEvent($('#scheduler'));
         this.clock.tick();
 
-        assert.notEqual(scheduler.instance.$element().find('.dx-scheduler-appointment').eq(0).outerHeight(), initialAppointmentHeight, 'Appointment was repainted');
+        assert.notEqual(getOuterHeight(scheduler.instance.$element().find('.dx-scheduler-appointment').eq(0)), initialAppointmentHeight, 'Appointment was repainted');
     });
 
     QUnit.test('view.intervalCount is passed to workspace & header', function(assert) {
@@ -647,6 +648,33 @@ QUnit.module('Options', {
         scheduler.instance.option('showCurrentTimeIndicator', false);
 
         assert.ok(repaintStub.calledOnce, 'Sheduler was repainted');
+    });
+
+    QUnit.test('Appointment popup form should be recreated after changing resources', function(assert) {
+        const resources = [{
+            fieldExpr: 'TestResources',
+            dataSource: [
+                {
+                    text: 'Test-01',
+                    id: 0,
+                }
+            ]
+        }];
+        const scheduler = createWrapper({
+            currentDate: new Date(2017, 11, 18),
+            indicatorTime: new Date(2017, 11, 18, 16, 45),
+            views: ['timelineWeek'],
+            view: 'timelineWeek',
+        });
+
+        const spyAppointmentPopupForm = sinon.spy(
+            scheduler.instance,
+            '_createAppointmentPopupForm'
+        );
+
+        scheduler.instance.option('resources', resources);
+
+        assert.ok(spyAppointmentPopupForm.calledOnce, 'Appointment form was recreated');
     });
 
     QUnit.test('Filter options should be updated when dataSource is changed', function(assert) {

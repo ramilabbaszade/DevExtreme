@@ -11,14 +11,9 @@ import {
     template,
 } from '../core/templates/template';
 
-import DataSource, {
-    DataSourceOptions,
-} from '../data/data_source';
-
-import Store from '../data/abstract_store';
+import DataSource, { DataSourceLike } from '../data/data_source';
 
 import {
-    DxEvent,
     EventInfo,
     NativeEventInfo,
     InitializedEventInfo,
@@ -38,7 +33,7 @@ import Widget, {
 } from './widget/ui.widget';
 
 /** @public */
-export type ButtonClickEvent = NativeEventInfo<dxDropDownButton> & {
+export type ButtonClickEvent = NativeEventInfo<dxDropDownButton, KeyboardEvent | MouseEvent | PointerEvent> & {
     readonly selectedItem?: any;
 };
 
@@ -52,7 +47,7 @@ export type DisposingEvent = EventInfo<dxDropDownButton>;
 export type InitializedEvent = InitializedEventInfo<dxDropDownButton>;
 
 /** @public */
-export type ItemClickEvent = NativeEventInfo<dxDropDownButton> & {
+export type ItemClickEvent = NativeEventInfo<dxDropDownButton, KeyboardEvent | MouseEvent | PointerEvent> & {
     readonly itemData?: any;
     readonly itemElement: DxElement;
 };
@@ -61,7 +56,7 @@ export type ItemClickEvent = NativeEventInfo<dxDropDownButton> & {
 export type OptionChangedEvent = EventInfo<dxDropDownButton> & ChangedOptionInfo;
 
 /** @public */
-export type SelectionChangedEvent = NativeEventInfo<dxDropDownButton> & {
+export type SelectionChangedEvent = EventInfo<dxDropDownButton> & {
     readonly item: any;
     readonly previousItem: any;
 };
@@ -77,7 +72,7 @@ export interface dxDropDownButtonOptions extends WidgetOptions<dxDropDownButton>
      * @default null
      * @public
      */
-    dataSource?: string | Array<Item | any> | Store | DataSource | DataSourceOptions;
+    dataSource?: DataSourceLike<Item | any>;
     /**
      * @docid
      * @default true
@@ -88,7 +83,6 @@ export interface dxDropDownButtonOptions extends WidgetOptions<dxDropDownButton>
      * @docid
      * @default undefined
      * @type_function_param1 itemData:object
-     * @type_function_return string
      * @public
      */
     displayExpr?: string | ((itemData: any) => string);
@@ -96,7 +90,6 @@ export interface dxDropDownButtonOptions extends WidgetOptions<dxDropDownButton>
      * @docid
      * @default "content"
      * @type_function_param1 data:Array<string,number,Object>|DataSource
-     * @type_function_param2 contentElement:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -130,8 +123,6 @@ export interface dxDropDownButtonOptions extends WidgetOptions<dxDropDownButton>
      * @docid
      * @default "item"
      * @type_function_param1 itemData:object
-     * @type_function_param2 itemIndex:number
-     * @type_function_param3 itemElement:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -158,6 +149,7 @@ export interface dxDropDownButtonOptions extends WidgetOptions<dxDropDownButton>
     /**
      * @docid
      * @default null
+     * @type function
      * @type_function_param1 e:object
      * @type_function_param1_field4 event:event
      * @type_function_param1_field5 selectedItem:object
@@ -171,6 +163,7 @@ export interface dxDropDownButtonOptions extends WidgetOptions<dxDropDownButton>
     /**
      * @docid
      * @default null
+     * @type function
      * @type_function_param1 e:object
      * @type_function_param1_field4 event:event
      * @type_function_param1_field5 itemData:object
@@ -185,6 +178,7 @@ export interface dxDropDownButtonOptions extends WidgetOptions<dxDropDownButton>
     /**
      * @docid
      * @default null
+     * @type function
      * @type_function_param1 e:object
      * @type_function_param1_field4 item:object
      * @type_function_param1_field5 previousItem:object
@@ -261,8 +255,6 @@ export interface dxDropDownButtonOptions extends WidgetOptions<dxDropDownButton>
 /**
  * @docid
  * @inherits Widget, DataHelperMixin
- * @module ui/drop_down_button
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -292,7 +284,6 @@ export default class dxDropDownButton extends Widget<dxDropDownButtonOptions> {
     /**
      * @docid
      * @publicName toggle(visibility)
-     * @param1 visibility:boolean
      * @return Promise<void>
      * @public
      */
@@ -313,14 +304,17 @@ export interface dxDropDownButtonItem extends dxListItem {
     /**
      * @docid
      * @default null
+     * @type function
      * @type_function_param1 e:object
      * @type_function_param1_field1 component:dxDropDownButton
      * @type_function_param1_field2 element:DxElement
-     * @type_function_param1_field3 model:object
+     * @type_function_param1_field3 model:any
      * @type_function_param1_field4 event:event
+     * @type_function_param1_field5 itemData:object
+     * @type_function_param1_field6 itemElement:DxElement
      * @public
      */
-    onClick?: ((e: { component?: dxDropDownButton; element?: DxElement; model?: any; event?: DxEvent }) => void) | string;
+     onClick?: ((e: ItemClickEvent) => void) | string;
 }
 
 /** @public */
@@ -328,6 +322,3 @@ export type Properties = dxDropDownButtonOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxDropDownButtonOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxDropDownButtonOptions;

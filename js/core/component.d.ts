@@ -1,9 +1,5 @@
-import {
-  DxElement,
-} from './element';
-
 /** @namespace DevExpress */
-export interface ComponentOptions<TComponent> {
+export interface ComponentOptions<TDisposingEvent, TInitializedEvent, TOptionChangedEvent> {
   /**
    * @docid
    * @type_function_param1 e:object
@@ -12,7 +8,7 @@ export interface ComponentOptions<TComponent> {
    * @action
    * @public
    */
-  onDisposing?: ((e: { component: TComponent }) => void);
+  onDisposing?: ((e: TDisposingEvent) => void);
   /**
    * @docid
    * @type_function_param1 e:object
@@ -22,7 +18,7 @@ export interface ComponentOptions<TComponent> {
    * @action
    * @public
    */
-  onInitialized?: ((e: { component?: TComponent; element?: DxElement }) => void);
+  onInitialized?: ((e: TInitializedEvent) => void);
   /**
    * @docid
    * @type_function_param1 e:object
@@ -34,12 +30,10 @@ export interface ComponentOptions<TComponent> {
    * @action
    * @public
    */
-  onOptionChanged?: ((e: { component?: TComponent; name?: string; fullName?: string; value?: any }) => void);
+  onOptionChanged?: ((e: TOptionChangedEvent) => void);
 }
 /**
  * @docid Component
- * @module core/component
- * @export Component
  * @namespace DevExpress
  * @hidden
  * @wrappable
@@ -68,7 +62,6 @@ export class Component<TProperties> {
   /**
    * @docid
    * @publicName off(eventName)
-   * @param1 eventName:string
    * @return this
    * @public
    */
@@ -76,8 +69,6 @@ export class Component<TProperties> {
   /**
    * @docid
    * @publicName off(eventName, eventHandler)
-   * @param1 eventName:string
-   * @param2 eventHandler:function
    * @return this
    * @public
    */
@@ -85,8 +76,6 @@ export class Component<TProperties> {
   /**
    * @docid
    * @publicName on(eventName, eventHandler)
-   * @param1 eventName:string
-   * @param2 eventHandler:function
    * @return this
    * @public
    */
@@ -94,7 +83,6 @@ export class Component<TProperties> {
   /**
    * @docid
    * @publicName on(events)
-   * @param1 events:object
    * @return this
    * @public
    */
@@ -110,7 +98,6 @@ export class Component<TProperties> {
    * @docid
    * @publicName option(optionName)
    * @param1 optionName:string
-   * @return any
    * @public
    */
    option<TPropertyName extends string>(optionName: TPropertyName): TPropertyName extends (keyof TProperties) ? TProperties[TPropertyName] : unknown;
@@ -118,7 +105,6 @@ export class Component<TProperties> {
    * @docid
    * @publicName option(optionName, optionValue)
    * @param1 optionName:string
-   * @param2 optionValue:any
    * @public
    */
    option<TPropertyName extends string>(optionName: TPropertyName, optionValue: TPropertyName extends keyof TProperties ? TProperties[TPropertyName] : unknown): void;
@@ -132,7 +118,6 @@ export class Component<TProperties> {
   /**
    * @docid
    * @publicName resetOption(optionName)
-   * @param1 optionName:string
    * @public
    */
   resetOption(optionName: string): void;

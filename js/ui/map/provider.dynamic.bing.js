@@ -1,7 +1,7 @@
+import { getWidth, getHeight } from '../../core/utils/size';
 import { noop } from '../../core/utils/common';
 import { getWindow } from '../../core/utils/window';
 const window = getWindow();
-import Promise from '../../core/polyfills/promise';
 import { extend } from '../../core/utils/extend';
 import errors from '../widget/ui.errors';
 import { map, each } from '../../core/utils/iterator';
@@ -201,8 +201,8 @@ const BingProvider = DynamicProvider.inherit({
         const $container = this._$container;
 
         this._map.setOptions({
-            width: $container.width(),
-            height: $container.height()
+            width: getWidth($container),
+            height: getHeight($container)
         });
 
         return Promise.resolve();

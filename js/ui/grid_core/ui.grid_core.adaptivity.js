@@ -1,3 +1,4 @@
+import { getWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import { addNamespace } from '../../events/utils/index';
@@ -46,7 +47,7 @@ const GROUP_ROW_CLASS = 'dx-group-row';
 
 const EXPAND_ARIA_NAME = 'dxDataGrid-ariaAdaptiveExpand';
 const COLLAPSE_ARIA_NAME = 'dxDataGrid-ariaAdaptiveCollapse';
-const NEW_SCROLLING_MODE = 'scrolling.newMode';
+const LEGACY_SCROLLING_MODE = 'scrolling.legacyMode';
 
 function getColumnId(that, column) {
     return that._columnsController.getColumnId(column);
@@ -150,7 +151,7 @@ const AdaptiveColumnsController = modules.ViewController.inherit({
                 const isItemEdited = that._isItemEdited(item);
                 templateOptions.value = cellOptions.row.values[columnIndex];
                 if(isItemEdited || column.showEditorAlways) {
-                    editingController.renderFormEditTemplate(templateOptions, item, options.component, $container, !isItemEdited);
+                    editingController.renderFormEditTemplate(templateOptions, item, options, $container, !isItemEdited);
                 } else {
                     templateOptions.column = column;
                     templateOptions.columnIndex = columnIndex;
@@ -477,7 +478,7 @@ const AdaptiveColumnsController = modules.ViewController.inherit({
         if(that._isVisibleColumnsValid(visibleColumns) && hiddenQueue.length) {
             let totalWidth = 0;
             const $rootElement = that.component.$element();
-            let rootElementWidth = $rootElement.width() - that._getCommandColumnsWidth();
+            let rootElementWidth = getWidth($rootElement) - that._getCommandColumnsWidth();
             const getVisibleContentColumns = function() {
                 return visibleColumns.filter(item => !item.command && this._hiddenColumns.filter(i => i.index === item.index).length === 0);
             }.bind(this);
@@ -521,7 +522,7 @@ const AdaptiveColumnsController = modules.ViewController.inherit({
                     }
                 }
 
-                needHideColumn = needHideColumn || totalWidth > $rootElement.width();
+                needHideColumn = needHideColumn || totalWidth > getWidth($rootElement);
 
                 if(needHideColumn) {
                     const column = hiddenQueue.pop();
@@ -758,7 +759,7 @@ export const adaptivityModule = {
                 },
 
                 _createRow: function(row) {
-                    const $row = this.callBase(row);
+                    const $row = this.callBase.apply(this, arguments);
 
                     if(row && row.rowType === ADAPTIVE_ROW_TYPE && row.key === this._dataController.adaptiveExpandedKey()) {
                         $row.addClass(ADAPTIVE_DETAIL_ROW_CLASS);
@@ -911,11 +912,11 @@ export const adaptivityModule = {
                     }
                 },
 
-                _afterInsertRow: function(options) {
-                    this.callBase(options);
+                _afterInsertRow: function(key) {
+                    this.callBase.apply(this, arguments);
 
                     if(this._adaptiveController.hasHiddenColumns()) {
-                        this._adaptiveController.toggleExpandAdaptiveDetailRow(options.key, this.isRowEditMode());
+                        this._adaptiveController.toggleExpandAdaptiveDetailRow(key, this.isRowEditMode());
                         this._isForceRowAdaptiveExpand = true;
                     }
                 },
@@ -1051,6 +1052,7 @@ export const adaptivityModule = {
                     }
 
                     const expandRowIndex = gridCoreUtils.getIndexByKey(this._adaptiveExpandedKey, items);
+                    const newMode = this.option(LEGACY_SCROLLING_MODE) === false;
 
                     if(expandRowIndex >= 0) {
                         const item = items[expandRowIndex];
@@ -1064,7 +1066,7 @@ export const adaptivityModule = {
                             isNewRow: item.isNewRow,
                             values: item.values
                         });
-                    } else if(changeType === 'refresh' && !(this.option(NEW_SCROLLING_MODE) && change.repaintChangesOnly)) {
+                    } else if(changeType === 'refresh' && !(newMode && change.repaintChangesOnly)) {
                         this._adaptiveExpandedKey = undefined;
                     }
 

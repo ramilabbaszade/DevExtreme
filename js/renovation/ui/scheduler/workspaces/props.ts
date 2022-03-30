@@ -3,6 +3,7 @@ import {
   Event,
   JSXTemplate,
   OneWay,
+  Slot,
   Template,
 } from '@devextreme-generator/declarations';
 import type { dxSchedulerScrolling } from '../../../../ui/scheduler';
@@ -18,9 +19,12 @@ import {
 import { BaseWidgetProps } from '../../common/base_props';
 import { HeaderPanelLayoutProps } from './base/header_panel/layout';
 import { DateTableLayoutProps } from './base/date_table/layout';
-import { TimePaneLayoutProps } from './base/time_panel/layout';
 import { GetDateForHeaderText } from '../view_model/to_test/views/types';
 import { ScrollableDirection } from '../../scroll_view/common/types';
+import { AppointmentTemplateProps, OverflowIndicatorTemplateProps } from '../appointment/types';
+
+// TODO: WA for bug in generators: they use getters for default props
+const DEFAULT_GROUPS = [];
 
 @ComponentBindings()
 export class WorkSpaceProps extends BaseWidgetProps {
@@ -36,17 +40,21 @@ export class WorkSpaceProps extends BaseWidgetProps {
 
   @Template() resourceCellTemplate?: JSXTemplate<ResourceCellTemplateProps>;
 
+  @Template() appointmentTemplate?: JSXTemplate<AppointmentTemplateProps>;
+
+  @Template() appointmentCollectorTemplate?: JSXTemplate<OverflowIndicatorTemplateProps>;
+
   // -----------------
   // Public props
   // -----------------
 
   @OneWay() intervalCount = 1;
 
-  @OneWay() groups: Group[] = [];
+  @OneWay() groups: Group[] = DEFAULT_GROUPS;
 
   @OneWay() groupByDate = false;
 
-  @OneWay() groupOrientation: GroupOrientation = 'horizontal';
+  @OneWay() groupOrientation?: GroupOrientation;
 
   @OneWay() crossScrollingEnabled = false;
 
@@ -59,6 +67,8 @@ export class WorkSpaceProps extends BaseWidgetProps {
   @OneWay() currentDate!: Date;
 
   @OneWay() startDate?: Date;
+
+  @OneWay() startViewDate!: Date;
 
   @OneWay() hoursInterval = 0.5;
 
@@ -84,13 +94,19 @@ export class WorkSpaceProps extends BaseWidgetProps {
 
   @OneWay() showCurrentTimeIndicator = true;
 
-  @OneWay() schedulerHeight?: number;
+  @OneWay() schedulerHeight?: string | number | (() => (string | number));
 
-  @OneWay() schedulerWidth?: number;
+  @OneWay() schedulerWidth?: string | number | (() => (string | number));
 
   @OneWay() type: ViewType = 'week';
 
+  @OneWay() maxAppointmentsPerCell?: number | 'auto' | 'unlimited';
+
   @Event() onViewRendered!: (viewMetaData: ViewMetaData) => void;
+
+  @Slot() appointments?: JSX.Element;
+
+  @Slot() allDayAppointments?: JSX.Element;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-type-alias
@@ -116,20 +132,23 @@ WorkSpaceProps,
 | 'tabIndex'
 | 'accessKey'
 | 'focusStateEnabled'
-| 'indicatorTime'
 | 'allowMultipleCellSelection'
 | 'allDayPanelExpanded'
 | 'hoursInterval'
-| 'groups'
-| 'selectedCellData'
 | 'type'
+| 'dataCellTemplate'
+| 'dateCellTemplate'
+| 'timeCellTemplate'
+| 'resourceCellTemplate'
+| 'appointmentTemplate'
+| 'appointmentCollectorTemplate'
+| 'maxAppointmentsPerCell'
 >;
 
 export interface ViewRenderConfig {
   headerPanelTemplate: JSXTemplate<HeaderPanelLayoutProps, 'dateHeaderData'>;
   dateTableTemplate: JSXTemplate<DateTableLayoutProps>;
-  timePanelTemplate?: JSXTemplate<TimePaneLayoutProps>;
-  className?: string;
+  className: string;
   isAllDayPanelSupported: boolean;
   isProvideVirtualCellsWidth: boolean;
   isRenderTimePanel: boolean;
@@ -139,4 +158,12 @@ export interface ViewRenderConfig {
   isRenderDateHeader: boolean;
   isGenerateWeekDaysHeaderData: boolean;
   scrollingDirection: ScrollableDirection;
+  isCreateCrossScrolling: boolean;
+  defaultGroupOrientation: GroupOrientation;
+
+  isMonthDateHeader: boolean;
+
+  // This is a WA for this bug: https://github.com/DevExpress/devextreme-renovation/issues/814
+  isUseMonthDateTable: boolean;
+  isUseTimelineHeader: boolean;
 }

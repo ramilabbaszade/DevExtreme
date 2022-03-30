@@ -1,6 +1,5 @@
 import $ from '../core/renderer';
 import eventsEngine from '../events/core/events_engine';
-import Promise from '../core/polyfills/promise';
 import { fromPromise } from '../core/utils/deferred';
 import registerComponent from '../core/component_registrator';
 import errors from './widget/ui.errors';
@@ -31,7 +30,6 @@ const PROVIDERS = {
 const MAP_CLASS = 'dx-map';
 const MAP_CONTAINER_CLASS = 'dx-map-container';
 const MAP_SHIELD_CLASS = 'dx-map-shield';
-const NATIVE_CLICK_CLASS = 'dx-native-click';
 
 const Map = Widget.inherit({
 
@@ -118,12 +116,6 @@ const Map = Widget.inherit({
 
             onRouteRemoved: null,
 
-            key: {
-                bing: '',
-                google: '',
-                googleStatic: ''
-            },
-
             apiKey: {
                 bing: '',
                 google: '',
@@ -161,20 +153,11 @@ const Map = Widget.inherit({
         ]);
     },
 
-    _setDeprecatedOptions: function() {
-        this.callBase();
-
-        extend(this._deprecatedOptions, {
-            'key': { since: '20.2', alias: 'apiKey' }
-        });
-    },
-
     _init: function() {
         this.callBase();
 
         this.$element()
-            .addClass(MAP_CLASS)
-            .addClass(NATIVE_CLICK_CLASS);
+            .addClass(MAP_CLASS);
 
         this._lastAsyncAction = Promise.resolve();
 
@@ -284,7 +267,6 @@ const Map = Widget.inherit({
                 this._suppressAsyncAction = true;
                 this._invalidate();
                 break;
-            case 'key':
             case 'apiKey':
                 errors.log('W1001');
                 break;

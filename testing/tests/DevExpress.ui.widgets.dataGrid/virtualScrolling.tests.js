@@ -3,10 +3,12 @@ import 'ui/scroll_view/ui.scrollable';
 
 import $ from 'jquery';
 import memoryLeaksHelper from '../../helpers/memoryLeaksHelper.js';
-import virtualScrollingCore, { VirtualScrollController, getPixelRatio } from 'ui/grid_core/ui.grid_core.virtual_scrolling_core';
+import { VirtualScrollController } from 'ui/grid_core/ui.grid_core.virtual_scrolling_core';
+import gridCoreUtils from 'ui/grid_core/ui.grid_core.utils';
 import browser from 'core/utils/browser';
 import devices from 'core/devices';
 import renderer from 'core/renderer';
+import { setHeight } from 'core/utils/size';
 
 const mockComponent = {
     option: sinon.stub()
@@ -42,7 +44,7 @@ const mockDataSource = {
 const DEFAULT_TOTAL_ITEMS_COUNT = 20000;
 
 const DEFAULT_PAGE_SIZE = 20;
-const CONTENT_HEIGHT_LIMIT = virtualScrollingCore.getContentHeightLimit(browser);
+const CONTENT_HEIGHT_LIMIT = gridCoreUtils.getContentHeightLimit(browser);
 
 function resetMock(mock) {
     $.each(mock, function(_, method) {
@@ -547,7 +549,7 @@ QUnit.module('Virtual scrolling', {
         assert.strictEqual(this.scrollController.beginPageIndex(), mockDataSource.pageCount() / 2);
         assert.strictEqual(this.scrollController.endPageIndex(), mockDataSource.pageCount() / 2 + 1);
 
-        assert.strictEqual(this.scrollController.getContentOffset() * getPixelRatio(window), browser.mozilla ? 4000000 : 7500000);
+        assert.strictEqual(this.scrollController.getContentOffset() * gridCoreUtils.getPixelRatio(window), browser.mozilla ? 4000000 : 7500000);
         assert.ok(mockDataSource.load.called);
 
         assert.strictEqual(this.externalDataChangedHandler.callCount, 2);
@@ -578,16 +580,16 @@ QUnit.module('Subscribe to external scrollable events', {
         this.scrollController.setContentItemSizes(contentSizes);
         mockDataSource.load.reset();
         this.externalDataChangedHandler.reset();
-        this.clock = sinon.useFakeTimers(),
+        this.clock = sinon.useFakeTimers();
 
-        this.$fixtureElement = $('<div>').appendTo('body');
-
+        const $container = $('<div />').appendTo('body');
+        this.$fixtureElement = $('<div />').appendTo($container);
     },
 
     afterEach: function() {
         moduleConfig.afterEach.call(this);
         this.clock.restore();
-        this.$fixtureElement.remove();
+        this.$fixtureElement.parent().remove();
     }
 }, () => {
 
@@ -679,7 +681,9 @@ QUnit.module('Subscribe to external scrollable events', {
 
         $('<div>').height(300).appendTo(this.$fixtureElement);
 
-        const $element = renderer('<div>').height(40000).appendTo(this.$fixtureElement);
+        const $element = renderer('<div>');
+        setHeight($element, 40000);
+        $element.appendTo(this.$fixtureElement);
         const scrollable = this.$fixtureElement.height(10000).dxScrollable({}).dxScrollable('instance');
 
         this.scrollController.subscribeToWindowScrollEvents($element);
@@ -776,7 +780,10 @@ QUnit.module('Subscribe to external scrollable events', {
 
         $('<div>').height(300).appendTo(this.$fixtureElement);
 
-        const $element = renderer('<div>').height(40000).appendTo(this.$fixtureElement);
+        const $element = renderer('<div>');
+        setHeight($element, 40000);
+        $element.appendTo(this.$fixtureElement);
+
         const scrollable = this.$fixtureElement.height(10000).dxScrollable({}).dxScrollable('instance');
 
         this.scrollController.subscribeToWindowScrollEvents($element);
@@ -839,11 +846,11 @@ QUnit.module('Subscribe to external scrollable events', {
     // T470971
     QUnit.test('Content height limit for different browsers', function(assert) {
     // act, assert
-        assert.equal(virtualScrollingCore.getContentHeightLimit({ mozilla: true }), 8000000, 'content height limit for firefox');
-        virtualScrollingCore._setPixelRatioFn(function() { return 1; });
-        assert.equal(virtualScrollingCore.getContentHeightLimit({}), 15000000, 'content height limit for other browsers');
-        virtualScrollingCore._setPixelRatioFn(function() { return 2; });
-        assert.equal(virtualScrollingCore.getContentHeightLimit({}), 7500000, 'content height limit depends on devicePixelRatio for other browsers'); // T692460
+        assert.equal(gridCoreUtils.getContentHeightLimit({ mozilla: true }), 8000000, 'content height limit for firefox');
+        gridCoreUtils._setPixelRatioFn(function() { return 1; });
+        assert.equal(gridCoreUtils.getContentHeightLimit({}), 15000000, 'content height limit for other browsers');
+        gridCoreUtils._setPixelRatioFn(function() { return 2; });
+        assert.equal(gridCoreUtils.getContentHeightLimit({}), 7500000, 'content height limit depends on devicePixelRatio for other browsers'); // T692460
     });
 });
 
@@ -852,8 +859,8 @@ QUnit.module('VirtualScrollingController. New mode', {
     beforeEach: function() {
         moduleConfig.beforeEach.call(this);
         mockComponent.option.withArgs('scrolling.rowRenderingMode').returns('virtual');
-        mockComponent.option.withArgs('scrolling.newMode').returns(true);
-        mockComponent.option.withArgs('scrolling.minGap').returns(1);
+        mockComponent.option.withArgs('scrolling.legacyMode').returns(false);
+        mockComponent.option.withArgs('scrolling.prerenderedRowCount').returns(1);
         mockDataSource.pageSize.returns(5);
         mockDataSource.loadedOffset.returns(0);
         mockDataSource.loadedItemCount.returns(100000);
@@ -914,8 +921,8 @@ QUnit.module('VirtualScrollingController. New mode', {
         const virtualItemsCount = this.scrollController.virtualItemsCount();
 
         // assert
-        assert.deepEqual(virtualItemsCount, { begin: 0, end: DEFAULT_TOTAL_ITEMS_COUNT - 30 }, 'virtual items');
-        assert.deepEqual(viewportParams, { skip: 0, take: 30 }, 'viewport params');
+        assert.deepEqual(virtualItemsCount, { begin: 0, end: DEFAULT_TOTAL_ITEMS_COUNT - 26 }, 'virtual items');
+        assert.deepEqual(viewportParams, { skip: 0, take: 26 }, 'viewport params');
     });
 
     QUnit.test('Viewport params at the middle', function(assert) {
@@ -927,20 +934,20 @@ QUnit.module('VirtualScrollingController. New mode', {
         const virtualItemsCount = this.scrollController.virtualItemsCount();
 
         // assert
-        assert.deepEqual(virtualItemsCount, { begin: Math.floor(viewportItemIndex) - 5, end: 9970 }, 'virtual items');
-        assert.deepEqual(viewportParams, { skip: Math.floor(viewportItemIndex) - 5, take: viewportSize + 10 }, 'viewport params');
+        assert.deepEqual(virtualItemsCount, { begin: Math.floor(viewportItemIndex), end: 9974 }, 'virtual items');
+        assert.deepEqual(viewportParams, { skip: Math.floor(viewportItemIndex), take: viewportSize + 1 }, 'viewport params');
     });
 
     QUnit.test('Viewport params at the bottom', function(assert) {
         const viewportSize = 25;
         this.scrollController.viewportSize(viewportSize);
-        const viewportItemIndex = DEFAULT_TOTAL_ITEMS_COUNT - 15;
+        const viewportItemIndex = DEFAULT_TOTAL_ITEMS_COUNT - viewportSize;
         this.scrollController.setViewportItemIndex(viewportItemIndex);
         const viewportParams = this.scrollController.getViewportParams();
         const virtualItemsCount = this.scrollController.virtualItemsCount();
 
         // assert
-        assert.deepEqual(virtualItemsCount, { begin: DEFAULT_TOTAL_ITEMS_COUNT - viewportSize - 5, end: 0 }, 'virtual items');
-        assert.deepEqual(viewportParams, { skip: DEFAULT_TOTAL_ITEMS_COUNT - viewportSize - 5, take: viewportSize + 5 }, 'viewport params');
+        assert.deepEqual(virtualItemsCount, { begin: DEFAULT_TOTAL_ITEMS_COUNT - viewportSize, end: 0 }, 'virtual items');
+        assert.deepEqual(viewportParams, { skip: DEFAULT_TOTAL_ITEMS_COUNT - viewportSize, take: viewportSize }, 'viewport params');
     });
 });

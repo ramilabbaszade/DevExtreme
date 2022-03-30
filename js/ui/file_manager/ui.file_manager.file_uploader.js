@@ -1,3 +1,4 @@
+import { getInnerHeight, setHeight, setWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { extend } from '../../core/utils/extend';
 import { Deferred } from '../../core/utils/deferred';
@@ -59,6 +60,9 @@ class FileManagerFileUploader extends Widget {
             uploadChunk: (file, chunksData) => this._fileUploaderUploadChunk(fileUploader, file, chunksData),
             abortUpload: (file, chunksData) => this._fileUploaderAbortUpload(fileUploader, file, chunksData)
         });
+
+        fileUploader._shouldRaiseDragLeaveBase = fileUploader._shouldRaiseDragLeave;
+        fileUploader._shouldRaiseDragLeave = e => this._shouldRaiseDragLeave(e, fileUploader);
 
         const uploaderInfo = {
             fileUploader
@@ -154,17 +158,17 @@ class FileManagerFileUploader extends Widget {
     }
 
     _adjustDropZonePlaceholder() {
-        if(!hasWindow()) {
+        const $dropZoneTarget = this.option('dropZone');
+        if(!hasWindow() || $dropZoneTarget.length === 0) {
             return;
         }
-        const $dropZoneTarget = this.option('dropZone');
         const placeholderBorderTopWidth = parseFloat(this._$dropZonePlaceholder.css('borderTopWidth'));
         const placeholderBorderLeftWidth = parseFloat(this._$dropZonePlaceholder.css('borderLeftWidth'));
 
         const $placeholderContainer = this.option('dropZonePlaceholderContainer');
         const containerBorderBottomWidth = parseFloat($placeholderContainer.css('borderBottomWidth'));
         const containerBorderLeftWidth = parseFloat($placeholderContainer.css('borderLeftWidth'));
-        const containerHeight = $placeholderContainer.innerHeight();
+        const containerHeight = getInnerHeight($placeholderContainer);
         const containerOffset = $placeholderContainer.offset();
         const dropZoneOffset = $dropZoneTarget.offset();
 
@@ -172,8 +176,14 @@ class FileManagerFileUploader extends Widget {
             top: dropZoneOffset.top - containerOffset.top - containerHeight - containerBorderBottomWidth,
             left: dropZoneOffset.left - containerOffset.left - containerBorderLeftWidth
         });
-        this._$dropZonePlaceholder.height($dropZoneTarget.get(0).offsetHeight - placeholderBorderTopWidth * 2);
-        this._$dropZonePlaceholder.width($dropZoneTarget.get(0).offsetWidth - placeholderBorderLeftWidth * 2);
+        setHeight(
+            this._$dropZonePlaceholder,
+            $dropZoneTarget.get(0).offsetHeight - placeholderBorderTopWidth * 2
+        );
+        setWidth(
+            this._$dropZonePlaceholder,
+            $dropZoneTarget.get(0).offsetWidth - placeholderBorderLeftWidth * 2
+        );
     }
 
     _setDropZonePlaceholderVisible(visible) {
@@ -184,6 +194,10 @@ class FileManagerFileUploader extends Widget {
         } else {
             this._$dropZonePlaceholder.css('display', 'none');
         }
+    }
+
+    _shouldRaiseDragLeave(e, uploaderInstance) {
+        return uploaderInstance.isMouseOverElement(e, this.option('splitterElement')) || uploaderInstance._shouldRaiseDragLeaveBase(e, true);
     }
 
     _uploadFiles(uploaderInfo, files) {
@@ -281,7 +295,8 @@ class FileManagerFileUploader extends Widget {
         return extend(super._getDefaultOptions(), {
             getController: null,
             onUploadSessionStarted: null,
-            onUploadProgress: null
+            onUploadProgress: null,
+            splitterElement: null
         });
     }
 
@@ -303,6 +318,8 @@ class FileManagerFileUploader extends Widget {
             case 'dropZonePlaceholderContainer':
                 this._$dropZonePlaceholder.detach();
                 this._$dropZonePlaceholder.appendTo(args.value);
+                break;
+            case 'splitterElement':
                 break;
             default:
                 super._optionChanged(args);

@@ -7,7 +7,6 @@ import injector from '../../core/utils/dependency_injector';
 import { isWindow, isFunction, isString } from '../../core/utils/type';
 import Callbacks from '../../core/utils/callbacks';
 import errors from '../../core/errors';
-import WeakMap from '../../core/polyfills/weak_map';
 import hookTouchProps from '../../events/core/hook_touch_props';
 import callOnce from '../../core/utils/call_once';
 
@@ -586,30 +585,32 @@ function initEvent(EventClass) {
 }
 
 initEvent(normalizeEventArguments(function(src, config) {
-    const that = this;
     const srcIsEvent = src instanceof eventsEngine.Event
         || (hasWindow() && src instanceof window.Event)
         || (src.view?.Event && src instanceof src.view.Event);
 
     if(srcIsEvent) {
-        that.originalEvent = src;
-        that.type = src.type;
-        that.currentTarget = undefined;
-        that.timeStamp = src.timeStamp || Date.now();
+        this.originalEvent = src;
+        this.type = src.type;
+        this.currentTarget = undefined;
+        if(Object.prototype.hasOwnProperty.call(src, 'isTrusted')) {
+            this.isTrusted = src.isTrusted;
+        }
+        this.timeStamp = src.timeStamp || Date.now();
     } else {
-        Object.assign(that, src);
+        Object.assign(this, src);
     }
 
-    addProperty('which', calculateWhich, that);
+    addProperty('which', calculateWhich, this);
 
     if(src.type.indexOf('touch') === 0) {
         delete config.pageX;
         delete config.pageY;
     }
 
-    Object.assign(that, config);
+    Object.assign(this, config);
 
-    that.guid = ++guid;
+    this.guid = ++guid;
 }));
 
 function addProperty(propName, hook, eventInstance) {

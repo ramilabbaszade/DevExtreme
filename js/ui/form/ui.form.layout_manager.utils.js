@@ -8,11 +8,12 @@ import Guid from '../../core/guid';
 import { SIMPLE_ITEM_TYPE } from './constants';
 
 const EDITORS_WITH_ARRAY_VALUE = ['dxTagBox', 'dxRangeSlider'];
+export const EDITORS_WITHOUT_LABELS = ['dxCalendar', 'dxCheckBox', 'dxHtmlEditor', 'dxRadioGroup', 'dxRangeSlider', 'dxSlider', 'dxSwitch'];
 
 export function convertToRenderFieldItemOptions({
-    $container,
-    containerCssClass,
-    parentComponent,
+    $parent,
+    rootElementCssClassList,
+    formOrLayoutManager,
     createComponentCallback,
     useFlexLayout,
     item,
@@ -28,19 +29,19 @@ export function convertToRenderFieldItemOptions({
     showColonAfterLabel,
     managerLabelLocation,
     itemId,
-    managerMarkOptions
+    managerMarkOptions,
+    labelMode
 }) {
     const isRequired = isDefined(item.isRequired) ? item.isRequired : !!_hasRequiredRuleInSet(item.validationRules);
     const isSimpleItem = item.itemType === SIMPLE_ITEM_TYPE;
     const helpID = item.helpText ? ('dx-' + new Guid()) : null;
-    const helpText = item.helpText;
 
     const labelOptions = _convertToLabelOptions({
         item, id: itemId, isRequired, managerMarkOptions,
         showColonAfterLabel,
         labelLocation: managerLabelLocation,
+        formLabelMode: labelMode,
     });
-
 
     const needRenderLabel = labelOptions.visible && labelOptions.text;
     const { location: labelLocation, labelID } = labelOptions;
@@ -53,10 +54,34 @@ export function convertToRenderFieldItemOptions({
             inArray(item.editorType, ['dxTextArea', 'dxRadioGroup', 'dxCalendar', 'dxHtmlEditor']) !== -1
         );
 
+    const editorOptions = _convertToEditorOptions({
+        editorType: item.editorType,
+        editorValue,
+        defaultEditorName: item.dataField,
+        canAssignUndefinedValueToEditor,
+        externalEditorOptions: item.editorOptions,
+        editorInputId: itemId,
+        editorValidationBoundary,
+        editorStylingMode,
+        formLabelMode: labelMode,
+        labelText: labelOptions.textWithoutColon,
+        labelMark: labelOptions.markOptions.showRequiredMark
+            ? String.fromCharCode(160) + labelOptions.markOptions.requiredMark
+            : '',
+    });
+
+    const needRenderOptionalMarkAsHelpText = labelOptions.markOptions.showOptionalMark
+        && !labelOptions.visible && editorOptions.labelMode !== 'hidden'
+        && !isDefined(item.helpText);
+
+    const helpText = needRenderOptionalMarkAsHelpText
+        ? labelOptions.markOptions.optionalMark
+        : item.helpText;
+
     return {
-        $container,
-        containerCssClass,
-        parentComponent,
+        $parent,
+        rootElementCssClassList,
+        formOrLayoutManager,
         createComponentCallback,
         useFlexLayout,
         labelOptions, labelNeedBaselineAlign, labelLocation, needRenderLabel,
@@ -64,30 +89,39 @@ export function convertToRenderFieldItemOptions({
         formLabelLocation,
         requiredMessageTemplate,
         validationGroup,
-        editorOptions: _convertToEditorOptions({
-            editorType: item.editorType,
-            editorValue,
-            defaultEditorName: item.dataField,
-            canAssignUndefinedValueToEditor,
-            externalEditorOptions: item.editorOptions,
-            editorInputId: itemId,
-            editorValidationBoundary,
-            editorStylingMode,
-        })
+        editorOptions
     };
+}
+
+export function getLabelMarkText({ showRequiredMark, requiredMark, showOptionalMark, optionalMark }) {
+    if(!showRequiredMark && !showOptionalMark) {
+        return '';
+    }
+
+    return String.fromCharCode(160) + (showRequiredMark ? requiredMark : optionalMark);
 }
 
 export function convertToLabelMarkOptions({ showRequiredMark, requiredMark, showOptionalMark, optionalMark }, isRequired) {
     return {
-        isRequiredMark: showRequiredMark && isRequired,
+        showRequiredMark: showRequiredMark && isRequired,
         requiredMark,
-        isOptionalMark: showOptionalMark && !isRequired,
+        showOptionalMark: showOptionalMark && !isRequired,
         optionalMark
     };
 }
 
 function _convertToEditorOptions({
-    editorType, defaultEditorName, editorValue, canAssignUndefinedValueToEditor, externalEditorOptions, editorInputId, editorValidationBoundary, editorStylingMode
+    editorType,
+    defaultEditorName,
+    editorValue,
+    canAssignUndefinedValueToEditor,
+    externalEditorOptions,
+    editorInputId,
+    editorValidationBoundary,
+    editorStylingMode,
+    formLabelMode,
+    labelText,
+    labelMark,
 }) {
     const editorOptionsWithValue = {};
     if(editorValue !== undefined || canAssignUndefinedValueToEditor) {
@@ -97,12 +131,22 @@ function _convertToEditorOptions({
         editorOptionsWithValue.value = editorOptionsWithValue.value || [];
     }
 
+    let labelMode = externalEditorOptions?.labelMode;
+    if(!isDefined(labelMode)) {
+        labelMode = formLabelMode === 'outside' ? 'hidden' : formLabelMode;
+    }
+
+    const stylingMode = externalEditorOptions?.stylingMode || editorStylingMode;
+
     const result = extend(true, editorOptionsWithValue,
         externalEditorOptions,
         {
             inputAttr: { id: editorInputId },
             validationBoundary: editorValidationBoundary,
-            stylingMode: editorStylingMode
+            stylingMode,
+            label: labelText,
+            labelMode,
+            labelMark,
         },
     );
 
@@ -136,14 +180,15 @@ function _hasRequiredRuleInSet(rules) {
     return hasRequiredRule;
 }
 
-function _convertToLabelOptions({ item, id, isRequired, managerMarkOptions, showColonAfterLabel, labelLocation }) {
+function _convertToLabelOptions({ item, id, isRequired, managerMarkOptions, showColonAfterLabel, labelLocation, formLabelMode }) {
+    const isEditorWithoutLabels = inArray(item.editorType, EDITORS_WITHOUT_LABELS) !== -1;
     const labelOptions = extend(
         {
             showColon: showColonAfterLabel,
             location: labelLocation,
             id: id,
-            visible: true,
-            isRequired: isRequired
+            visible: formLabelMode === 'outside' || (isEditorWithoutLabels && formLabelMode !== 'hidden'),
+            isRequired: isRequired,
         },
         item ? item.label : {},
         { markOptions: convertToLabelMarkOptions(managerMarkOptions, isRequired) }
@@ -159,6 +204,7 @@ function _convertToLabelOptions({ item, id, isRequired, managerMarkOptions, show
     }
 
     if(labelOptions.text) {
+        labelOptions.textWithoutColon = labelOptions.text;
         labelOptions.text += labelOptions.showColon ? ':' : '';
     }
 

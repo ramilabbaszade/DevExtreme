@@ -1641,6 +1641,7 @@ test.skip('Vertical moving by keydown if scrolling.mode: virtual, scrolling.rowR
       dataSource: data,
       scrolling: {
         columnRenderingMode: 'virtual',
+        useNative: false,
       },
       editing: {
         mode: editMode,
@@ -1725,6 +1726,7 @@ test('Moving by Tab key if scrolling.columnRenderingMode: virtual and fixed colu
     dataSource: data,
     scrolling: {
       columnRenderingMode: 'virtual',
+      useNative: false,
     },
     width: 500,
     selection: {
@@ -1815,6 +1817,7 @@ test('Moving by Tab key if scrolling.columnRenderingMode: virtual and fixed colu
     rtlEnabled: true,
     scrolling: {
       columnRenderingMode: 'virtual',
+      useNative: false,
     },
     width: 500,
     selection: {
@@ -2516,7 +2519,7 @@ test('New mode. A cell should be focused when the PageDow/Up key is pressed (T89
     height: 300,
     scrolling: {
       mode: 'virtual',
-      newMode: true,
+      legacyMode: false,
     },
     columns: ['Name', 'Description'],
     onFocusedCellChanging(e) {
@@ -2525,42 +2528,46 @@ test('New mode. A cell should be focused when the PageDow/Up key is pressed (T89
   });
 });
 
-test('Focus next cell using tab after adding row if some another row is focused and repaintChangesOnly is enabled (T1004913)', async (t) => {
-  const dataGrid = new DataGrid('#container');
+['Row', 'Cell', 'Batch'].forEach((editMode) => {
+  [false, true].forEach((repaintChangesOnly) => {
+    test(`${editMode} - Focus next cell using tab after adding row if some another row is focused and repaintChangesOnly is ${repaintChangesOnly} (T1004913, T1036685)`, async (t) => {
+      const dataGrid = new DataGrid('#container');
 
-  const addRowButton = dataGrid.getHeaderPanel().getAddRowButton();
-  const cell00 = dataGrid.getDataCell(0, 0);
-  const editor00 = cell00.getEditor();
-  const cell01 = dataGrid.getDataCell(0, 1);
-  const editor01 = cell01.getEditor();
+      const addRowButton = dataGrid.getHeaderPanel().getAddRowButton();
+      const cell00 = dataGrid.getDataCell(0, 0);
+      const editor00 = cell00.getEditor();
+      const cell01 = dataGrid.getDataCell(0, 1);
+      const editor01 = cell01.getEditor();
 
-  await t
-    .click(addRowButton)
+      await t
+        .click(addRowButton)
 
-    .expect(cell00.isFocused)
-    .ok()
-    .expect(editor00.element.focused)
-    .ok()
+        .expect(cell00.isFocused)
+        .ok()
+        .expect(editor00.element.focused)
+        .ok()
 
-    .pressKey('tab')
+        .pressKey('tab')
 
-    .expect(cell01.isFocused)
-    .ok()
-    .expect(editor01.element.focused)
-    .ok();
-}).before(async () => createWidget('dxDataGrid', {
-  dataSource: [{ ID: 1, FirstName: 'John' }],
-  keyExpr: 'ID',
-  repaintChangesOnly: true,
-  editing: {
-    mode: 'cell',
-    allowUpdating: true,
-    allowAdding: true,
-  },
-  focusedRowEnabled: true,
-  focusedRowKey: 1,
-  columns: ['ID', 'FirstName'],
-}));
+        .expect(cell01.isFocused)
+        .ok()
+        .expect(editor01.element.focused)
+        .ok();
+    }).before(async () => createWidget('dxDataGrid', {
+      dataSource: [{ ID: 1, FirstName: 'John' }],
+      keyExpr: 'ID',
+      repaintChangesOnly,
+      editing: {
+        mode: editMode.toLowerCase(),
+        allowUpdating: true,
+        allowAdding: true,
+      },
+      focusedRowEnabled: true,
+      focusedRowKey: 1,
+      columns: ['ID', 'FirstName'],
+    }));
+  });
+});
 
 test('All rows should be focused on arrow-up/down when virtual scrolling enabled with group summary (T1014612)', async (t) => {
   const dataGrid = new DataGrid('#container');
@@ -2674,3 +2681,680 @@ test('All rows should be focused on arrow-up/down when virtual scrolling enabled
     groupIndex: 0,
   }],
 }));
+
+test('Cells should be focused after saving data when filter is applied and cell mode is used (T1029906)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+
+  // act
+  await t
+    .click(dataGrid.getDataCell(0, 0).element);
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 0).isFocused)
+    .ok()
+    .expect(dataGrid.getDataCell(0, 0).getEditor().element.exists)
+    .ok();
+
+  // act
+  await t
+    .pressKey('esc');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 0).isFocused)
+    .ok()
+    .expect(dataGrid.getDataCell(0, 0).getEditor().element.exists)
+    .notOk();
+
+  // act
+  await t
+    .pressKey('down');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(1, 0).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('d')
+    .pressKey('enter');
+
+  const visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(4)
+    .expect(dataGrid.getDataCell(2, 0).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('down');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(3, 0).isFocused)
+    .ok();
+}).before(async () => createWidget('dxDataGrid', {
+  dataSource: [
+    { id: 1, name: 'aaa' },
+    { id: 2, name: 'aba' },
+    { id: 3, name: 'baa' },
+    { id: 4, name: 'bca' },
+    { id: 5, name: 'acd' },
+  ],
+  keyExpr: 'id',
+  columns: [{
+    dataField: 'name',
+    filterValue: 'a',
+  }],
+  filterRow: {
+    visible: true,
+    applyFilter: 'auto',
+  },
+  keyboardNavigation: {
+    enterKeyAction: 'moveFocus',
+    enterKeyDirection: 'column',
+    editOnKeyPress: true,
+  },
+
+  editing: {
+    mode: 'cell',
+    allowUpdating: true,
+  },
+  onFocusedCellChanging(e) {
+    e.isHighlighted = true;
+  },
+}));
+
+test('Lookup editor should update cell value on down or up key when cell is focused by tab or shift+tab (T1036028)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+
+  // act
+  await t
+    .click(dataGrid.getDataRow(0).getCommandCell(3).getButton(0));
+
+  // assert
+  await t
+    .expect(dataGrid.getDataRow(0).isEdited)
+    .ok()
+    .expect(dataGrid.getDataCell(0, 0).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 1).isFocused)
+    .ok()
+    .expect(dataGrid.apiGetCellValue(0, 1))
+    .eql('1');
+
+  // act
+  await t
+    .pressKey('down');
+
+  // assert
+  await t
+    .expect(dataGrid.apiGetCellValue(0, 1))
+    .eql('2');
+
+  // act
+  await t
+    .pressKey('tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 2).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('shift+tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 1).isFocused)
+    .ok()
+    .expect(dataGrid.apiGetCellValue(0, 1))
+    .eql('2');
+
+  // act
+  await t
+    .pressKey('up');
+
+  // assert
+  await t
+    .expect(dataGrid.apiGetCellValue(0, 1))
+    .eql('1');
+}).before(async () => createWidget('dxDataGrid', {
+  dataSource: [
+    {
+      id: 1, field1: 'a', field2: '1', field3: 'b',
+    },
+  ],
+  keyExpr: 'id',
+  columns: ['field1',
+    {
+      dataField: 'field2',
+      lookup: {
+        dataSource: [
+          { id: '1' },
+          { id: '2' },
+        ],
+        displayExpr: 'id',
+        valueExpr: 'id',
+      },
+    },
+    'field3'],
+  editing: {
+    mode: 'row',
+    allowUpdating: true,
+  },
+}));
+
+[false, true].forEach((repaintChangesOnly) => {
+  test(`Editor in the filter row should not lose focus when groups are expanded after the filtering (repaintChangesOnly is ${repaintChangesOnly}) (T1038332)`, async (t) => {
+    const dataGrid = new DataGrid('#container');
+    const filterRowCell = dataGrid.getHeaders().getFilterRow().getFilterCell(1);
+    const filterRowEditor = filterRowCell.getEditor();
+
+    // act
+    await t
+      .click(filterRowEditor.element);
+
+    // assert
+    await t
+      .expect(filterRowEditor.element.focused)
+      .ok()
+      .expect(filterRowCell.isFocused)
+      .ok();
+
+    // act
+    await t
+      .typeText(filterRowEditor.element, 'Name')
+      .wait(1000);
+
+    let visibleRows = await dataGrid.apiGetVisibleRows();
+
+    // assert
+    await t
+      .expect(visibleRows.length)
+      .eql(5)
+      .expect(filterRowEditor.element.focused)
+      .ok()
+      .expect(filterRowCell.isFocused)
+      .ok();
+
+    // act
+    await t
+      .typeText(filterRowEditor.element, '_1')
+      .wait(1000);
+
+    visibleRows = await dataGrid.apiGetVisibleRows();
+
+    // assert
+    await t
+      .expect(visibleRows.length)
+      .eql(2)
+      .expect(filterRowEditor.element.focused)
+      .ok()
+      .expect(filterRowCell.isFocused)
+      .ok();
+  }).before(async () => createWidget('dxDataGrid', {
+    dataSource: [
+      {
+        ID: 1,
+        Name: 'Name_1',
+        Category: 'Category_1',
+      },
+      {
+        ID: 2,
+        Name: 'Name_2',
+        Category: 'Category_1',
+      },
+      {
+        ID: 3,
+        Name: 'Name_3',
+        Category: 'Category_2',
+      },
+    ],
+    keyExpr: 'ID',
+    repaintChangesOnly,
+    filterRow: {
+      visible: true,
+    },
+    grouping: {
+      autoExpandAll: false,
+    },
+    onContentReady(e) {
+      if (e.component.getCombinedFilter()) {
+        if (e.component.myAllExpand) {
+          e.component.myAllExpand = false;
+          return;
+        }
+        e.component.myAllExpand = true;
+        e.component.expandAll(0);
+      }
+    },
+    columns: [
+      'Name',
+      {
+        dataField: 'Category',
+        groupIndex: 0,
+      },
+    ],
+  }));
+});
+
+test('Checkbox value is changed properly on tab when the batch editing mode and focused row are enabled (T1059412)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+  const addRowButton = dataGrid.getHeaderPanel().getAddRowButton();
+
+  // act
+  await t
+    .click(addRowButton);
+
+  // assert
+  await t
+    .expect(dataGrid.getDataRow(0).isInserted)
+    .ok();
+
+  // act
+  await t
+    .click(dataGrid.getDataCell(0, 0).element.nth(1));
+
+  // assert
+  await t
+    .expect(dataGrid.getDataRow(0).element.nth(1).hasClass('dx-row-focused'))
+    .ok();
+
+  // act
+  await t
+    .pressKey('up');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 0).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('right');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 1).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('space');
+
+  // assert
+  await t
+    .expect(dataGrid.apiGetCellValue(0, 1))
+    .ok()
+    .expect(dataGrid.getDataCell(0, 1).isFocused)
+    .ok()
+    .expect(dataGrid.getDataCell(0, 1).isModified)
+    .ok();
+
+  // act
+  await t
+    .pressKey('space');
+
+  // assert
+  await t
+    .expect(dataGrid.apiGetCellValue(0, 1))
+    .notOk()
+    .expect(dataGrid.getDataCell(0, 1).isFocused)
+    .ok()
+    .expect(dataGrid.getDataCell(0, 1).isModified)
+    .ok();
+
+  // act
+  await t
+    .pressKey('space');
+
+  // assert
+  await t
+    .expect(dataGrid.apiGetCellValue(0, 1))
+    .ok()
+    .expect(dataGrid.getDataCell(0, 1).isFocused)
+    .ok()
+    .expect(dataGrid.getDataCell(0, 1).isModified)
+    .ok();
+}).before(async () => createWidget('dxDataGrid', {
+  keyExpr: 'id',
+  columns: [
+    {
+      dataField: 'id',
+      allowEditing: false,
+    },
+    {
+      dataField: 'checked',
+      dataType: 'boolean',
+    },
+  ],
+  dataSource: [
+    {
+      id: 1,
+      checked: false,
+    },
+  ],
+  editing: {
+    allowAdding: true,
+    allowUpdating: true,
+    mode: 'batch',
+  },
+  focusedRowEnabled: true,
+  keyboardNavigation: {
+    editOnKeyPress: true,
+  },
+}));
+
+test('The last cell should be focused after changing the page size (T1063530)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+  const pager = dataGrid.getPager();
+
+  // act
+  for (let i = 0; i < 3; i += 1) {
+    await t.pressKey('tab');
+  }
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 0).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 1).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(1, 0).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(1, 1).isFocused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('tab');
+
+  // assert
+  await t
+    .expect(pager.getPageSize(0).element.focused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('space');
+  const visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(1);
+
+  // act
+  await t
+    .pressKey('shift+tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 1).isFocused)
+    .ok();
+}).before(async () => {
+  const getItems = (): Record<string, unknown>[] => {
+    const items: Record<string, unknown>[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      items.push({
+        ID: i + 1,
+        Name: `Name ${i + 1}`,
+      });
+    }
+    return items;
+  };
+  return createWidget('dxDataGrid', {
+    dataSource: getItems(),
+    keyExpr: 'ID',
+    columnWidth: 150,
+    paging: {
+      pageSize: 2,
+    },
+    pager: {
+      visible: true,
+      allowedPageSizes: [1, 2],
+      showPageSizeSelector: true,
+    },
+  });
+});
+
+test('The last cell should be focused after changing the page size when scrolling.columnRenderingMode is virtual (T1063530)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+  const pager = dataGrid.getPager();
+
+  // act
+  await t
+    .click(dataGrid.getDataCell(0, 0).element);
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 0).hasHiddenFocusState)
+    .ok();
+
+  // navigate trough the first row
+  for (let i = 0; i < 6; i += 1) {
+    // act
+    await t
+      .pressKey('tab');
+
+    // assert
+    await t
+      .expect(dataGrid.getDataCell(0, i + 1).isFocused)
+      .ok();
+  }
+
+  // navigate trough the second row
+  for (let i = 0; i < 7; i += 1) {
+    // act
+    await t
+      .pressKey('tab');
+
+    // assert
+    await t
+      .expect(dataGrid.getDataCell(1, i).isFocused)
+      .ok();
+  }
+
+  // act
+  await t
+    .pressKey('tab');
+
+  // assert
+  await t
+    .expect(pager.getPageSize(0).element.focused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('space');
+  const visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(1);
+
+  // act
+  await t
+    .pressKey('shift+tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getDataCell(0, 6).isFocused)
+    .ok();
+}).before(async () => {
+  const getItems = (): Record<string, unknown>[] => {
+    const items: Record<string, unknown>[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const item = {
+        id: i + 1,
+      };
+
+      for (let j = 1; j < 7; j += 1) {
+        item[`field${j + 1}`] = `Field_${i + 1}_${j + 1}`;
+      }
+      items.push(item);
+    }
+    return items;
+  };
+  return createWidget('dxDataGrid', {
+    dataSource: getItems(),
+    keyExpr: 'id',
+    width: 450,
+    columnWidth: 150,
+    paging: {
+      pageSize: 2,
+    },
+    scrolling: {
+      columnRenderingMode: 'virtual',
+    },
+    pager: {
+      visible: true,
+      allowedPageSizes: [1, 2],
+      showPageSizeSelector: true,
+    },
+  });
+});
+
+test('The last cell should be focused after changing the page size when scrolling.columnRenderingMode is virtual and fixed columns are enabled (T1063530)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+  const pager = dataGrid.getPager();
+
+  // act
+  await t
+    .click(dataGrid.getFixedDataCell(0, 0).element);
+
+  // assert
+  await t
+    .expect(dataGrid.getFixedDataCell(0, 0).hasHiddenFocusState)
+    .ok();
+
+  // navigate trough the first row
+  for (let i = 0; i < 6; i += 1) {
+    // act
+    await t
+      .pressKey('tab');
+
+    const dataCell = i < 5 ? dataGrid.getDataCell(0, i + 1) : dataGrid.getFixedDataCell(0, i + 1);
+
+    // assert
+    await t
+      .expect(dataCell.isFocused)
+      .ok();
+  }
+
+  // navigate trough the second row
+  for (let i = 0; i < 7; i += 1) {
+    // act
+    await t
+      .pressKey('tab');
+
+    const dataCell = i === 0 || i === 6 ? dataGrid.getFixedDataCell(1, i)
+      : dataGrid.getDataCell(1, i);
+
+    // assert
+    await t
+      .expect(dataCell.isFocused)
+      .ok();
+  }
+
+  // act
+  await t
+    .pressKey('tab');
+
+  // assert
+  await t
+    .expect(pager.getPageSize(0).element.focused)
+    .ok();
+
+  // act
+  await t
+    .pressKey('space');
+  const visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(1);
+
+  // act
+  await t
+    .pressKey('shift+tab');
+
+  // assert
+  await t
+    .expect(dataGrid.getFixedDataCell(0, 6).isFocused)
+    .ok();
+}).before(async () => {
+  const getItems = (): Record<string, unknown>[] => {
+    const items: Record<string, unknown>[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const item = {
+        id: i + 1,
+      };
+
+      for (let j = 1; j < 7; j += 1) {
+        item[`field${j + 1}`] = `Field_${i + 1}_${j + 1}`;
+      }
+      items.push(item);
+    }
+    return items;
+  };
+  return createWidget('dxDataGrid', {
+    dataSource: getItems(),
+    keyExpr: 'id',
+    width: 450,
+    columnWidth: 150,
+    customizeColumns(columns) {
+      columns[0].fixed = true;
+      columns[6].fixed = true;
+      columns[6].fixedPosition = 'right';
+    },
+    paging: {
+      pageSize: 2,
+    },
+    scrolling: {
+      columnRenderingMode: 'virtual',
+    },
+    pager: {
+      visible: true,
+      allowedPageSizes: [1, 2],
+      showPageSizeSelector: true,
+    },
+  });
+});

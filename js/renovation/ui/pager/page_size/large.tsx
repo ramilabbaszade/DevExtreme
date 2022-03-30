@@ -7,10 +7,11 @@ import {
   Fragment,
 } from '@devextreme-generator/declarations';
 
+import { combineClasses } from '../../../utils/combine_classes';
 import { LightButton } from '../common/light_button';
-import { FullPageSize } from '../common/types.d';
+import { FullPageSize } from '../common/types';
 import { InternalPagerProps } from '../common/pager_props';
-import { PAGER_SELECTED_PAGE_SIZE_CLASS, PAGER_PAGE_SIZE_CLASS } from '../common/consts';
+import { PAGER_SELECTED_PAGE_SIZE_CLASS, PAGER_PAGE_SIZE_CLASS, FIRST_CHILD_CLASS } from '../common/consts';
 
 export const viewFunction = ({ pageSizesText }: PageSizeLarge): JSX.Element => (
   <Fragment>
@@ -30,6 +31,7 @@ export class PageSizeLargeProps {
   @OneWay() pageSizes!: FullPageSize[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-type-alias
 type PageSizeLargePropsType = Pick<InternalPagerProps, 'pageSize' | 'pageSizeChange'> & PageSizeLargeProps;
 
 @Component({ defaultOptionRules: null, view: viewFunction })
@@ -41,9 +43,12 @@ export class PageSizeLarge extends JSXComponent<PageSizeLargePropsType, 'pageSiz
     text: string;
   }[] {
     const { pageSize, pageSizes } = this.props;
-    return pageSizes.map(({ value: processedPageSize, text }) => {
+    return pageSizes.map(({ value: processedPageSize, text }, index: number) => {
       const selected = processedPageSize === pageSize;
-      const className = selected ? PAGER_SELECTED_PAGE_SIZE_CLASS : PAGER_PAGE_SIZE_CLASS;
+      const className = combineClasses({
+        [selected ? PAGER_SELECTED_PAGE_SIZE_CLASS : PAGER_PAGE_SIZE_CLASS]: true,
+        [FIRST_CHILD_CLASS]: index === 0,
+      });
       return {
         className,
         click: this.onPageSizeChange(processedPageSize),

@@ -1,3 +1,4 @@
+import { getHeight, getOuterHeight, getWidth, getOuterWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import { nativeScrolling } from '../../core/utils/support';
@@ -7,18 +8,15 @@ import { isPlainObject, isDefined } from '../../core/utils/type';
 import { extend } from '../../core/utils/extend';
 import { getPublicElement } from '../../core/element';
 import { hasWindow } from '../../core/utils/window';
-import domAdapter from '../../core/dom_adapter';
 import devices from '../../core/devices';
 import registerComponent from '../../core/component_registrator';
 import DOMComponent from '../../core/dom_component';
-import { focusable } from '../widget/selectors';
 import { addNamespace } from '../../events/utils/index';
 import scrollEvents from '../../events/gesture/emitter.gesture.scroll';
 import { SimulatedStrategy } from './ui.scrollable.simulated';
 import NativeStrategy from './ui.scrollable.native';
 import { deviceDependentOptions } from './ui.scrollable.device';
 import { when } from '../../core/utils/deferred';
-import getScrollRtlBehavior from '../../core/utils/scroll_rtl_behavior';
 import { getElementLocationInternal } from '../../renovation/ui/scroll_view/utils/get_element_location_internal';
 
 const SCROLLABLE = 'dxScrollable';
@@ -103,14 +101,6 @@ const Scrollable = DOMComponent.inherit({
         const $container = this._$container = $('<div>').addClass(SCROLLABLE_CONTAINER_CLASS);
         const $wrapper = this._$wrapper = $('<div>').addClass(SCROLLABLE_WRAPPER_CLASS);
         const $content = this._$content = $('<div>').addClass(SCROLLABLE_CONTENT_CLASS);
-
-        if(domAdapter.hasDocumentProperty('onbeforeactivate') && browser.msie && browser.version < 12) {
-            eventsEngine.on($element, addNamespace('beforeactivate', SCROLLABLE), function(e) {
-                if(!$(e.target).is(focusable)) {
-                    e.preventDefault();
-                }
-            });
-        }
 
         $content.append($element.contents()).appendTo($container);
         $container.appendTo($wrapper);
@@ -258,7 +248,6 @@ const Scrollable = DOMComponent.inherit({
                 this._invalidate();
                 break;
             case 'inertiaEnabled':
-            case 'scrollByContent':
             case 'scrollByThumb':
             case 'bounceEnabled':
             case 'useKeyboard':
@@ -271,6 +260,7 @@ const Scrollable = DOMComponent.inherit({
                 this._strategy && this._strategy.disabledChanged();
                 break;
             case 'updateManually':
+            case 'scrollByContent':
                 break;
             case 'width':
                 this.callBase(args);
@@ -397,19 +387,19 @@ const Scrollable = DOMComponent.inherit({
     },
 
     clientHeight: function() {
-        return this._$container.height();
+        return getHeight(this._$container);
     },
 
     scrollHeight: function() {
-        return this.$content().outerHeight();
+        return getOuterHeight(this.$content());
     },
 
     clientWidth: function() {
-        return this._$container.width();
+        return getWidth(this._$container);
     },
 
     scrollWidth: function() {
-        return this.$content().outerWidth();
+        return getOuterWidth(this.$content());
     },
 
     update: function() {
@@ -444,8 +434,8 @@ const Scrollable = DOMComponent.inherit({
             location = this._strategy._applyScaleRatio(location);
         }
 
-        if(this._isScrollInverted()) {
-            location.left = this._getScrollSign() * location.left - this._getMaxOffset().left;
+        if(this._isRtlNativeStrategy()) {
+            location.left = location.left - this._getMaxOffset().left;
         }
 
         const distance = this._normalizeLocation({
@@ -458,17 +448,6 @@ const Scrollable = DOMComponent.inherit({
         }
 
         this._strategy.scrollBy(distance);
-    },
-
-    _getScrollSign() {
-        return getScrollRtlBehavior().positive ? -1 : 1;
-    },
-
-    _isScrollInverted: function() {
-        const { rtlEnabled, useNative } = this.option();
-        const { decreasing, positive } = getScrollRtlBehavior();
-
-        return useNative && rtlEnabled && (decreasing ^ positive);
     },
 
     scrollToElement: function(element, offset) {
@@ -513,6 +492,10 @@ const Scrollable = DOMComponent.inherit({
     _useTemplates: function() {
         return false;
     },
+
+    isRenovated: function() {
+        return !!Scrollable.IS_RENOVATED_WIDGET;
+    }
 });
 
 registerComponent(SCROLLABLE, Scrollable);

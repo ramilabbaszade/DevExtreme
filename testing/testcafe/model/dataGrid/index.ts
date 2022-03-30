@@ -26,6 +26,31 @@ const CLASS = {
   fixedGridView: 'content-fixed',
   rowsView: 'rowsview',
   revertButton: 'dx-revert-button',
+  fieldItemContent: 'dx-field-item-content',
+  textEditorInput: 'dx-texteditor-input',
+};
+
+const moveElement = ($element: JQuery, x: number, y: number, isStart: boolean): void => {
+  if ($element?.length) {
+    const offset = $element.offset();
+
+    if (offset) {
+      if (isStart) {
+        $element
+          .trigger($.Event('dxpointerdown', {
+            pageX: offset.left,
+            pageY: offset.top,
+            pointers: [{ pointerId: 1 }],
+          }));
+      }
+
+      $element.trigger($.Event('dxpointermove', {
+        pageX: offset.left + x,
+        pageY: offset.top + y,
+        pointers: [{ pointerId: 1 }],
+      }));
+    }
+  }
 };
 
 export default class DataGrid extends Widget {
@@ -65,6 +90,14 @@ export default class DataGrid extends Widget {
     return new DataRow(this.element.find(`.${CLASS.dataRow}[aria-rowindex='${index + 1}']`), this.name);
   }
 
+  getFormItemElement(index: number): Selector {
+    return this.element.find(`.${CLASS.fieldItemContent}`).nth(index);
+  }
+
+  getFormItemEditor(index: number): Selector {
+    return this.getFormItemElement(index).find(`.${CLASS.textEditorInput}`);
+  }
+
   getFixedDataRow(index: number): DataRow {
     return new DataRow(this.element.find(`.${this.addWidgetPrefix(CLASS.fixedGridView)} .${CLASS.dataRow}[aria-rowindex='${index + 1}']`), this.name);
   }
@@ -98,6 +131,33 @@ export default class DataGrid extends Widget {
 
     return ClientFunction(
       () => (getGridInstance() as any).getScrollable().scrollTo(options),
+      { dependencies: { getGridInstance, options } },
+    )();
+  }
+
+  hasScrollable(): Promise<boolean> {
+    const { getGridInstance } = this;
+
+    return ClientFunction(
+      () => Boolean((getGridInstance() as any).getScrollable()),
+      { dependencies: { getGridInstance } },
+    )();
+  }
+
+  isReady(): Promise<boolean> {
+    const { getGridInstance } = this;
+
+    return ClientFunction(
+      () => (getGridInstance() as any).isReady(),
+      { dependencies: { getGridInstance } },
+    )();
+  }
+
+  scrollBy(options: { x?: number; y?: number; top?: number }): Promise<void> {
+    const { getGridInstance } = this;
+
+    return ClientFunction(
+      () => (getGridInstance() as any).getScrollable().scrollBy(options),
       { dependencies: { getGridInstance, options } },
     )();
   }
@@ -216,6 +276,15 @@ export default class DataGrid extends Widget {
     )();
   }
 
+  apiExpandRow(key: unknown): Promise<void> {
+    const { getGridInstance } = this;
+
+    return ClientFunction(
+      () => (getGridInstance() as any).expandRow(key),
+      { dependencies: { getGridInstance, key } },
+    )();
+  }
+
   apiCancelEditData(): Promise<void> {
     const { getGridInstance } = this;
     return ClientFunction(
@@ -278,5 +347,111 @@ export default class DataGrid extends Widget {
         rowType: r.rowType,
       }));
     }, { dependencies: { getGridInstance } })();
+  }
+
+  apiGetTopVisibleRowData(): Promise<any> {
+    const { getGridInstance } = this;
+    return ClientFunction(() => {
+      const dataGrid = getGridInstance() as any;
+      return dataGrid.getTopVisibleRowData();
+    }, { dependencies: { getGridInstance } })();
+  }
+
+  moveRow(rowIndex: number, x: number, y: number, isStart = false): Promise<void> {
+    const { getGridInstance } = this;
+
+    return ClientFunction(() => {
+      const gridInstance = getGridInstance() as any;
+      const $row = $(gridInstance.getRowElement(rowIndex));
+      const $cell = $row.children('.dx-command-drag');
+
+      moveElement($cell, x, y, isStart);
+    },
+    {
+      dependencies: {
+        getGridInstance, rowIndex, x, y, isStart, moveElement,
+      },
+    })();
+  }
+
+  moveHeader(columnIndex: number, x: number, y: number, isStart = false): Promise<void> {
+    const { getGridInstance } = this;
+
+    return ClientFunction(() => {
+      const gridInstance = getGridInstance() as any;
+      const columnHeadersView = gridInstance.getView('columnHeadersView');
+      const $header = $(columnHeadersView.getHeaderElement(columnIndex));
+
+      moveElement($header, x, y, isStart);
+    },
+    {
+      dependencies: {
+        getGridInstance, columnIndex, x, y, isStart, moveElement,
+      },
+    })();
+  }
+
+  isVirtualRowIntersectViewport(): Promise<boolean> {
+    const { getGridInstance } = this;
+
+    return ClientFunction(() => {
+      let result = false;
+      const gridInstance = getGridInstance() as any;
+      const rowsViewElement = gridInstance.getView('rowsView').element();
+      const isElementIntersectRowsView = (element) => {
+        const rowsViewRect = rowsViewElement[0].getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+
+        return (elementRect.top > rowsViewRect.top && elementRect.top < rowsViewRect.bottom)
+          || (elementRect.bottom > rowsViewRect.top && elementRect.bottom < rowsViewRect.bottom)
+          || (elementRect.top <= rowsViewRect.top && elementRect.bottom >= rowsViewRect.bottom);
+      };
+      const virtualRowElements = rowsViewElement.find('.dx-virtual-row');
+
+      // eslint-disable-next-line @typescript-eslint/prefer-for-of
+      for (let i = 0; i < virtualRowElements.length; i += 1) {
+        result = isElementIntersectRowsView(virtualRowElements[i]);
+        if (result) {
+          break;
+        }
+      }
+
+      return result;
+    }, {
+      dependencies: {
+        getGridInstance,
+      },
+    })();
+  }
+
+  isFocusedRowInViewport(): Promise<boolean> {
+    const { getGridInstance } = this;
+
+    return ClientFunction(() => {
+      let result = false;
+      const gridInstance = getGridInstance() as any;
+      const rowsViewElement = gridInstance.getView('rowsView').element();
+      const isElementInRowsView = (element) => {
+        const rowsViewRect = rowsViewElement[0].getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+
+        return elementRect.top >= rowsViewRect.top && elementRect.bottom <= rowsViewRect.bottom;
+      };
+      const rowElement = rowsViewElement.find('.dx-row-focused');
+
+      if (rowElement?.length) {
+        result = isElementInRowsView(rowElement[0]);
+      }
+
+      return result;
+    }, {
+      dependencies: {
+        getGridInstance,
+      },
+    })();
+  }
+
+  getScrollBarThumbTrack(scrollbarPosition: string): Selector {
+    return this.getRowsView().find(`.dx-scrollbar-${scrollbarPosition.toLowerCase()} .dx-scrollable-scroll`);
   }
 }

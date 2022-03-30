@@ -5,27 +5,14 @@ import { each } from '../../core/utils/iterator';
 import { extend } from '../../core/utils/extend';
 import { AGENDA_LAST_IN_DATE_APPOINTMENT_CLASS } from './classes';
 import { utils } from './utils';
-import {
-    getResourceManager,
-    getAppointmentDataProvider,
-    getTimeZoneCalculator
-} from './instanceFactory';
 import { createAppointmentAdapter } from './appointmentAdapter';
 import { getFormatType, formatDates } from './appointments/textUtils';
 
 const toMs = dateUtils.dateToMilliseconds;
 
 const subscribes = {
-    getResourceManager: function() {
-        return getResourceManager(this.key);
-    },
-
-    getAppointmentDataProvider: function() {
-        return getAppointmentDataProvider(this.key);
-    },
-
     isCurrentViewAgenda: function() {
-        return this.option('currentView') === 'agenda';
+        return this.currentViewType === 'agenda';
     },
     currentViewUpdated: function(currentView) {
         this.option('currentView', currentView);
@@ -51,7 +38,7 @@ const subscribes = {
         this._workSpace.setCellDataCacheAlias(appointment, geometry);
     },
 
-    isGroupedByDate: function() { // TODO replace with ModelProvider
+    isGroupedByDate: function() {
         return this.getWorkSpace().isGroupedByDate();
     },
 
@@ -87,8 +74,12 @@ const subscribes = {
     updateAppointmentAfterDrag: function({ event, element, rawAppointment, coordinates }) {
         const info = utils.dataAccessors.getAppointmentInfo(element);
 
-        const appointment = createAppointmentAdapter(this.key, rawAppointment);
-        const targetedAppointment = createAppointmentAdapter(this.key, extend({}, rawAppointment, this._getUpdatedData(rawAppointment)));
+        const appointment = createAppointmentAdapter(rawAppointment, this._dataAccessors, this.timeZoneCalculator);
+        const targetedAppointment = createAppointmentAdapter(
+            extend({}, rawAppointment, this._getUpdatedData(rawAppointment)),
+            this._dataAccessors,
+            this.timeZoneCalculator,
+        );
         const targetedRawAppointment = targetedAppointment.source();
 
         const newCellIndex = this._workSpace.getDroppableCellIndex();
@@ -120,15 +111,18 @@ const subscribes = {
     },
 
     getTextAndFormatDate(appointmentRaw, targetedAppointmentRaw, format) { // TODO: rename to createFormattedDateText
-        const appointmentAdapter = createAppointmentAdapter(this.key, appointmentRaw);
-        const targetedAdapter = createAppointmentAdapter(this.key, (targetedAppointmentRaw || appointmentRaw));
-        const timeZoneCalculator = getTimeZoneCalculator(this.key);
+        const appointmentAdapter = createAppointmentAdapter(appointmentRaw, this._dataAccessors, this.timeZoneCalculator);
+        const targetedAdapter = createAppointmentAdapter(
+            (targetedAppointmentRaw || appointmentRaw),
+            this._dataAccessors,
+            this.timeZoneCalculator
+        );
 
         // TODO pull out time zone converting from appointment adapter for knockout(T947938)
-        const startDate = timeZoneCalculator.createDate(targetedAdapter.startDate, { path: 'toGrid' });
-        const endDate = timeZoneCalculator.createDate(targetedAdapter.endDate, { path: 'toGrid' });
+        const startDate = this.timeZoneCalculator.createDate(targetedAdapter.startDate, { path: 'toGrid' });
+        const endDate = this.timeZoneCalculator.createDate(targetedAdapter.endDate, { path: 'toGrid' });
 
-        const formatType = format || getFormatType(startDate, endDate, targetedAdapter.allDay, this.option('currentView') !== 'month');
+        const formatType = format || getFormatType(startDate, endDate, targetedAdapter.allDay, this.currentViewType !== 'month');
 
         return {
             text: targetedAdapter.text || appointmentAdapter.text,
@@ -215,15 +209,6 @@ const subscribes = {
         return this.getRenderingStrategyInstance().getDirection();
     },
 
-    getWorkSpaceDateTableOffset: function() {
-        return this.getWorkSpaceDateTableOffset();
-    },
-
-    getMaxAppointmentWidth: function(options) {
-        const workSpace = this._workSpace;
-        return workSpace.getCellCountToLastViewDate(options.date) * workSpace.getCellWidth();
-    },
-
     updateAppointmentStartDate: function(options) {
         const appointment = options.appointment;
         const firstViewDate = this._workSpace.getStartViewDate();
@@ -268,11 +253,7 @@ const subscribes = {
     },
 
     supportCompactDropDownAppointments: function() {
-        return this._workSpace._supportCompactDropDownAppointments();
-    },
-
-    isApplyCompactAppointmentOffset: function() {
-        return this._workSpace._isApplyCompactAppointmentOffset();
+        return this.getLayoutManager().getRenderingStrategyInstance().supportCompactDropDownAppointments();
     },
 
     getGroupCount: function() {
@@ -288,14 +269,6 @@ const subscribes = {
             appointmentElement: config.itemElement,
             targetedAppointmentData: targetedData,
         };
-    },
-
-    getOffsetByAllDayPanel: function(groupIndex) {
-        return this._workSpace._getOffsetByAllDayPanel(groupIndex);
-    },
-
-    getGroupTop: function(groupIndex) {
-        return this._workSpace._getGroupTop(groupIndex);
     },
 
     dayHasAppointment: function(day, appointment, trimTime) {

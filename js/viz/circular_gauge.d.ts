@@ -147,8 +147,6 @@ export interface dxCircularGaugeScaleLabel extends BaseGaugeScaleLabel {
 /**
  * @docid
  * @inherits BaseGauge
- * @module viz/circular_gauge
- * @export default
  * @namespace DevExpress.viz
  * @public
  */
@@ -159,6 +157,3 @@ export type Properties = dxCircularGaugeOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxCircularGaugeOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxCircularGaugeOptions;

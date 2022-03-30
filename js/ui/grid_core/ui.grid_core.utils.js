@@ -1,3 +1,4 @@
+import { getHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { isDefined, isFunction } from '../../core/utils/type';
 import { when } from '../../core/utils/deferred';
@@ -21,7 +22,7 @@ const DATAGRID_EXPAND_CLASS = 'dx-datagrid-expand';
 const NO_DATA_CLASS = 'nodata';
 const SCROLLING_MODE_INFINITE = 'infinite';
 const SCROLLING_MODE_VIRTUAL = 'virtual';
-const NEW_SCROLLING_MODE = 'scrolling.newMode';
+const LEGACY_SCROLLING_MODE = 'scrolling.legacyMode';
 const SCROLLING_MODE_OPTION = 'scrolling.mode';
 const ROW_RENDERING_MODE_OPTION = 'scrolling.rowRenderingMode';
 const DATE_INTERVAL_SELECTORS = {
@@ -188,17 +189,6 @@ export default {
             loadPanelOptions = extend({
                 shading: false,
                 message: loadPanelOptions.text,
-                position: function() {
-                    const $window = $(getWindow());
-                    if($element.height() > $window.height()) {
-                        return {
-                            of: $window,
-                            boundary: $element,
-                            collision: 'fit'
-                        };
-                    }
-                    return { of: $element };
-                },
                 container: $container
             }, loadPanelOptions);
 
@@ -206,6 +196,18 @@ export default {
         } else {
             that._loadPanel = null;
         }
+    },
+
+    calculateLoadPanelPosition($element) {
+        const $window = $(getWindow());
+        if(getHeight($element) > getHeight($window)) {
+            return {
+                of: $window,
+                boundary: $element,
+                collision: 'fit'
+            };
+        }
+        return { of: $element };
     },
 
     getIndexByKey: function(key, items, keyName) {
@@ -232,7 +234,16 @@ export default {
         operation = operation || 'and';
 
         for(let i = 0; i < filters.length; i++) {
-            if(!filters[i]) continue;
+            if(!filters[i]) {
+                continue;
+            }
+            if(filters[i]?.length === 1 && filters[i][0] === '!') {
+                if(operation === 'and') {
+                    return ['!'];
+                } else if(operation === 'or') {
+                    continue;
+                }
+            }
             if(resultFilter.length) {
                 resultFilter.push(operation);
             }
@@ -448,7 +459,7 @@ export default {
                     selectionEnd: focusedElement.selectionEnd
                 };
             }
-        } catch(e) {}
+        } catch(e) { }
 
         return {};
     },
@@ -458,18 +469,18 @@ export default {
             if(focusedElement && focusedElement.setSelectionRange) {
                 focusedElement.setSelectionRange(selectionRange.selectionStart, selectionRange.selectionEnd);
             }
-        } catch(e) {}
+        } catch(e) { }
     },
 
     focusAndSelectElement: function(component, $element) {
+        const isFocused = $element.is(':focus');
+
         eventsEngine.trigger($element, 'focus');
 
         const isSelectTextOnEditingStart = component.option('editing.selectTextOnEditStart');
-        const keyboardController = component.getController('keyboardNavigation');
-        const isEditingNavigationMode = keyboardController && keyboardController._isFastEditingStarted();
         const element = $element.get(0);
 
-        if(isSelectTextOnEditingStart && !isEditingNavigationMode && $element.is('.dx-texteditor-input') && !$element.is('[readonly]')) {
+        if(!isFocused && isSelectTextOnEditingStart && $element.is('.dx-texteditor-input') && !$element.is('[readonly]')) {
             const editor = getWidgetInstance($element.closest('.dx-texteditor'));
 
             when(editor && editor._loadItemDeferred).done(function() {
@@ -510,10 +521,28 @@ export default {
         const isVirtualMode = that.option(SCROLLING_MODE_OPTION) === SCROLLING_MODE_VIRTUAL;
         const isAppendMode = that.option(SCROLLING_MODE_OPTION) === SCROLLING_MODE_INFINITE;
 
-        if(that.option(NEW_SCROLLING_MODE) && (isVirtualMode || isAppendMode)) {
+        if(that.option(LEGACY_SCROLLING_MODE) === false && (isVirtualMode || isAppendMode)) {
             return true;
-        } else {
-            return rowRenderingMode === SCROLLING_MODE_VIRTUAL;
         }
+
+        return rowRenderingMode === SCROLLING_MODE_VIRTUAL;
+    },
+
+    getPixelRatio: function(window) {
+        return window.devicePixelRatio || 1;
+    },
+
+    ///#DEBUG
+    _setPixelRatioFn: function(value) {
+        this.getPixelRatio = value;
+    },
+    ///#ENDDEBUG
+
+    getContentHeightLimit(browser) {
+        if(browser.mozilla) {
+            return 8000000;
+        }
+
+        return 15000000 / this.getPixelRatio(getWindow());
     }
 };

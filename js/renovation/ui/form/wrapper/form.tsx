@@ -10,12 +10,13 @@ import { DomComponentWrapper } from '../../common/dom_component_wrapper';
 import { FormProps } from './form_props';
 
 export const viewFunction = ({
-  props,
+  componentProps,
   restAttributes,
 }: Form): JSX.Element => (
   <DomComponentWrapper
     componentType={LegacyForm}
-    componentProps={props}
+    componentProps={componentProps}
+    templateNames={[]}
    // eslint-disable-next-line react/jsx-props-no-spreading
     {...restAttributes}
   />
@@ -27,4 +28,9 @@ export const viewFunction = ({
   view: viewFunction,
 })
 
-export class Form extends JSXComponent<FormProps>() {}
+export class Form extends JSXComponent<FormProps>() {
+  /* istanbul ignore next: WA for Angular */
+  get componentProps(): FormProps {
+    return this.props;
+  }
+}

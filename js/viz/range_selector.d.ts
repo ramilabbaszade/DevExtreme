@@ -1,13 +1,9 @@
+import DataSource, { DataSourceLike } from '../data/data_source';
+
 import {
     PaletteType,
     PaletteExtensionModeType,
 } from './palette';
-
-import DataSource, {
-    DataSourceOptions,
-} from '../data/data_source';
-
-import Store from '../data/abstract_store';
 
 import {
     EventInfo,
@@ -65,7 +61,7 @@ export type InitializedEvent = InitializedEventInfo<dxRangeSelector>;
 export type OptionChangedEvent = EventInfo<dxRangeSelector> & ChangedOptionInfo;
 
 /** @public */
-export type ValueChangedEvent = NativeEventInfo<dxRangeSelector> & {
+export type ValueChangedEvent = NativeEventInfo<dxRangeSelector, MouseEvent | TouchEvent> & {
   readonly value: Array<number | string | Date>;
   readonly previousValue: Array<number | string | Date>;
 };
@@ -187,10 +183,8 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
         convertToAxisDataType?: boolean;
         /**
          * @docid
-         * @type_function_param1 a:object
          * @type_function_param1_field1 arg:Date|Number|string
          * @type_function_param1_field2 val:Date|Number|string
-         * @type_function_param2 b:object
          * @type_function_param2_field1 arg:Date|Number|string
          * @type_function_param2_field2 val:Date|Number|string
          * @type_function_return Number
@@ -229,7 +223,6 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
       paletteExtensionMode?: PaletteExtensionModeType;
       /**
        * @docid
-       * @type ChartSeries|Array<ChartSeries>
        * @default undefined
        * @notUsedInTheme
        */
@@ -241,8 +234,6 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
       seriesTemplate?: {
         /**
          * @docid
-         * @type_function_param1 seriesName:any
-         * @type_function_return ChartSeries
          */
         customizeSeries?: ((seriesName: any) => ChartSeries);
         /**
@@ -302,11 +293,11 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
     containerBackgroundColor?: string;
     /**
      * @docid
-     * @type Array<any>|Store|DataSource|DataSourceOptions|string
      * @notUsedInTheme
      * @public
+     * @type Store|DataSource|DataSourceOptions|string|Array<any>
      */
-    dataSource?: Array<any> | Store | DataSource | DataSourceOptions | string;
+    dataSource?: DataSourceLike<any>;
     /**
      * @docid
      * @default 'arg'
@@ -426,10 +417,7 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
       label?: {
         /**
          * @docid
-         * @type_function_param1 scaleValue:object
          * @type_function_param1_field1 value:Date|Number|string
-         * @type_function_param1_field2 valueText:string
-         * @type_function_return string
          * @notUsedInTheme
          */
         customizeText?: ((scaleValue: { value?: Date | number | string; valueText?: string }) => string);
@@ -441,7 +429,6 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
         font?: Font;
         /**
          * @docid
-         * @type Format
          * @default undefined
          */
         format?: Format;
@@ -482,16 +469,12 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
         label?: {
           /**
            * @docid
-           * @type_function_param1 markerValue:object
            * @type_function_param1_field1 value:Date|Number
-           * @type_function_param1_field2 valueText:string
-           * @type_function_return string
            * @notUsedInTheme
            */
           customizeText?: ((markerValue: { value?: Date | number; valueText?: string }) => string);
           /**
            * @docid
-           * @type Format
            * @default undefined
            */
           format?: Format;
@@ -702,10 +685,7 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
       color?: string;
       /**
        * @docid
-       * @type_function_param1 scaleValue:object
        * @type_function_param1_field1 value:Date|Number|string
-       * @type_function_param1_field2 valueText:string
-       * @type_function_return string
        * @notUsedInTheme
        */
       customizeText?: ((scaleValue: { value?: Date | number | string; valueText?: string }) => string);
@@ -717,7 +697,6 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
       font?: Font;
       /**
        * @docid
-       * @type Format
        * @default undefined
        */
       format?: Format;
@@ -765,8 +744,6 @@ export interface dxRangeSelectorOptions extends BaseWidgetOptions<dxRangeSelecto
 /**
  * @docid
  * @inherits BaseWidget, DataHelperMixin
- * @module viz/range_selector
- * @export default
  * @namespace DevExpress.viz
  * @public
  */
@@ -783,7 +760,6 @@ export default class dxRangeSelector extends BaseWidget<dxRangeSelectorOptions> 
     /**
      * @docid
      * @publicName render(skipChartAnimation)
-     * @param1 skipChartAnimation:boolean
      * @public
      */
     render(skipChartAnimation: boolean): void;
@@ -801,6 +777,3 @@ export type Properties = dxRangeSelectorOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxRangeSelectorOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxRangeSelectorOptions;

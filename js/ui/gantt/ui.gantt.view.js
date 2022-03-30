@@ -16,6 +16,7 @@ export class GanttView extends Widget {
         this._onScroll = this._createActionByOption('onScroll');
         this._onDialogShowing = this._createActionByOption('onDialogShowing');
         this._onPopupMenuShowing = this._createActionByOption('onPopupMenuShowing');
+        this._onPopupMenuHiding = this._createActionByOption('onPopupMenuHiding');
         this._expandAll = this._createActionByOption('onExpandAll');
         this._collapseAll = this._createActionByOption('onCollapseAll');
         this._taskClick = this._createActionByOption('onTaskClick');
@@ -38,12 +39,13 @@ export class GanttView extends Widget {
             areHorizontalBordersEnabled: this.option('showRowLines'),
             areAlternateRowsEnabled: false,
             viewType: this._getViewTypeByScaleType(this.option('scaleType')),
+            viewTypeRange: this._parseViewTypeRangeSettings(this.option('scaleTypeRange')),
             cultureInfo: this._getCultureInfo(),
             taskTooltipContentTemplate: this.option('taskTooltipContentTemplate'),
             taskProgressTooltipContentTemplate: this.option('taskProgressTooltipContentTemplate'),
             taskTimeTooltipContentTemplate: this.option('taskTimeTooltipContentTemplate'),
             taskContentTemplate: this.option('taskContentTemplate'),
-            sorting: this.option('sorting')
+            sieve: this.option('sieve')
         });
         this._selectTask(this.option('selectedRowKey'));
         this.updateBarItemsState();
@@ -67,7 +69,7 @@ export class GanttView extends Widget {
         this._ganttViewCore.changeTaskExpanded(id, value);
     }
     updateView() {
-        this._ganttViewCore.updateView();
+        this._ganttViewCore?.updateView();
     }
     updateBarItemsState() {
         this._ganttViewCore.barManager.updateItemsState([]);
@@ -75,20 +77,15 @@ export class GanttView extends Widget {
     setWidth(value) {
         this._ganttViewCore.setWidth(value);
     }
+    _onDimensionChanged() {
+        this._ganttViewCore.onBrowserWindowResize();
+    }
 
     _selectTask(id) {
         this._ganttViewCore.selectTaskById(id);
     }
     _update(keepExpandState) {
-        const core = this._ganttViewCore;
-        const state = keepExpandState && core.getTasksExpandedState();
-        core.loadOptionsFromGanttOwner();
-
-        if(keepExpandState) {
-            core.applyTasksExpandedState(state);
-        } else {
-            core.resetAndUpdate();
-        }
+        this._ganttViewCore?.updateWithDataReload(keepExpandState);
     }
 
     _getCultureInfo() {
@@ -130,6 +127,8 @@ export class GanttView extends Widget {
                 return 0;
             case 'hours':
                 return 1;
+            case 'sixHours':
+                return 2;
             case 'days':
                 return 3;
             case 'weeks':
@@ -159,6 +158,13 @@ export class GanttView extends Widget {
         };
     }
 
+    _parseViewTypeRangeSettings(value) {
+        return {
+            min: this._getViewTypeByScaleType(value.min),
+            max: this._getViewTypeByScaleType(value.max)
+        };
+    }
+
     _optionChanged(args) {
         switch(args.name) {
             case 'width':
@@ -172,7 +178,7 @@ export class GanttView extends Widget {
             case 'dependencies':
             case 'resources':
             case 'resourceAssignments':
-                this._sortOptions = undefined;
+                this._sieveOptions = undefined;
                 this._update(true);
                 break;
             case 'showResources':
@@ -212,6 +218,9 @@ export class GanttView extends Widget {
             case 'scaleType':
                 this._ganttViewCore.setViewType(this._getViewTypeByScaleType(args.value));
                 break;
+            case 'scaleTypeRange':
+                this._ganttViewCore.setViewTypeRange(this._getViewTypeByScaleType(args.value.min), this._getViewTypeByScaleType(args.value.max));
+                break;
             case 'stripLines':
                 this._ganttViewCore.setStripLines({ stripLines: args.value });
                 break;
@@ -227,8 +236,8 @@ export class GanttView extends Widget {
             case 'taskContentTemplate':
                 this._ganttViewCore.setTaskContentTemplate(args.value);
                 break;
-            case 'sorting':
-                this._sort(args.value);
+            case 'sieve':
+                this._sortAndFilter(args.value);
                 break;
             default:
                 super._optionChanged(args);
@@ -247,21 +256,21 @@ export class GanttView extends Widget {
     }
     getGanttTasksData() {
         const tasks = this.option('tasks');
-        const sortingOptions = this.getSortingOptions();
-        if(sortingOptions?.sortedItems && sortingOptions?.sortColumn) {
-            return sortingOptions.sortedItems;
+        const sieveOptions = this.getSieveOptions();
+        if(sieveOptions?.sievedItems && sieveOptions?.sieveColumn) {
+            return sieveOptions.sievedItems;
         }
         return tasks;
     }
-    _sort(args) {
-        this._sortOptions = args;
+    _sortAndFilter(args) {
+        this._sieveOptions = args;
         this._update(true);
         const selectedRowKey = this.option('selectedRowKey');
         this._selectTask(selectedRowKey);
     }
 
-    getSortingOptions() {
-        return this._sortOptions;
+    getSieveOptions() {
+        return this._sieveOptions;
     }
     getGanttDependenciesData() {
         return this.option('dependencies');
@@ -273,7 +282,7 @@ export class GanttView extends Widget {
         return this.option('resourceAssignments');
     }
     getGanttWorkTimeRules() {
-        return {};
+        return null;
     }
     getExternalTaskAreaContainer(element) {
         if(!this._taskAreaContainer) {
@@ -308,6 +317,9 @@ export class GanttView extends Widget {
     }
     showPopupMenu(info) {
         this._onPopupMenuShowing(info);
+    }
+    hidePopupMenu(info) {
+        this._onPopupMenuHiding(info);
     }
     getMainElement() {
         return this.option('mainElement').get(0);
@@ -346,6 +358,13 @@ export class GanttView extends Widget {
     destroyTemplate(container) {
         $(container).empty();
     }
+    onTaskAreaSizeChanged(info) {
+        const scrollView = this._taskAreaContainer._scrollView;
+        if(isDefined(info?.height)) {
+            const direction = info?.height > this._taskAreaContainer.getHeight() ? 'both' : 'horizontal';
+            scrollView.option('direction', direction);
+        }
+    }
     // export
     getTreeListTableStyle() {
         return this.callExportHelperMethod('getTreeListTableStyle');
@@ -356,8 +375,8 @@ export class GanttView extends Widget {
     getTreeListHeaderInfo(colIndex) {
         return this.callExportHelperMethod('getTreeListHeaderInfo', colIndex);
     }
-    getTreeListCellInfo(rowIndex, colIndex) {
-        return this.callExportHelperMethod('getTreeListCellInfo', rowIndex, colIndex);
+    getTreeListCellInfo(rowIndex, colIndex, key) {
+        return this.callExportHelperMethod('getTreeListCellInfo', key, colIndex);
     }
     callExportHelperMethod(methodName, ...args) {
         const helper = this.option('exportHelper');

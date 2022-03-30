@@ -1,22 +1,37 @@
 import { ClientFunction } from 'testcafe';
 
-type WidgetName =
+export type WidgetName =
+'dxAccordion' |
 'dxGallery' |
+'dxButtonGroup' |
+'dxCheckBox' |
 'dxTabPanel' |
 'dxForm' |
 'dxTabPanel' |
 'dxScrollable' |
 'dxScrollView' |
 'dxDataGrid' |
+'dxDataGridNext' |
 'dxTreeList' |
+'dxPager' |
 'dxScheduler' |
+'dxTabs' |
 'dxTagBox' |
 'dxContextMenu' |
 'dxDropDownMenu' |
 'dxChart' |
+'dxMenu' |
 'dxPopup' |
 'dxSelectBox' |
-'dxButton';
+'dxButton' |
+'dxTextBox' |
+'dxTextArea' |
+'dxTagBox' |
+'dxToolbar' |
+'dxTreeView' |
+'dxDateBox' |
+'dxLookup' |
+'dxNumberBox';
 
 export default async function createWidget(
   widgetName: WidgetName,

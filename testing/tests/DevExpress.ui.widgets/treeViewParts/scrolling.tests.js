@@ -3,8 +3,8 @@ import {
     SCROLLABLE_SIMULATED_CLASS,
     SCROLLABLE_NATIVE_CLASS
 } from '../scrollableParts/scrollable.constants.js';
-import browser from 'core/utils/browser';
 import $ from 'jquery';
+import Scrollable from 'ui/scroll_view/ui.scrollable';
 
 import 'generic_light.css!';
 
@@ -16,10 +16,6 @@ QUnit.module('scrollToItem', {
         this.clock.restore();
     }
 }, () => {
-    if(browser.msie) {
-        return;
-    }
-
     function createWrapper({
         scrollDirection,
         initialPosition,
@@ -220,5 +216,18 @@ QUnit.module('useNativeScrolling', () => {
 
         assert.equal($treeView.find(`.${SCROLLABLE_NATIVE_CLASS}`).length, 1, 'native scrollable');
         assert.equal($treeView.find(`.${SCROLLABLE_SIMULATED_CLASS}`).length, 0, 'simulated scrollable');
+    });
+});
+
+QUnit.module('getScrollable()', () => {
+    QUnit.test('getScrollable() method should return instance of private Scrollable widget', function(assert) {
+        const wrapper = new TreeViewTestWrapper({
+            useNativeScrolling: true
+        });
+
+        const scrollableInstance = wrapper.getInstance().getScrollable();
+
+        assert.ok(scrollableInstance instanceof Scrollable, 'scrollable instance');
+        assert.strictEqual(scrollableInstance, wrapper.getElement().find('.dx-scrollable').dxScrollable('instance'), 'getScrollable() return internal scrollable instance');
     });
 });

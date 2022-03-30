@@ -1,3 +1,4 @@
+import { getOuterHeight, getOuterWidth } from 'core/utils/size';
 import $ from 'jquery';
 import devices from 'core/devices';
 import resizeCallbacks from 'core/utils/resize_callbacks';
@@ -9,7 +10,6 @@ import CustomStore from 'data/custom_store';
 import dataUtils from 'core/element_data';
 import { createWrapper, SchedulerTestWrapper, initTestMarkup } from '../../helpers/scheduler/helpers.js';
 import timeZoneUtils from 'ui/scheduler/utils.timeZone';
-import { getAppointmentDataProvider } from 'ui/scheduler/instanceFactory';
 
 const {
     module,
@@ -42,6 +42,35 @@ const moduleConfig = {
 };
 
 module('Integration: Agenda', moduleConfig, () => {
+    test('startDateExpr and endDateExpr should be applied for Agenda view', function(assert) {
+        assert.expect(4);
+
+        const scheduler = createWrapper({
+            dataSource: [{
+                text: 'Oil Painting for Beginners',
+                CustomStartDate: new Date(2020, 9, 25, 9, 30),
+                CustomEndDate: new Date(2020, 9, 25, 10),
+                recurrenceRule: 'FREQ=WEEKLY'
+            }],
+            views: ['agenda'],
+            currentView: 'agenda',
+            currentDate: new Date(2020, 10, 25),
+            startDayHour: 9,
+            startDateExpr: 'CustomStartDate',
+            endDateExpr: 'CustomEndDate',
+            onAppointmentClick({ targetedAppointmentData, appointmentData }) {
+                assert.equal(targetedAppointmentData.CustomStartDate.toDateString(), 'Sun Nov 29 2020');
+                assert.equal(targetedAppointmentData.CustomEndDate.toDateString(), 'Sun Nov 29 2020');
+
+                assert.equal(appointmentData.CustomStartDate.toDateString(), 'Sun Oct 25 2020');
+                assert.equal(appointmentData.CustomEndDate.toDateString(), 'Sun Oct 25 2020');
+            },
+            height: 600
+        });
+
+        scheduler.appointments.click();
+    });
+
     test('Scheduler should have a right agenda work space', function(assert) {
         const instance = createInstance({
             views: ['agenda'],
@@ -611,8 +640,8 @@ module('Integration: Agenda', moduleConfig, () => {
         const $headers = $groupTable.find('.dx-scheduler-group-header-content');
 
         assert.equal($headers.length, 4, 'Header count is OK');
-        assert.roughEqual($headers.eq(1).outerHeight(), 240, 2, 'Header height is OK');
-        assert.roughEqual($headers.eq(3).outerHeight(), 240, 2, 'Header height is OK');
+        assert.roughEqual(getOuterHeight($headers.eq(1)), 240, 2, 'Header height is OK');
+        assert.roughEqual(getOuterHeight($headers.eq(3)), 240, 2, 'Header height is OK');
     });
 
     test('Group agenda with recurrence appointments should be rendered correctly (T683374)', function(assert) {
@@ -716,7 +745,7 @@ module('Integration: Agenda', moduleConfig, () => {
         }]);
 
         const $groupTable = instance.$element().find('.dx-scheduler-group-table');
-        const $container = instance.$element().find('.dx-scheduler-date-table-scrollable .dx-scrollable-content');
+        const $container = instance.$element().find('.dx-scheduler-date-table-scrollable-content');
 
         assert.equal($groupTable.length, 1, 'Group table was rendered');
         assert.equal($container.children().get(0), $groupTable.get(0), 'Group table was rendered in right place');
@@ -875,8 +904,7 @@ module('Integration: Agenda', moduleConfig, () => {
         const agenda = instance.getWorkSpace();
         const rowHeight = 77;
         const $element = instance.$element();
-        const timePanelWidth = $element.find('.dx-scheduler-time-panel').outerWidth();
-        const expectedWidth = $element.find('.dx-scheduler-date-table').outerWidth() - timePanelWidth;
+        const expectedWidth = getOuterWidth($element.find('.dx-scheduler-date-table'));
         const agendaStub = sinon.stub(agenda, '_getRowHeight').returns(rowHeight);
 
         try {
@@ -887,13 +915,13 @@ module('Integration: Agenda', moduleConfig, () => {
 
             const $appointments = instance.$element().find('.dx-scheduler-appointment');
 
-            assert.roughEqual($appointments.eq(0).outerHeight(), 2.001, rowHeight, 'Appointment height is OK');
+            assert.roughEqual(getOuterHeight($appointments.eq(0)), 2.001, rowHeight, 'Appointment height is OK');
             assert.equal(parseInt($appointments.eq(0).css('marginBottom'), 10), 5, 'Appointment offset is OK');
-            assert.roughEqual($appointments.eq(0).outerWidth(), 2.001, expectedWidth, 'Appointment width is OK');
+            assert.roughEqual(getOuterWidth($appointments.eq(0)), 2.001, expectedWidth, 'Appointment width is OK');
 
-            assert.roughEqual($appointments.eq(1).outerHeight(), 2.001, rowHeight, 'Appointment height is OK');
+            assert.roughEqual(getOuterHeight($appointments.eq(1)), 2.001, rowHeight, 'Appointment height is OK');
             assert.equal(parseInt($appointments.eq(1).css('marginBottom'), 10), 20, 'Appointment offset is OK');
-            assert.roughEqual($appointments.eq(1).outerWidth(), 2.001, expectedWidth, 'Appointment width is OK');
+            assert.roughEqual(getOuterWidth($appointments.eq(1)), 2.001, expectedWidth, 'Appointment width is OK');
 
         } finally {
             agendaStub.restore();
@@ -1263,8 +1291,8 @@ module('Integration: Agenda', moduleConfig, () => {
                 owner: 1
             }],
             resourceCellTemplate: function(cellData, cellIndex, cellElement) {
-                assert.equal($(cellElement).outerWidth(), 80, 'Resource cell width is OK');
-                assert.equal($(cellElement).outerHeight(), 80, 'Resource cell height is OK');
+                assert.equal(getOuterWidth($(cellElement)), 80, 'Resource cell width is OK');
+                assert.equal(getOuterHeight($(cellElement)), 80, 'Resource cell height is OK');
             }
         });
     });
@@ -1369,11 +1397,11 @@ module('Integration: Agenda', moduleConfig, () => {
         assert.equal($appointments.length, 4, 'appointments are OK');
 
         instance.option('currentView', 'month');
-        const cellWidth = instance.$element().find('.dx-scheduler-date-table-cell').eq(0).outerWidth();
+        const cellWidth = getOuterWidth(instance.$element().find('.dx-scheduler-date-table-cell').eq(0));
         $appointments = instance.$element().find('.dx-scheduler-appointment');
 
         assert.equal($appointments.length, 1, 'appointment is OK');
-        assert.roughEqual($appointments.eq(0).outerWidth(), cellWidth * 4, 2.5, 'appointment size is OK');
+        assert.roughEqual(getOuterWidth($appointments.eq(0)), cellWidth * 4, 2.5, 'appointment size is OK');
     });
 
     test('Timepanel rows count should be OK for long appointment', function(assert) {
@@ -1545,7 +1573,7 @@ module('Integration: Agenda', moduleConfig, () => {
             dataSource: data
         });
 
-        const { filteredItems } = getAppointmentDataProvider(instance.key);
+        const filteredItems = instance.filteredItems;
 
         assert.equal(filteredItems.length, 1, 'Filtered items amount is correct');
         assert.deepEqual(filteredItems[0], data[2], 'Filtered item is correct');

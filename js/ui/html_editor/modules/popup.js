@@ -1,12 +1,17 @@
+import { getHeight } from '../../../core/utils/size';
 import Quill from 'devextreme-quill';
 import $ from '../../../core/renderer';
 import { extend } from '../../../core/utils/extend';
 import { getWindow } from '../../../core/utils/window';
+import eventsEngine from '../../../events/core/events_engine';
+import { addNamespace } from '../../../events/utils/index';
 
 import BaseModule from './base';
 
 import Popup from '../../popup';
 import List from '../../list_light';
+
+const MODULE_NAMESPACE = 'dxHtmlEditorPopupModule';
 
 let ListPopupModule = BaseModule;
 
@@ -30,6 +35,7 @@ if(Quill) {
             this.options = extend({}, this._getDefaultOptions(), options);
             this._popup = this.renderPopup();
             this._popup.$wrapper().addClass(SUGGESTION_LIST_WRAPPER_CLASS);
+            this._renderPreventFocusOut();
         }
 
         renderList($container, options) {
@@ -66,7 +72,7 @@ if(Quill) {
                 height: 'auto',
                 shading: false,
                 hideOnParentScroll: true,
-                closeOnOutsideClick: true,
+                hideOnOutsideClick: true,
                 animation: {
                     show: { type: 'fade', duration: 0, from: 0, to: 1 },
                     hide: { type: 'fade', duration: 400, from: 1, to: 0 }
@@ -87,7 +93,7 @@ if(Quill) {
 
         get maxHeight() {
             const window = getWindow();
-            const windowHeight = window && $(window).height() || 0;
+            const windowHeight = window && getHeight(window) || 0;
             return Math.max(MIN_HEIGHT, windowHeight * 0.5);
         }
 
@@ -97,6 +103,14 @@ if(Quill) {
 
                 this.insertEmbedContent(e);
             }
+        }
+
+        _renderPreventFocusOut() {
+            const eventName = addNamespace('mousedown', MODULE_NAMESPACE);
+
+            eventsEngine.on(this._popup.$wrapper(), eventName, (e) => {
+                e.preventDefault();
+            });
         }
 
         insertEmbedContent(selectionChangedEvent) { }

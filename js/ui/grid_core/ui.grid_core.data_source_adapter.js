@@ -77,8 +77,15 @@ export default gridCore.Controller.inherit((function() {
             const skip = options.skip ?? storeLoadOptions.skip ?? 0;
             for(let i = 0; i < take; i++) {
                 const localIndex = fromEnd ? take - 1 - i : i;
-                const cacheItem = cachedItems[localIndex + skip];
+                const cacheItemIndex = localIndex + skip;
+                const cacheItem = cachedItems[cacheItemIndex];
+
+                if(cacheItem === undefined && cacheItemIndex in cachedItems) {
+                    return true;
+                }
+
                 const item = getItemFromCache(options, cacheItem, groupCount, localIndex, take);
+
                 if(item) {
                     items.push(item);
                 } else {
@@ -222,6 +229,7 @@ export default gridCore.Controller.inherit((function() {
             that.loadError = Callbacks();
             that.customizeStoreLoadOptions = Callbacks();
             that.changing = Callbacks();
+            that.pushed = Callbacks();
 
             that._dataChangedHandler = that._handleDataChanged.bind(that);
             that._customizeStoreLoadOptionsHandler = that._handleCustomizeStoreLoadOptions.bind(that);
@@ -237,7 +245,7 @@ export default gridCore.Controller.inherit((function() {
             dataSource.on('loadingChanged', that._loadingChangedHandler);
             dataSource.on('loadError', that._loadErrorHandler);
             dataSource.on('changing', that._changingHandler);
-            dataSource.store().on('push', that._pushHandler);
+            dataSource.store().on('beforePush', that._pushHandler);
 
             each(dataSource, function(memberName, member) {
                 if(!that[memberName] && isFunction(member)) {
@@ -261,7 +269,7 @@ export default gridCore.Controller.inherit((function() {
             dataSource.off('loadingChanged', that._loadingChangedHandler);
             dataSource.off('loadError', that._loadErrorHandler);
             dataSource.off('changing', that._changingHandler);
-            store && store.off('push', that._pushHandler);
+            store && store.off('beforePush', that._pushHandler);
 
             if(!isSharedDataSource) {
                 dataSource.dispose();
@@ -317,6 +325,8 @@ export default gridCore.Controller.inherit((function() {
             if(!fromStore) {
                 this._applyBatch(changes);
             }
+
+            this.pushed.fire(changes);
         },
         getDataIndexGetter: function() {
             if(!this._dataIndexGetter) {
@@ -372,13 +382,13 @@ export default gridCore.Controller.inherit((function() {
                 useInsertIndex: true
             });
 
-            if(!this.option('scrolling.newMode') && this._currentTotalCount > 0 || isVirtualMode && totalCount === oldItemCount) {
+            if(this._currentTotalCount > 0 || isVirtualMode && totalCount === oldItemCount) {
                 this._totalCountCorrection += getItemCount() - oldItemCount;
             }
 
             changes.splice(0, changes.length);
         },
-        _handlePush: function(changes) {
+        _handlePush: function({ changes }) {
             this.push(changes, true);
         },
         _handleChanging: function(e) {
@@ -399,7 +409,8 @@ export default gridCore.Controller.inherit((function() {
 
             if((options.storeLoadOptions.filter && !options.remoteOperations.filtering) || (options.storeLoadOptions.sort && !options.remoteOperations.sorting)) {
                 options.remoteOperations = {
-                    filtering: options.remoteOperations.filtering
+                    filtering: options.remoteOperations.filtering,
+                    summary: options.remoteOperations.summary,
                 };
             }
 
@@ -439,7 +450,9 @@ export default gridCore.Controller.inherit((function() {
         },
         _handleCustomizeStoreLoadOptions(options) {
             this._handleDataLoading(options);
-            options.data = getPageDataFromCache(options, true) || options.cachedStoreData;
+            if(!(options.data?.length === 0)) {
+                options.data = getPageDataFromCache(options, true) || options.cachedStoreData;
+            }
         },
         _handleDataLoading: function(options) {
             const dataSource = this._dataSource;
@@ -537,13 +550,6 @@ export default gridCore.Controller.inherit((function() {
                 return;
             }
 
-            if(options.lastLoadOptions) {
-                this._lastLoadOptions = options.lastLoadOptions;
-                Object.keys(options.operationTypes).forEach(operationType => {
-                    this._lastOperationTypes[operationType] = this._lastOperationTypes[operationType] || options.operationTypes[operationType];
-                });
-            }
-
             if(localPaging) {
                 options.skip = loadOptions.skip;
                 options.take = loadOptions.take;
@@ -606,6 +612,15 @@ export default gridCore.Controller.inherit((function() {
                     });
                 }
             }
+
+            when(options.data).done(() => {
+                if(options.lastLoadOptions) {
+                    this._lastLoadOptions = options.lastLoadOptions;
+                    Object.keys(options.operationTypes).forEach(operationType => {
+                        this._lastOperationTypes[operationType] = this._lastOperationTypes[operationType] || options.operationTypes[operationType];
+                    });
+                }
+            });
             options.storeLoadOptions = options.originalStoreLoadOptions;
         },
         _handleDataLoadedCore: function(options) {
@@ -635,12 +650,16 @@ export default gridCore.Controller.inherit((function() {
             let currentTotalCount;
             const dataSource = this._dataSource;
             let isLoading = false;
+            const isDataLoading = !args || isDefined(args.changeType);
+
             const itemsCount = this.itemsCount();
 
-            this._isLastPage = !itemsCount || !this._loadPageSize() || itemsCount < this._loadPageSize();
+            if(isDataLoading) {
+                this._isLastPage = !itemsCount || !this._loadPageSize() || itemsCount < this._loadPageSize();
 
-            if(this._isLastPage) {
-                this._hasLastPage = true;
+                if(this._isLastPage) {
+                    this._hasLastPage = true;
+                }
             }
 
             if(dataSource.totalCount() >= 0) {
@@ -651,9 +670,14 @@ export default gridCore.Controller.inherit((function() {
                     dataSource.load();
                     isLoading = true;
                 }
-            } else if(!args || isDefined(args.changeType)) {
+            } else if(isDataLoading) {
                 currentTotalCount = dataSource.pageIndex() * this.pageSize() + itemsCount;
-                this._currentTotalCount = Math.max(this._currentTotalCount, currentTotalCount);
+                if(currentTotalCount > this._currentTotalCount) {
+                    this._currentTotalCount = currentTotalCount;
+                    if(dataSource.pageIndex() === 0 || !this.option('scrolling.legacyMode')) {
+                        this._totalCountCorrection = 0;
+                    }
+                }
                 if(itemsCount === 0 && dataSource.pageIndex() >= this.pageCount()) {
                     dataSource.pageIndex(this.pageCount() - 1);
                     if(this.option('scrolling.mode') !== 'infinite') {
@@ -694,6 +718,9 @@ export default gridCore.Controller.inherit((function() {
         },
         totalCount: function() {
             return parseInt((this._currentTotalCount || this._dataSource.totalCount()) + this._totalCountCorrection);
+        },
+        totalCountCorrection: function() {
+            return this._totalCountCorrection;
         },
         itemsCount: function() {
             return this._dataSource.items().length;

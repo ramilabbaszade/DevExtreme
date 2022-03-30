@@ -14,7 +14,7 @@ import Widget, {
 } from './widget/ui.widget';
 
 /** @public */
-export type ClickEvent = NativeEventInfo<dxSpeedDialAction> & {
+export type ClickEvent = NativeEventInfo<dxSpeedDialAction, MouseEvent | PointerEvent> & {
     actionElement?: DxElement;
 };
 
@@ -87,8 +87,6 @@ export interface dxSpeedDialActionOptions extends WidgetOptions<dxSpeedDialActio
 /**
  * @docid
  * @inherits Widget
- * @module ui/speed_dial_action
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -99,6 +97,3 @@ export type Properties = dxSpeedDialActionOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxSpeedDialActionOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxSpeedDialActionOptions;

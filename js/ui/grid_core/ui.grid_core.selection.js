@@ -111,12 +111,23 @@ const SelectionController = gridCore.Controller.inherit((function() {
             this._selection = this._createSelection();
             this._updateSelectColumn();
             this.createAction('onSelectionChanged', { excludeValidators: ['disabled', 'readOnly'] });
+            this._dataController && this._dataController.pushed.add(this._handleDataPushed.bind(this));
+        },
+
+        _handleDataPushed: function(changes) {
+            const removedKeys = changes.filter(change => change.type === 'remove').map(change => change.key);
+            removedKeys.length && this.deselectRows(removedKeys);
         },
 
         _getSelectionConfig: function() {
             const dataController = this._dataController;
+            const columnsController = this.getController('columns');
             const selectionOptions = this.option('selection') || {};
             const deferred = selectionOptions.deferred;
+            const scrollingMode = this.option('scrolling.mode');
+            const virtualPaging = scrollingMode === 'virtual' || scrollingMode === 'infinite';
+            const allowSelectAll = this.option('selection.allowSelectAll');
+            const legacyScrollingMode = this.option('scrolling.legacyMode');
 
             return {
                 selectedKeys: this.option('selectedRowKeys'),
@@ -125,6 +136,10 @@ const SelectionController = gridCore.Controller.inherit((function() {
                 maxFilterLengthInRequest: selectionOptions.maxFilterLengthInRequest,
                 selectionFilter: this.option('selectionFilter'),
                 ignoreDisabledItems: true,
+                allowLoadByRange: function() {
+                    const hasGroupColumns = columnsController.getGroupColumns().length > 0;
+                    return virtualPaging && !legacyScrollingMode && !hasGroupColumns && allowSelectAll && !deferred;
+                },
                 key: function() {
                     return dataController?.key();
                 },
@@ -137,8 +152,8 @@ const SelectionController = gridCore.Controller.inherit((function() {
                 load: function(options) {
                     return dataController.dataSource()?.load(options) || new Deferred().resolve([]);
                 },
-                plainItems: function(allItems) {
-                    return dataController.items(allItems);
+                plainItems: function() {
+                    return dataController.items(true);
                 },
                 isItemSelected: function(item) {
                     return item.selected;
@@ -154,6 +169,25 @@ const SelectionController = gridCore.Controller.inherit((function() {
                 },
                 totalCount: () => {
                     return dataController.totalCount();
+                },
+                getLoadOptions: function(loadItemIndex, focusedItemIndex, shiftItemIndex) {
+                    const { sort, filter } = dataController.dataSource()?.lastLoadOptions() ?? {};
+                    let minIndex = Math.min(loadItemIndex, focusedItemIndex);
+                    let maxIndex = Math.max(loadItemIndex, focusedItemIndex);
+
+                    if(isDefined(shiftItemIndex)) {
+                        minIndex = Math.min(shiftItemIndex, minIndex);
+                        maxIndex = Math.max(shiftItemIndex, maxIndex);
+                    }
+
+                    const take = maxIndex - minIndex + 1;
+
+                    return {
+                        skip: minIndex,
+                        take,
+                        filter,
+                        sort
+                    };
                 },
                 onSelectionChanged: this._updateSelectedItems.bind(this)
             };
@@ -186,15 +220,15 @@ const SelectionController = gridCore.Controller.inherit((function() {
         },
 
         _fireSelectionChanged: function(options) {
-            if(options) {
-                this.executeAction('onSelectionChanged', options);
-            }
-
             const argument = this.option('selection.deferred') ?
                 { selectionFilter: this.option('selectionFilter') } :
                 { selectedRowKeys: this.option('selectedRowKeys') };
 
             this.selectionChanged.fire(argument);
+
+            if(options) {
+                this.executeAction('onSelectionChanged', options);
+            }
         },
 
         _updateCheckboxesState: function(options) {
@@ -409,12 +443,13 @@ const SelectionController = gridCore.Controller.inherit((function() {
             return this._selection.getSelectedItems();
         },
 
-        changeItemSelection: function(itemIndex, keys) {
+        changeItemSelection: function(visibleItemIndex, keys) {
             keys = keys || {};
             if(this.isSelectionWithCheckboxes()) {
                 keys.control = true;
             }
-            return this._selection.changeItemSelection(itemIndex, keys);
+            const loadedItemIndex = visibleItemIndex + this._dataController.getRowIndexOffset() - this._dataController.getRowIndexOffset(true);
+            return this._selection.changeItemSelection(loadedItemIndex, keys);
         },
 
         focusedItemIndex: function(itemIndex) {
@@ -585,12 +620,6 @@ export const selectionModule = {
                         this._changes = [{ changeType: 'updateSelection', itemIndexes }];
                     }
                     this.callBase.apply(this, arguments);
-                },
-
-                push: function(changes) {
-                    this.callBase.apply(this, arguments);
-                    const removedKeys = changes.filter(change => change.type === 'remove').map(change => change.key);
-                    removedKeys.length && this.getController('selection').deselectRows(removedKeys);
                 }
             },
             contextMenu: {
@@ -799,7 +828,7 @@ export const selectionModule = {
                 },
 
                 _createRow: function(row) {
-                    const $row = this.callBase(row);
+                    const $row = this.callBase.apply(this, arguments);
 
                     if(row) {
                         const isSelected = !!row.isSelected;

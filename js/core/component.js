@@ -187,6 +187,10 @@ export const Component = Class.inherit({
         return !this._initializing && !this._initialized;
     },
 
+    isInitialized() {
+        return this._initialized;
+    },
+
     _commitUpdate() {
         this.postponedOperations.callPostponedOperations();
         this._isInitializingRequired() && this._initializeComponent();
@@ -302,7 +306,7 @@ export const Component = Class.inherit({
                 }
                 ///#ENDDEBUG
 
-                actionFunc = this.option(optionName);
+                actionFunc = this.option()[optionName];
             }
 
             if(!action && !actionFunc && !config.beforeExecute && !config.afterExecute && !this._eventsStrategy.hasEvent(eventName)) {
@@ -381,12 +385,3 @@ export const Component = Class.inherit({
         this.endUpdate();
     }
 });
-
-/**
- * @name Component
- * @module core/component
- * @export Component
- * @namespace DevExpress
- * @hidden
- * @wrappable
- */

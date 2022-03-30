@@ -4,12 +4,13 @@ import SchedulerWorkSpace from './ui.scheduler.work_space.indicator';
 import dateUtils from '../../../core/utils/date';
 import { getBoundingRect } from '../../../core/utils/position';
 import { utils } from '../utils';
+import { hasWindow } from '../../../core/utils/window';
 import dxrMonthDateTableLayout from '../../../renovation/ui/scheduler/workspaces/month/date_table/layout.j';
 import {
     getViewStartByOptions,
     getCellText,
 } from '../../../renovation/ui/scheduler/view_model/to_test/views/utils/month';
-import { calculateDayDuration, formatWeekday } from '../../../renovation/ui/scheduler/view_model/to_test/views/utils/base';
+import { formatWeekday } from '../../../renovation/ui/scheduler/view_model/to_test/views/utils/base';
 import { VIEWS } from '../constants';
 
 const MONTH_CLASS = 'dx-scheduler-work-space-month';
@@ -55,7 +56,7 @@ class SchedulerWorkSpaceMonth extends SchedulerWorkSpace {
             let averageWidth = 0;
             const cells = this._getCells().slice(0, DAYS_IN_WEEK);
             cells.each((index, element) => {
-                averageWidth += getBoundingRect(element).width;
+                averageWidth += hasWindow() ? getBoundingRect(element).width : 0;
             });
 
             return cells.length === 0 ? undefined : averageWidth / DAYS_IN_WEEK;
@@ -96,24 +97,12 @@ class SchedulerWorkSpaceMonth extends SchedulerWorkSpace {
         return false;
     }
 
-    getCellDuration() {
-        return calculateDayDuration(this.option('startDayHour'), this.option('endDayHour')) * 3600000;
-    }
-
     getIntervalDuration() {
         return toMs('day');
     }
 
     getTimePanelWidth() {
         return 0;
-    }
-
-    getCellCountToLastViewDate(date) {
-        const firstDateTime = date.getTime();
-        const lastDateTime = this.getEndViewDate().getTime();
-        const dayDurationInMs = this.getCellDuration();
-
-        return Math.ceil((lastDateTime - firstDateTime) / dayDurationInMs);
     }
 
     supportAllDayRow() {
@@ -134,10 +123,6 @@ class SchedulerWorkSpaceMonth extends SchedulerWorkSpace {
 
     _getHeaderDate() {
         return this._getViewStartByOptions();
-    }
-
-    _supportCompactDropDownAppointments() {
-        return false;
     }
 
     scrollToTime() { return noop(); }

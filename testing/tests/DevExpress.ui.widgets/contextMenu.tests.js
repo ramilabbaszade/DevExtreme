@@ -1410,18 +1410,20 @@ QUnit.module('Behavior', moduleConfig, () => {
         assert.ok(instance.option('visible'), 'menu is visible');
     });
 
-    QUnit.test('context menu should not block outside click for other overlays on outside click', function(assert) {
-        const otherOverlay = $('<div>').appendTo('#qunit-fixture').dxOverlay({
-            closeOnOutsideClick: true,
-            visible: true
-        }).dxOverlay('instance');
+    ['closeOnOutsideClick', 'hideOnOutsideClick'].forEach(closeOnOutsideClickOptionName => {
+        QUnit.test('context menu should not block outside click for other overlays on outside click', function(assert) {
+            const otherOverlay = $('<div>').appendTo('#qunit-fixture').dxOverlay({
+                [closeOnOutsideClickOptionName]: true,
+                visible: true
+            }).dxOverlay('instance');
 
-        const contextMenu = new ContextMenu(this.$element, { items: [{ text: 'item 1' }], visible: true });
+            const contextMenu = new ContextMenu(this.$element, { items: [{ text: 'item 1' }], visible: true });
 
-        $(document).trigger('dxpointerdown');
+            $(document).trigger('dxpointerdown');
 
-        assert.notOk(otherOverlay.option('visible'), 'other overlay was hidden');
-        assert.notOk(contextMenu.option('visible'), 'context menu was hidden');
+            assert.notOk(otherOverlay.option('visible'), 'other overlay was hidden');
+            assert.notOk(contextMenu.option('visible'), 'context menu was hidden');
+        });
     });
 
     QUnit.test('context menu should prevent default behavior if it shows', function(assert) {
@@ -1596,6 +1598,52 @@ QUnit.module('Selection', moduleConfig, () => {
 
         assert.ok(items[0].items[0].selected, 'nested item is selected');
         assert.notOk(items[0].selected, 'first item is not selected');
+    });
+
+    QUnit.test('Changing selection: selectByClick=true, item[1].closeMenuOnClick=false, item[2].closeMenuOnClick=true', function(assert) {
+        const onSelectionChangedHandler = sinon.spy();
+        const items = [{
+            text: 'item 1',
+            selected: true,
+            items: [{ text: 'item 11', closeMenuOnClick: false }, { text: 'item 111', closeMenuOnClick: true }]
+        }];
+
+        const instance = new ContextMenu(this.$element, {
+            items,
+            visible: true,
+            selectByClick: true,
+            selectionMode: 'single',
+            onSelectionChanged: onSelectionChangedHandler
+        });
+
+        const $itemContainer = instance.itemsContainer();
+
+        assert.ok(items[0].selected, '1st item is selected');
+
+        let $items = $itemContainer.find(`.${DX_MENU_ITEM_CLASS}`);
+        $($items.eq(0)).trigger('dxclick');
+
+        assert.strictEqual(onSelectionChangedHandler.callCount, 0, 'onSelectionChangedHandler.callCount');
+
+        $items = $itemContainer.find(`.${DX_MENU_ITEM_CLASS}`);
+
+        $($items.eq(1)).trigger('dxclick');
+        assert.strictEqual(onSelectionChangedHandler.callCount, 1, 'onSelectionChangedHandler.callCount');
+
+        assert.strictEqual(items[0].selected, false, 'root item selected');
+        assert.strictEqual(items[0].items[0].selected, true, 'items[0].items[0].selected');
+        assert.strictEqual(items[0].items[1].selected, undefined, 'items[0].items[1].selected');
+
+        assert.equal(getVisibleSubmenuCount(instance), 2, 'submenu is open');
+
+        $($items.eq(2)).trigger('dxclick');
+        assert.strictEqual(onSelectionChangedHandler.callCount, 2, 'onSelectionChangedHandler.callCount');
+
+        assert.strictEqual(items[0].selected, false, 'root item selected');
+        assert.strictEqual(items[0].items[0].selected, false, 'items[0].items[0].selected');
+        assert.strictEqual(items[0].items[1].selected, true, 'items[0].items[1].selected');
+
+        assert.equal(getVisibleSubmenuCount(instance), 1, 'submenu is close');
     });
 });
 

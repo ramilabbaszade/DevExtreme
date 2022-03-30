@@ -4,49 +4,55 @@ import {
   Ref,
   Method,
   RefObject,
+  Consumer,
 } from '@devextreme-generator/declarations';
 
 import {
   DxMouseEvent,
+  ElementOffset,
   ScrollableDirection,
   ScrollOffset,
-} from './common/types.d';
+} from './common/types';
 
-import { ScrollableNative } from './scrollable_native';
-import { ScrollableSimulated } from './scrollable_simulated';
+import { ScrollableNative } from './strategy/native';
+import { ScrollableSimulated } from './strategy/simulated';
 import { ScrollableWrapper } from '../../component_wrapper/navigation/scrollable';
 import { getElementLocationInternal } from './utils/get_element_location_internal';
+import { convertToLocation } from './utils/convert_location';
+import { getOffsetDistance } from './utils/get_offset_distance';
+import { isDefined, isNumeric } from '../../../core/utils/type';
 
 import { hasWindow } from '../../../core/utils/window';
 import { DIRECTION_HORIZONTAL, DIRECTION_VERTICAL } from './common/consts';
 import { ScrollableProps } from './common/scrollable_props';
 
-let isServerSide = !hasWindow();
+import { resolveRtlEnabled } from '../../utils/resolve_rtl';
+import { ConfigContextValue, ConfigContext } from '../../common/config_context';
 
 export const viewFunction = (viewModel: Scrollable): JSX.Element => {
   const {
     scrollableNativeRef,
     scrollableSimulatedRef,
+    rtlEnabled,
+    isServerSide,
     props: {
-      useNative, activeStateUnit, children, classes,
-      aria, disabled, width, height, visible, rtlEnabled,
+      useNative, children, classes,
+      aria, disabled, width, height, visible,
       direction, showScrollbar, scrollByThumb, bounceEnabled,
       scrollByContent, useKeyboard, pullDownEnabled,
       reachBottomEnabled, forceGeneratePockets, needScrollViewContentWrapper,
-      needScrollViewLoadPanel, useSimulatedScrollbar, inertiaEnabled,
-      pulledDownText, pullingDownText, refreshingText, reachBottomText,
+      useSimulatedScrollbar, inertiaEnabled,
+      pulledDownText, pullingDownText, refreshingText, reachBottomText, refreshStrategy,
       onScroll, onUpdated, onPullDown, onReachBottom, onStart, onEnd, onBounce, onVisibilityChange,
+      loadPanelTemplate,
     },
     restAttributes,
   } = viewModel;
-
-  isServerSide = !hasWindow();
 
   return useNative
     ? (
       <ScrollableNative
         ref={scrollableNativeRef}
-        activeStateUnit={activeStateUnit}
         aria={aria}
         classes={classes}
         width={width}
@@ -60,12 +66,13 @@ export const viewFunction = (viewModel: Scrollable): JSX.Element => {
         reachBottomEnabled={reachBottomEnabled}
         forceGeneratePockets={forceGeneratePockets && !isServerSide}
         needScrollViewContentWrapper={needScrollViewContentWrapper}
-        needScrollViewLoadPanel={needScrollViewLoadPanel && !isServerSide}
+        loadPanelTemplate={!isServerSide ? loadPanelTemplate : undefined}
         needRenderScrollbars={!isServerSide}
         onScroll={onScroll}
         onUpdated={onUpdated}
         onPullDown={onPullDown}
         onReachBottom={onReachBottom}
+        refreshStrategy={refreshStrategy}
         pulledDownText={pulledDownText}
         pullingDownText={pullingDownText}
         refreshingText={refreshingText}
@@ -81,7 +88,6 @@ export const viewFunction = (viewModel: Scrollable): JSX.Element => {
     : (
       <ScrollableSimulated
         ref={scrollableSimulatedRef}
-        activeStateUnit={activeStateUnit}
         aria={aria}
         classes={classes}
         width={width}
@@ -96,12 +102,13 @@ export const viewFunction = (viewModel: Scrollable): JSX.Element => {
         reachBottomEnabled={reachBottomEnabled}
         forceGeneratePockets={forceGeneratePockets && !isServerSide}
         needScrollViewContentWrapper={needScrollViewContentWrapper}
-        needScrollViewLoadPanel={needScrollViewLoadPanel && !isServerSide}
+        loadPanelTemplate={!isServerSide ? loadPanelTemplate : undefined}
         needRenderScrollbars={!isServerSide}
         onScroll={onScroll}
         onUpdated={onUpdated}
         onPullDown={onPullDown}
         onReachBottom={onReachBottom}
+        refreshStrategy="simulated"
         pulledDownText={pulledDownText}
         pullingDownText={pullingDownText}
         refreshingText={refreshingText}
@@ -116,6 +123,7 @@ export const viewFunction = (viewModel: Scrollable): JSX.Element => {
         onStart={onStart}
         onEnd={onEnd}
         onBounce={onBounce}
+
         // eslint-disable-next-line react/jsx-props-no-spreading
         {...restAttributes}
       >
@@ -134,6 +142,9 @@ export const viewFunction = (viewModel: Scrollable): JSX.Element => {
 })
 
 export class Scrollable extends JSXComponent<ScrollableProps>() {
+  @Consumer(ConfigContext)
+  config?: ConfigContextValue;
+
   @Ref() scrollableNativeRef!: RefObject<ScrollableNative>;
 
   @Ref() scrollableSimulatedRef!: RefObject<ScrollableSimulated>;
@@ -149,8 +160,45 @@ export class Scrollable extends JSXComponent<ScrollableProps>() {
   }
 
   @Method()
+  scrollTo(targetLocation: number | Partial<ScrollOffset>): void {
+    if (!this.props.useNative) {
+      // the resizeObserver handler calls too late
+      // in case when DataGrid call dxresize when data was loaded
+      this.updateHandler();
+    }
+
+    const currentScrollOffset = this.props.useNative
+      ? this.scrollOffset()
+      : { top: this.container().scrollTop, left: this.container().scrollLeft };
+
+    const distance = getOffsetDistance(
+      convertToLocation(targetLocation, this.props.direction),
+      currentScrollOffset,
+    );
+
+    this.scrollBy(distance);
+  }
+
+  @Method()
   scrollBy(distance: number | Partial<ScrollOffset>): void {
-    this.scrollableRef.scrollBy(distance);
+    let { top = 0, left = 0 } = convertToLocation(distance, this.props.direction);
+
+    // destructuring assignment with default values not working
+    // TODO: delete next two conditions after fix - https://github.com/DevExpress/devextreme-renovation/issues/734
+    /* istanbul ignore next */
+    if (!isDefined(top) || !isNumeric(top)) {
+      top = 0;
+    }
+    /* istanbul ignore next */
+    if (!isDefined(left) || !isNumeric(top)) {
+      left = 0;
+    }
+
+    if (top === 0 && left === 0) {
+      return;
+    }
+
+    this.scrollableRef.scrollByLocation({ top, left });
   }
 
   @Method()
@@ -160,25 +208,20 @@ export class Scrollable extends JSXComponent<ScrollableProps>() {
 
   @Method()
   release(): void {
-    if (!isServerSide) {
+    if (!this.isServerSide) {
       this.scrollableRef.release() as undefined;
     }
   }
 
   @Method()
   refresh(): void {
-    if (!isServerSide) {
+    if (!this.isServerSide) {
       this.scrollableRef.refresh();
     }
   }
 
   @Method()
-  scrollTo(targetLocation: number | Partial<ScrollOffset>): void {
-    this.scrollableRef.scrollTo(targetLocation);
-  }
-
-  @Method()
-  scrollToElement(element: HTMLElement, offset?: Partial<Omit<ClientRect, 'width' | 'height'>>): void {
+  scrollToElement(element: HTMLElement, offset?: ElementOffset): void {
     if (!this.content().contains(element)) {
       return;
     }
@@ -236,7 +279,7 @@ export class Scrollable extends JSXComponent<ScrollableProps>() {
   getScrollElementPosition(
     targetElement: HTMLElement,
     direction: ScrollableDirection,
-    offset?: Partial<Omit<ClientRect, 'width' | 'height'>>,
+    offset?: ElementOffset,
   ): number {
     const scrollOffset = this.scrollOffset();
 
@@ -256,7 +299,7 @@ export class Scrollable extends JSXComponent<ScrollableProps>() {
 
   @Method()
   finishLoading(): void {
-    if (!isServerSide) {
+    if (!this.isServerSide) {
       this.scrollableRef.finishLoading();
     }
   }
@@ -265,12 +308,21 @@ export class Scrollable extends JSXComponent<ScrollableProps>() {
     return this.scrollableRef.validate(event) as boolean;
   }
 
-  // https://trello.com/c/6TBHZulk/2672-renovation-cannot-use-getter-to-get-access-to-components-methods-react
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get scrollableRef(): any {
     if (this.props.useNative) {
       return this.scrollableNativeRef.current!;
     }
     return this.scrollableSimulatedRef.current!;
+  }
+
+  get rtlEnabled(): boolean {
+    const { rtlEnabled } = this.props;
+    return !!resolveRtlEnabled(rtlEnabled, this.config);
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  get isServerSide(): boolean {
+    return !hasWindow();
   }
 }

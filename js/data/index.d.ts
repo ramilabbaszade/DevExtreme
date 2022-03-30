@@ -1,10 +1,15 @@
+import CustomStore, { Options as CustomStoreOptions } from './custom_store';
+import ArrayStore, { Options as ArrayStoreOptions } from './array_store';
+import LocalStore, { Options as LocalStoreOptions } from './local_store';
+import ODataStore, { Options as ODataStoreOptions } from './odata/store';
+
 /**
  * @docid
  * @public
  */
 export type SearchOperation = '=' | '<>' | '>' | '>=' | '<' | '<=' | 'startswith' | 'endswith' | 'contains' | 'notcontains';
 
-type KeySelector<T> = string | ((source: T) => string);
+type KeySelector<T> = string | ((source: T) => string | number | Date | Object);
 
 type BaseGroupDescriptor<T> = {
     selector: KeySelector<T>;
@@ -31,7 +36,7 @@ export type SortDescriptor<T> = GroupDescriptor<T>;
  * @public
  * @type object
  */
-export type SelectDescriptor<T> = KeySelector<T>;
+export type SelectDescriptor<T> = string | Array<string> | ((source: T) => any);
 /**
  * @docid
  * @public
@@ -48,6 +53,7 @@ export type SummaryDescriptor<T> = KeySelector<T> | BaseGroupDescriptor<T> & {
 };
 
 /**
+ * @public
  * @docid
  * @namespace DevExpress.data
  * @type object
@@ -117,7 +123,7 @@ export type SummaryDescriptor<T> = KeySelector<T> | BaseGroupDescriptor<T> & {
      * @public
      * @type object
      */
-    select?: SelectDescriptor<T> | Array<SelectDescriptor<T>>;
+    select?: SelectDescriptor<T>;
     /**
      * @docid
      * @public
@@ -146,3 +152,23 @@ export type SummaryDescriptor<T> = KeySelector<T> | BaseGroupDescriptor<T> & {
      */
     userData?: any;
 }
+
+/**
+ * @public
+ * @namespace DevExpress.data.utils
+ */
+export type Store<TItem = any, TKey = any> =
+    CustomStore<TItem, TKey> |
+    ArrayStore<TItem, TKey> |
+    LocalStore<TItem, TKey> |
+    ODataStore<TItem, TKey>;
+
+/**
+ * @public
+ * @namespace DevExpress.data.utils
+ */
+export type StoreOptions<TItem = any, TKey = any> =
+    CustomStoreOptions<TItem, TKey> |
+    ArrayStoreOptions<TItem, TKey> & { type: 'array' } |
+    LocalStoreOptions<TItem, TKey> & { type: 'local' } |
+    ODataStoreOptions<TItem, TKey> & { type: 'odata' };

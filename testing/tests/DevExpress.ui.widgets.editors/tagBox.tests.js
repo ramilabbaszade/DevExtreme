@@ -17,8 +17,10 @@ import ArrayStore from 'data/array_store';
 import CustomStore from 'data/custom_store';
 import ODataStore from 'data/odata/store';
 import TagBox from 'ui/tag_box';
-import getScrollRtlBehavior from 'core/utils/scroll_rtl_behavior';
 import { normalizeKeyName } from 'events/utils/index';
+import { getWidth, getHeight } from 'core/utils/size';
+
+import { TextEditorLabel } from 'ui/text_box/ui.text_editor.label.js';
 
 import 'generic_light.css!';
 
@@ -39,6 +41,7 @@ const SELECT_ALL_CHECKBOX_CLASS = 'dx-list-select-all-checkbox';
 const POPUP_DONE_BUTTON_CLASS = 'dx-popup-done';
 const TEXTBOX_CLASS = 'dx-texteditor-input';
 const EMPTY_INPUT_CLASS = 'dx-texteditor-empty';
+const DROP_DOWN_EDITOR_INPUT_WRAPPER = 'dx-dropdowneditor-input-wrapper';
 const TAGBOX_TAG_CONTAINER_CLASS = 'dx-tag-container';
 const TAGBOX_TAG_CONTENT_CLASS = 'dx-tag-content';
 const TAGBOX_TAG_CLASS = 'dx-tag';
@@ -66,7 +69,7 @@ const getListItems = (tagBox) => {
     return $((instance).content()).find(`.${LIST_ITEM_CLASS}`);
 };
 
-const getDSWithAsyncSearch = () => {
+const getAsyncLoad = () => {
     const data = [{
         'id': 'item 1'
     }, {
@@ -87,50 +90,55 @@ const getDSWithAsyncSearch = () => {
         'id': 'item for search 4'
     }];
 
+    return (loadOptions) => {
+        const deferred = $.Deferred();
+        setTimeout(() => {
+            if(loadOptions.take && !loadOptions.searchValue) {
+                deferred.resolve(data.slice().splice(loadOptions.skip, loadOptions.take), { totalCount: 9 });
+            } else if(loadOptions.filter) {
+                const result = data.filter((item) => {
+                    if(Array.isArray(loadOptions.filter[0]) && item[2] && item[2].id === loadOptions.filter[2].id) {
+                        return item[2];
+                    } else if(item.id === loadOptions.filter[2].id) {
+                        return item;
+                    } else if(Array.isArray(loadOptions.filter) && loadOptions.filter.length > 2) {
+                        for(let i = 0; i < loadOptions.filter.length; i++) {
+                            const element = loadOptions.filter[i];
+                            if(Array.isArray(element) && element[2] === item.id) {
+                                return item;
+                            }
+                        }
+                    } else {
+                        deferred.reject();
+                    }
+                });
+
+                deferred.resolve(result, { totalCount: 9 });
+            } else if(loadOptions.searchValue) {
+                const result = data.filter((item) => {
+                    if(item.id.indexOf(loadOptions.searchValue) >= 0) {
+                        return item;
+                    }
+                });
+
+                deferred.resolve(result.splice(loadOptions.skip, loadOptions.take), { totalCount: 9 });
+            } else {
+                deferred.resolve(data, { totalCount: 9 });
+            }
+        }, TIME_TO_WAIT * 2);
+
+        return deferred.promise();
+    };
+};
+
+const getDSWithAsyncSearch = (asyncLoad = getAsyncLoad()) => {
+
     return new DataSource({
         paginate: true,
         pageSize: 5,
         store: new CustomStore({
             key: 'id',
-            load: function(loadOptions) {
-                const deferred = $.Deferred();
-                setTimeout(() => {
-                    if(loadOptions.take && !loadOptions.searchValue) {
-                        deferred.resolve(data.slice().splice(loadOptions.skip, loadOptions.take), { totalCount: 9 });
-                    } else if(loadOptions.filter) {
-                        const result = data.filter((item) => {
-                            if(Array.isArray(loadOptions.filter[0]) && item[2] && item[2].id === loadOptions.filter[2].id) {
-                                return item[2];
-                            } else if(item.id === loadOptions.filter[2].id) {
-                                return item;
-                            } else if(Array.isArray(loadOptions.filter) && loadOptions.filter.length > 2) {
-                                for(let i = 0; i < loadOptions.filter.length; i++) {
-                                    const element = loadOptions.filter[i];
-                                    if(Array.isArray(element) && element[2] === item.id) {
-                                        return item;
-                                    }
-                                }
-                            } else {
-                                deferred.reject();
-                            }
-                        });
-
-                        deferred.resolve(result, { totalCount: 9 });
-                    } else if(loadOptions.searchValue) {
-                        const result = data.filter((item) => {
-                            if(item.id.indexOf(loadOptions.searchValue) >= 0) {
-                                return item;
-                            }
-                        });
-
-                        deferred.resolve(result.splice(loadOptions.skip, loadOptions.take), { totalCount: 9 });
-                    } else {
-                        deferred.resolve(data, { totalCount: 9 });
-                    }
-                }, TIME_TO_WAIT * 2);
-
-                return deferred.promise();
-            }
+            load: asyncLoad
         })
     });
 };
@@ -583,7 +591,7 @@ QUnit.module('tags', moduleSetup, () => {
         $($listItems.eq(0)).trigger('dxclick');
         $($listItems.eq(1)).trigger('dxclick');
         $($element.find('.dx-clear-button-area')).trigger('dxclick');
-        $($listItems.eq(2)).trigger('dxclick');
+        getListItems($element).eq(2).trigger('dxclick');
 
         assert.equal($element.find('.' + TAGBOX_TAG_CLASS).length, 1, 'one item is chosen');
     });
@@ -695,6 +703,51 @@ QUnit.module('tags', moduleSetup, () => {
             const $tag = $tagBox.find(`.${TAGBOX_TAG_CLASS}`);
             assert.equal($tag.text(), 'updated', 'tag has updated text');
         });
+    });
+
+    QUnit.test('Tags should be rendered on start if fieldTemplate is async (T1056792)', function(assert) {
+        const done = assert.async();
+        assert.expect(1);
+        this.clock.restore();
+
+        let rendered = false;
+        const $tagBox = $('#tagBox').dxTagBox({
+            items: [{ name: 'one', value: 1 }, { name: 'two', value: 2 }],
+            displayExpr: 'name',
+            valueExpr: 'value',
+            value: [1],
+            fieldTemplate: 'fieldTemplate',
+            templatesRenderAsynchronously: true,
+            integrationOptions: {
+                templates: {
+                    fieldTemplate: {
+                        render: (data) => {
+                            const text = $('<div>');
+                            if(!rendered) {
+                                setTimeout(() => {
+                                    text.dxTextBox({});
+                                    data.container.append(text.get(0));
+                                    data.onRendered();
+                                    rendered = true;
+                                }, TIME_TO_WAIT / 2);
+                            } else {
+                                text.dxTextBox({});
+                                data.container.append(text);
+                                data.onRendered();
+                            }
+
+                            return text;
+                        }
+                    }
+                }
+            },
+        });
+
+        setTimeout(() => {
+            const $tag = $tagBox.find(`.${TAGBOX_TAG_CLASS}`);
+            assert.equal($tag.length, 1, 'tag was rendered');
+            done();
+        }, TIME_TO_WAIT);
     });
 });
 
@@ -3339,7 +3392,7 @@ QUnit.module('searchEnabled', moduleSetup, () => {
             const inputCopy = createTextElementHiddenCopy($input, text);
             inputCopy.appendTo('#qunit-fixture');
 
-            assert.ok(inputWidth >= inputCopy.width());
+            assert.ok(inputWidth >= getWidth(inputCopy));
             inputCopy.remove();
         });
     });
@@ -3371,9 +3424,9 @@ QUnit.module('searchEnabled', moduleSetup, () => {
         $inputCopy
             .css('whiteSpace', 'pre')
             .appendTo('#qunit-fixture');
-        const textWidth = $inputCopy.width();
+        const textWidth = getWidth($inputCopy);
 
-        const currentWidth = $tagBox.find(`.${TEXTBOX_CLASS}`).width();
+        const currentWidth = getWidth($tagBox.find(`.${TEXTBOX_CLASS}`));
         assert.ok(currentWidth > textWidth, `input width (${currentWidth}) should be grester then input text width (${textWidth})`);
         $inputCopy.remove();
     });
@@ -4050,9 +4103,14 @@ QUnit.module('searchEnabled', moduleSetup, () => {
                     const d = $.Deferred();
 
                     setTimeout(function() {
-                        const data = loadOptions && loadOptions.searchValue ?
-                            ['test1'] :
-                            ['test1', 'test2', 'test3'];
+                        let data;
+                        if(loadOptions && loadOptions.searchValue) {
+                            data = ['test1'];
+                        } else if(loadOptions && loadOptions.filter) {
+                            data = ['test2'];
+                        } else {
+                            data = ['test1', 'test2', 'test3'];
+                        }
 
                         d.resolve(data);
                     }, TIME_TO_WAIT);
@@ -4082,12 +4140,12 @@ QUnit.module('searchEnabled', moduleSetup, () => {
         this.clock.tick(TIME_TO_WAIT);
 
         keyboardMock(instance._input()).type('te');
-        this.clock.tick(TIME_TO_WAIT);
+        this.clock.tick(TIME_TO_WAIT * 2);
 
         const $listItems = getListItems(instance);
 
         $listItems.first().trigger('dxclick');
-        this.clock.tick(TIME_TO_WAIT);
+        this.clock.tick(TIME_TO_WAIT * 2);
     });
 
     QUnit.test('TagBox should not request dataSource after item selecting using search when all selected items are available (T944099)', function(assert) {
@@ -4316,6 +4374,47 @@ QUnit.module('searchEnabled', moduleSetup, () => {
         assert.deepEqual(tagBox.option('value'), [], 'all items are deselected');
     });
 
+    QUnit.test('TagBox should send one request if we select second item after search (T1029049)', function(assert) {
+        const loadSpy = sinon.spy(getAsyncLoad());
+
+        const $tagBox = $('#tagBox').dxTagBox({
+            dataSource: getDSWithAsyncSearch(loadSpy),
+            valueExpr: 'id',
+            displayExpr: 'id',
+            selectAllMode: 'allPages',
+            searchEnabled: true,
+            searchExpr: 'id',
+            dropDownOptions: {
+                height: 120,
+            },
+            searchTimeout: TIME_TO_WAIT,
+            opened: true
+        });
+        const tagBox = $tagBox.dxTagBox('instance');
+
+        this.clock.tick(TIME_TO_WAIT * 3);
+
+        const $input = $tagBox.find(`.${TEXTBOX_CLASS}`);
+
+        keyboardMock($input).type('item');
+
+        let $listItems = getListItems(tagBox);
+
+        $listItems.eq(0).trigger('dxclick');
+        this.clock.tick(TIME_TO_WAIT * 3);
+
+        keyboardMock($input).type('search');
+
+        this.clock.tick(TIME_TO_WAIT * 5);
+
+        $listItems = getListItems(tagBox);
+
+        $listItems.eq(0).trigger('dxclick');
+        this.clock.tick(TIME_TO_WAIT * 3);
+
+        assert.strictEqual(loadSpy.callCount, 5, 'correct count of ds load');
+    });
+
     QUnit.test('TagBox should use one DataSource request on list item selection if the editor has selected items from next pages (T970259)', function(assert) {
         const data = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }, { id: 6 }, { id: 7 }];
 
@@ -4410,14 +4509,14 @@ QUnit.module('popup position and size', moduleSetup, () => {
         });
 
         const instance = $element.dxTagBox('instance');
-        const height = instance._popup._$popupContent.height();
+        const height = getHeight(instance._popup._$popupContent);
 
         const $input = $element.find(`.${TEXTBOX_CLASS}`);
         $input.focus();
 
         keyboardMock($input).type('American Samo');
 
-        const currentHeight = instance._popup._$popupContent.height();
+        const currentHeight = getHeight(instance._popup._$popupContent);
 
         assert.notEqual(height, currentHeight);
     });
@@ -5749,11 +5848,7 @@ QUnit.module('single line mode', {
         this.instance.option('rtlEnabled', true);
 
         const $container = this.$element.find('.' + TAGBOX_TAG_CONTAINER_CLASS);
-        const scrollBehavior = getScrollRtlBehavior();
-        const isScrollInverted = scrollBehavior.decreasing ^ scrollBehavior.positive;
-        const scrollSign = scrollBehavior.positive ? 1 : -1;
-
-        const expectedScrollPosition = isScrollInverted ? 0 : scrollSign * ($container.get(0).scrollWidth - $container.outerWidth());
+        const expectedScrollPosition = 0;
 
         assert.equal($container.scrollLeft(), expectedScrollPosition, 'scroll position is correct on rendering');
 
@@ -5768,11 +5863,7 @@ QUnit.module('single line mode', {
 
         const $container = this.$element.find('.' + TAGBOX_TAG_CONTAINER_CLASS);
 
-        const scrollBehavior = getScrollRtlBehavior();
-        const isScrollInverted = scrollBehavior.decreasing ^ scrollBehavior.positive;
-        const scrollSign = scrollBehavior.positive ? 1 : -1;
-
-        const expectedScrollPosition = isScrollInverted ? scrollSign * ($container.get(0).scrollWidth - $container.outerWidth()) : 0;
+        const expectedScrollPosition = -($container.get(0).scrollWidth - $container.outerWidth());
 
         this.instance.focus();
         assert.roughEqual($container.scrollLeft(), expectedScrollPosition, 1.01, 'tags container is scrolled to the end');
@@ -5789,9 +5880,7 @@ QUnit.module('single line mode', {
     });
 
     QUnit.test('focusOut should be prevented when tagContainer clicked - T454876', function(assert) {
-        assert.expect(1);
-
-        const $inputWrapper = this.$element.find('.dx-dropdowneditor-input-wrapper');
+        const $inputWrapper = this.$element.find(`.${DROP_DOWN_EDITOR_INPUT_WRAPPER}`);
 
         $inputWrapper.on('mousedown', e => {
             // note: you should not prevent pointerdown because it will prevent click on ios real devices
@@ -5800,6 +5889,17 @@ QUnit.module('single line mode', {
         });
 
         $inputWrapper.trigger('mousedown');
+    });
+
+    QUnit.test('mousedown should not be prevented when input field clicked (T1046705)', function(assert) {
+        const $inputWrapper = this.$element.find(`.${DROP_DOWN_EDITOR_INPUT_WRAPPER}`);
+        const $input = this.$element.find(`.${TEXTBOX_CLASS}`);
+
+        $inputWrapper.on('mousedown', e => {
+            assert.notOk(e.isDefaultPrevented(), 'mousedown was not prevented');
+        });
+
+        $input.trigger('mousedown');
     });
 });
 
@@ -5941,18 +6041,14 @@ QUnit.module('keyboard navigation through tags in single line mode', {
 
         const $container = this.$element.find('.' + TAGBOX_TAG_CONTAINER_CLASS);
 
-        const scrollBehavior = getScrollRtlBehavior();
-        const isScrollInverted = scrollBehavior.decreasing ^ scrollBehavior.positive;
-        const scrollSign = scrollBehavior.positive ? 1 : -1;
-
         this.instance.focus();
         this.instance.option('value', [this.items[0]]);
 
-        let expectedScrollPosition = isScrollInverted ? scrollSign * ($container.get(0).scrollWidth - $container.outerWidth()) : 0;
+        let expectedScrollPosition = -($container.get(0).scrollWidth - $container.outerWidth());
         assert.roughEqual($container.scrollLeft(), expectedScrollPosition, 1.01, 'tags container is scrolled to the start');
 
         this.instance.option('value', this.items);
-        expectedScrollPosition = isScrollInverted ? scrollSign * ($container.get(0).scrollWidth - $container.outerWidth()) : 0;
+        expectedScrollPosition = -($container.get(0).scrollWidth - $container.outerWidth());
 
         assert.roughEqual($container.scrollLeft(), expectedScrollPosition, 1.01, 'tags container is scrolled to the start');
     });
@@ -5981,14 +6077,14 @@ QUnit.module('keyboard navigation through tags in single line mode', {
             .press('right');
 
         let $focusedTag = this.getFocusedTag();
-        assert.roughEqual($focusedTag.position().left + $focusedTag.width(), containerWidth, 1, 'focused tag is visible');
+        assert.roughEqual($focusedTag.position().left + $focusedTag.width(), containerWidth, 1.5, 'focused tag is visible');
 
         this.keyboard
             .press('right')
             .press('right');
 
         $focusedTag = this.getFocusedTag();
-        assert.roughEqual($focusedTag.position().left + $focusedTag.width(), containerWidth, 1, 'focused tag is visible');
+        assert.roughEqual($focusedTag.position().left + $focusedTag.width(), containerWidth, 1.5, 'focused tag is visible');
     });
 
     QUnit.test('the focused tag should be visible during keyboard navigation to the left in the RTL mode', function(assert) {
@@ -6046,16 +6142,37 @@ QUnit.module('keyboard navigation through tags in single line mode', {
 
         const $container = this.$element.find('.' + TAGBOX_TAG_CONTAINER_CLASS);
 
-        const scrollBehavior = getScrollRtlBehavior();
-        const scrollSign = scrollBehavior.positive ? 1 : -1;
-        const isScrollInverted = scrollBehavior.decreasing ^ scrollBehavior.positive;
-        const expectedScrollPosition = isScrollInverted ? scrollSign * ($container.get(0).scrollWidth - $container.outerWidth()) : 0;
+        const expectedScrollPosition = -($container.get(0).scrollWidth - $container.outerWidth());
 
         assert.roughEqual($container.scrollLeft(), expectedScrollPosition, 1.01, 'tags container is scrolled to the start');
     });
 });
 
 QUnit.module('dataSource integration', moduleSetup, () => {
+    [{
+        dataSource: [1, 2, 3, 4, 5],
+        titleSuffix: 'is not grouped'
+    }, {
+        dataSource: [{ key: 'key', items: [1, 2] }],
+        titleSuffix: 'is grouped'
+    }].forEach(({ dataSource, titleSuffix }) => {
+        QUnit.test(`setting dataSource to null after opening should not raise any errors if dataSource ${titleSuffix} (T1046896)`, function(assert) {
+            const tagBox = $('#tagBox').dxTagBox({
+                dataSource
+            }).dxTagBox('instance');
+
+            tagBox.open();
+
+            try {
+                tagBox.option('dataSource', null);
+            } catch(e) {
+                assert.ok(false, `error is raised: ${e}`);
+            } finally {
+                assert.ok(true, 'no errors is raised');
+            }
+        });
+    });
+
     QUnit.test('item should be chosen synchronously if item is already loaded', function(assert) {
         assert.expect(0);
 
@@ -7269,5 +7386,25 @@ QUnit.module('valueChanged should receive correct event parameter', {
                 this.testProgramChange(assert);
             });
         });
+    });
+});
+
+QUnit.module('label integration', () => {
+    QUnit.test('tagBox should pass containerWidth equal to tag container width', function(assert) {
+        this.TextEditorLabelMock = (args) => { this.labelArgs = args; return new TextEditorLabel(args); };
+        TagBox.mockTextEditorLabel(this.TextEditorLabelMock);
+
+        try {
+            const $tagBox = $('#tagBox').dxTagBox({
+                label: 'some'
+            });
+
+            const borderWidth = 2;
+            const $tagContainer = $tagBox.find(`.${TAGBOX_TAG_CONTAINER_CLASS}`);
+            const tagContainerWidth = getWidth($tagContainer);
+            assert.strictEqual(this.labelArgs.containerWidth + borderWidth, tagContainerWidth);
+        } finally {
+            TagBox.restoreTextEditorLabel();
+        }
     });
 });

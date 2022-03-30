@@ -1,4 +1,5 @@
 import { Selector } from 'testcafe';
+import { createScreenshotsComparer } from 'devextreme-screenshot-comparer';
 import createWidget from '../../../helpers/createWidget';
 import url from '../../../helpers/getPageUrl';
 import Scheduler from '../../../model/scheduler';
@@ -78,6 +79,54 @@ test('viewSwitcher dropdown button popup should have a specified class', async (
     .eql(1);
 }).before(async () => createWidget('dxScheduler', {
   currentView: 'day',
-  views: ['day'],
+  views: ['day', 'week'],
   height: 580,
 }));
+
+test('The toolbar should not display if the config is empty', async (t) => {
+  const { takeScreenshot, compareResults } = createScreenshotsComparer(t);
+
+  const scheduler = new Scheduler('#container');
+
+  await t
+    .expect(await takeScreenshot('scheduler-with-empty-toolbar-config.png'))
+    .ok();
+
+  await scheduler.option('toolbar', [{ defaultElement: 'viewSwitcher' }]);
+
+  await t
+    .expect(await takeScreenshot('scheduler-with-non-empty-toolbar-config.png'))
+    .ok();
+
+  await t
+    .expect(compareResults.isValid())
+    .ok(compareResults.errorMessages());
+}).before(async () => createWidget('dxScheduler', {
+  currentDate: new Date(2020, 2, 2),
+  currentView: 'day',
+  views: ['day'],
+  height: 580,
+  toolbar: [],
+}, true));
+
+test('The viewSwitcher should not drop down if only one view', async (t) => {
+  const { takeScreenshot, compareResults } = createScreenshotsComparer(t);
+
+  const { toolbar } = new Scheduler('#container');
+  const dropDownButton = toolbar.viewSwitcher.getDropDownButton();
+
+  await t
+    .click(dropDownButton.element)
+
+    .expect(await takeScreenshot('drop-down-with-one-view.png', toolbar.element))
+    .ok()
+
+    .expect(compareResults.isValid())
+    .ok(compareResults.errorMessages());
+}).before(async () => createWidget('dxScheduler', {
+  currentDate: new Date(2020, 2, 2),
+  currentView: 'day',
+  views: ['day'],
+  useDropDownViewSwitcher: true,
+  height: 580,
+}, true));

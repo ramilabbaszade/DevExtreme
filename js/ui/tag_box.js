@@ -1,3 +1,4 @@
+import { getOuterWidth, getHeight } from '../core/utils/size';
 import $ from '../core/renderer';
 import devices from '../core/devices';
 import { data as elementData } from '../core/element_data';
@@ -18,7 +19,6 @@ import { addNamespace, isCommandKeyPressed, normalizeKeyName } from '../events/u
 import { name as clickEvent } from '../events/click';
 import caret from './text_box/utils.caret';
 import { normalizeLoadResult } from '../data/data_source/utils';
-import getScrollRtlBehavior from '../core/utils/scroll_rtl_behavior';
 
 import SelectBox from './select_box';
 import { BindableTemplate } from '../core/templates/bindable_template';
@@ -41,7 +41,6 @@ const TAGBOX_POPUP_WRAPPER_CLASS = 'dx-tagbox-popup-wrapper';
 const TAGBOX_TAG_CONTENT_CLASS = 'dx-tag-content';
 const TAGBOX_DEFAULT_FIELD_TEMPLATE_CLASS = 'dx-tagbox-default-template';
 const TAGBOX_CUSTOM_FIELD_TEMPLATE_CLASS = 'dx-tagbox-custom-template';
-const NATIVE_CLICK_CLASS = 'dx-native-click';
 const TEXTEDITOR_INPUT_CONTAINER_CLASS = 'dx-texteditor-input-container';
 
 const TAGBOX_MOUSE_WHEEL_DELTA_MULTIPLIER = -0.3;
@@ -169,9 +168,7 @@ const TagBox = SelectBox.inherit({
 
     _updateTagsContainer: function($element) {
         this._$tagsContainer = $element
-            .addClass(TAGBOX_TAG_CONTAINER_CLASS)
-            .addClass(NATIVE_CLICK_CLASS);
-        this._$tagsContainer.parent().addClass(NATIVE_CLICK_CLASS);
+            .addClass(TAGBOX_TAG_CONTAINER_CLASS);
     },
 
     _allowSelectItemByTab: function() {
@@ -223,6 +220,10 @@ const TagBox = SelectBox.inherit({
         return this.callBase();
     },
 
+    _getLabelContainer: function() {
+        return this._$tagsContainer;
+    },
+
     _scrollContainer: function(direction) {
         if(this.option('multiline') || !hasWindow()) {
             return;
@@ -250,13 +251,11 @@ const TagBox = SelectBox.inherit({
         const rtlEnabled = this.option('rtlEnabled');
         const isScrollLeft = (direction === 'end') ^ rtlEnabled;
 
-        const scrollBehavior = getScrollRtlBehavior();
-        const isScrollInverted = rtlEnabled && (scrollBehavior.decreasing ^ scrollBehavior.positive);
-        const scrollSign = !rtlEnabled || scrollBehavior.positive ? 1 : -1;
+        const scrollSign = rtlEnabled ? -1 : 1;
 
-        return (isScrollLeft ^ !isScrollInverted)
+        return (isScrollLeft ^ !rtlEnabled)
             ? 0
-            : scrollSign * (this._$tagsContainer.get(0).scrollWidth - this._$tagsContainer.outerWidth());
+            : scrollSign * (this._$tagsContainer.get(0).scrollWidth - getOuterWidth(this._$tagsContainer));
     },
 
     _getFocusedTagPosition: function(direction) {
@@ -266,13 +265,11 @@ const TagBox = SelectBox.inherit({
         let scrollLeft = this._$tagsContainer.scrollLeft();
 
         if(isScrollLeft) {
-            scrollOffset += this._$focusedTag.outerWidth(true) - this._$tagsContainer.outerWidth();
+            scrollOffset += getOuterWidth(this._$focusedTag, true) - getOuterWidth(this._$tagsContainer);
         }
 
         if(isScrollLeft ^ (scrollOffset < 0)) {
-            const scrollBehavior = getScrollRtlBehavior();
-            const scrollCorrection = rtlEnabled && !scrollBehavior.decreasing && scrollBehavior.positive ? -1 : 1;
-            scrollLeft += scrollOffset * scrollCorrection;
+            scrollLeft += scrollOffset;
         }
 
         return scrollLeft;
@@ -573,7 +570,18 @@ const TagBox = SelectBox.inherit({
 
     _renderInput: function() {
         this.callBase();
-        this._renderPreventBlur(this._inputWrapper());
+        this._renderPreventBlurOnInputClick();
+    },
+
+    _renderPreventBlurOnInputClick: function() {
+        const eventName = addNamespace('mousedown', 'dxTagBox');
+
+        eventsEngine.off(this._inputWrapper(), eventName);
+        eventsEngine.on(this._inputWrapper(), eventName, (e) => {
+            if(e.target !== this._input()[0]) {
+                e.preventDefault();
+            }
+        });
     },
 
     _renderInputValueImpl: function() {
@@ -703,7 +711,7 @@ const TagBox = SelectBox.inherit({
             const $calculationElement = createTextElementHiddenCopy($input, value, { includePaddings: true });
 
             $calculationElement.insertAfter($input);
-            width = $calculationElement.outerWidth() + cursorWidth;
+            width = getOuterWidth($calculationElement) + cursorWidth;
 
             $calculationElement.remove();
         } else if(!value) {
@@ -781,11 +789,13 @@ const TagBox = SelectBox.inherit({
         const filteredItems = selectedItems.filter(clientFilterFunction);
         const selectedItemsAlreadyLoaded = filteredItems.length === values.length;
         const d = new Deferred();
+        const dataSource = this._dataSource;
 
-        if((!this._isDataSourceChanged || isListItemsLoaded) && selectedItemsAlreadyLoaded) {
+        if(!dataSource) {
+            return d.resolve([]).promise();
+        } else if((!this._isDataSourceChanged || isListItemsLoaded) && selectedItemsAlreadyLoaded) {
             return d.resolve(filteredItems).promise();
         } else {
-            const dataSource = this._dataSource;
             const { customQueryParams, expand, select } = dataSource.loadOptions();
             const filter = this._getFilter(creator);
 
@@ -859,7 +869,7 @@ const TagBox = SelectBox.inherit({
     },
 
     _isGroupedData: function() {
-        return this.option('grouped') && !this._dataSource.group();
+        return this.option('grouped') && !this._dataSource?.group();
     },
 
     _getItemsByValues: function(values) {
@@ -875,6 +885,11 @@ const TagBox = SelectBox.inherit({
 
     _getFilteredGroupedItems: function(values) {
         const selectedItems = new Deferred();
+
+        if(!this._dataSource) {
+            return selectedItems.promise();
+        }
+
         if(this._filteredGroupedItemsLoadPromise) {
             this._dataSource.cancel(this._filteredGroupedItemsLoadPromise.operationId);
         }
@@ -1003,17 +1018,30 @@ const TagBox = SelectBox.inherit({
     },
 
     _integrateInput: function() {
+        this._isInputReady.resolve();
         this.callBase();
         this._updateTagsContainer($(`.${TEXTEDITOR_INPUT_CONTAINER_CLASS}`));
         this._renderTagRemoveAction();
     },
 
     _renderTagsCore: function(items) {
+        this._isInputReady?.reject();
+        this._isInputReady = new Deferred();
         this._renderField();
 
         this.option('selectedItems', this._selectedItems.slice());
         this._cleanTags();
 
+        if(this._input().length > 0) {
+            this._isInputReady.resolve();
+        }
+
+        when(this._isInputReady).done(() => {
+            this._renderTagsElements(items);
+        });
+    },
+
+    _renderTagsElements(items) {
         const $multiTag = this._multiTagRequired() && this._renderMultiTag(this._input());
         const showMultiTagOnly = this.option('showMultiTagOnly');
         const maxDisplayedTags = this.option('maxDisplayedTags');
@@ -1318,11 +1346,11 @@ const TagBox = SelectBox.inherit({
 
     _updateWidgetHeight: function() {
         const element = this.$element();
-        const originalHeight = element.height();
+        const originalHeight = getHeight(element);
 
         this._renderInputSize();
 
-        const currentHeight = element.height();
+        const currentHeight = getHeight(element);
 
         if(this._popup && this.option('opened') && this._isEditable() && currentHeight !== originalHeight) {
             this._popup.repaint();

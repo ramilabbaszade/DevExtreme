@@ -148,7 +148,8 @@ export const HeaderFilterView = modules.View.inherit({
 
     updatePopup: function($element, options) {
         const that = this;
-        const alignment = options.alignment === 'right' ? 'left' : 'right';
+        const showColumnLines = this.option('showColumnLines');
+        const alignment = (options.alignment === 'right' ^ !showColumnLines) ? 'left' : 'right';
 
         if(that._popupContainer) {
             that._cleanPopupContent();
@@ -205,9 +206,10 @@ export const HeaderFilterView = modules.View.inherit({
             showCloseButton: false,
             hideOnParentScroll: false, // T756320
             dragEnabled: false,
-            closeOnOutsideClick: true,
+            hideOnOutsideClick: true,
             focusStateEnabled: false,
             copyRootClassesToWrapper: true,
+            _ignoreCopyRootClassesToWrapperDeprecation: true,
             toolbarItems: [
                 {
                     toolbar: 'bottom', location: 'after', widget: 'dxButton', options: {

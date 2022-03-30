@@ -440,7 +440,7 @@ test('New virtual mode. A detail row should be rendered when the last master row
     scrolling: {
       mode: 'virtual',
       rowRenderingMode: 'virtual',
-      newMode: true,
+      legacyMode: false,
     },
     masterDetail: {
       enabled: true,
@@ -493,7 +493,7 @@ test('New virtual mode. An adaptive row should be rendered when the last row is 
     scrolling: {
       mode: 'virtual',
       rowRenderingMode: 'virtual',
-      newMode: true,
+      legacyMode: false,
       useNative: false,
     },
     columnHidingEnabled: true,
@@ -503,7 +503,7 @@ test('New virtual mode. An adaptive row should be rendered when the last row is 
   });
 });
 
-test('New virtual mode. Virtual rows should not be in view port', async (t) => {
+test.skip('New virtual mode. Virtual rows should not be in view port', async (t) => {
   const dataGrid = new DataGrid('#container');
   const getVirtualRowInfo = ClientFunction(() => {
     const result: any = {};
@@ -525,7 +525,7 @@ test('New virtual mode. Virtual rows should not be in view port', async (t) => {
     const $rows = $((window as any).widget.element()).find('.dx-data-row');
 
     $rows.each((_, el) => {
-      result += $(el).height();
+      result += $(el).height() ?? 0;
     });
 
     return result;
@@ -603,7 +603,7 @@ test('New virtual mode. Virtual rows should not be in view port', async (t) => {
     };
 
     (window as any).myStore = new (window as any).DevExpress.data.ArrayStore({
-      key: 'id',
+      key: 'ID',
       data: getItems(),
     });
   });
@@ -630,7 +630,416 @@ test('New virtual mode. Virtual rows should not be in view port', async (t) => {
     remoteOperations: true,
     scrolling: {
       mode: 'virtual',
-      newMode: true,
+      legacyMode: false,
+    },
+  });
+});
+
+test('New row should be rendered at the top when grid is scrolled in virtual scrolling', async (t) => {
+  const dataGrid = new DataGrid('#container');
+
+  // act
+  await dataGrid.scrollTo({ top: 2350 });
+
+  const topVisibleRowData = await dataGrid.apiGetTopVisibleRowData();
+
+  // assert
+  await t
+    .expect(topVisibleRowData.ID)
+    .eql(70);
+
+  await t
+    .click(dataGrid.getHeaderPanel().getAddRowButton());
+
+  // assert
+  await t
+    .expect(dataGrid.getDataRow(0).isInserted)
+    .ok();
+}).before(async () => {
+  const generateData = (): Record<string, unknown>[] => {
+    const items: Record<string, unknown>[] = [];
+    for (let i = 0; i < 130; i += 1) {
+      items.push({
+        ID: i + 1,
+        Name: `Name ${i + 1}`,
+      });
+    }
+    return items;
+  };
+  await ClientFunction(() => {
+    $('#container').css('max-height', 440);
+  })();
+  await createWidget('dxDataGrid', {
+    dataSource: generateData(),
+    keyExpr: 'ID',
+    scrolling: {
+      mode: 'virtual',
+    },
+    paging: {
+      pageSize: 10,
+    },
+    editing: {
+      mode: 'row',
+      allowAdding: true,
+      newRowPosition: 'first',
+    },
+  });
+});
+
+test('New mode. Rows should be rendered properly when rowRenderingMode is virtual and max height (T1054920)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+
+  await t
+    .resizeWindow(800, 700);
+
+  let visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(10);
+
+  // act
+  await t
+    .click(dataGrid.getPager().getPageSize(1).element);
+
+  visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length > 0)
+    .ok();
+
+  await dataGrid.scrollTo({ top: 2000 });
+
+  // act
+  await t
+    .expect(dataGrid.isVirtualRowIntersectViewport())
+    .notOk();
+
+  visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(18);
+
+  // act
+  await t
+    .click(dataGrid.getPager().getPageSize(0).element);
+
+  // act
+  await t
+    .expect(dataGrid.isVirtualRowIntersectViewport())
+    .notOk();
+
+  visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(10);
+}).before(async () => {
+  const setMaxHeight = ClientFunction(() => {
+    $('#container').css('max-height', '600px');
+  });
+
+  const getItems = (): any[] => {
+    const items: any[] = [];
+    for (let i = 0; i < 100; i += 1) {
+      items.push({
+        id: i + 1,
+        name: `Name ${i + 1}`,
+      });
+    }
+
+    return items;
+  };
+
+  await setMaxHeight();
+
+  return createWidget('dxDataGrid', {
+    dataSource: getItems(),
+    keyExpr: 'id',
+    showBorders: true,
+    remoteOperations: true,
+    scrolling: {
+      rowRenderingMode: 'virtual',
+      useNative: false,
+    },
+    paging: {
+      pageSize: 10,
+    },
+    pager: {
+      visible: true,
+      allowedPageSizes: [10, 'all'],
+      showPageSizeSelector: true,
+    },
+  });
+});
+
+test('Rows are rendered properly when window content is scrolled (T1070388)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+  const scrollWindowTo = async (position: number) => {
+    await ClientFunction(() => {
+      (window as any).scroll({ top: position });
+    },
+    {
+      dependencies: {
+        position,
+      },
+    })();
+  };
+  const getWindowScrollPosition = ClientFunction(() => (window as any).scrollY);
+
+  let visibleRows = await dataGrid.apiGetVisibleRows();
+
+  await t
+    .resizeWindow(800, 800);
+
+  // assert
+  await t
+    .expect(visibleRows.length > 0)
+    .ok();
+
+  // act
+  await scrollWindowTo(3000);
+
+  // assert
+  await t
+    .expect(getWindowScrollPosition())
+    .eql(3000);
+
+  visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(26)
+    .expect(visibleRows[0].key > 30)
+    .ok()
+    .expect(visibleRows[25].key > 55)
+    .ok();
+
+  // act
+  await scrollWindowTo(6000);
+
+  // assert
+  await t
+    .expect(getWindowScrollPosition())
+    .eql(6000);
+
+  // act
+  await scrollWindowTo(3000);
+
+  // assert
+  await t
+    .expect(getWindowScrollPosition())
+    .eql(3000);
+
+  visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length)
+    .eql(26)
+    .expect(visibleRows[0].key > 30)
+    .ok()
+    .expect(visibleRows[25].key > 55)
+    .ok();
+
+  // act
+  await scrollWindowTo(0);
+
+  // assert
+  await t
+    .expect(getWindowScrollPosition())
+    .eql(0);
+
+  visibleRows = await dataGrid.apiGetVisibleRows();
+
+  // assert
+  await t
+    .expect(visibleRows.length > 0)
+    .ok();
+}).before(async () => {
+  const renderContent = ClientFunction(() => {
+    for (let i = 0; i < 100; i += 1) {
+      $('body').prepend('<br/>');
+    }
+    for (let i = 0; i < 100; i += 1) {
+      $('body').append('<br/>');
+    }
+  });
+
+  const getItems = (): any[] => {
+    const items: any[] = [];
+    for (let i = 0; i < 100; i += 1) {
+      items.push({
+        id: i + 1,
+        name: `Name ${i + 1}`,
+      });
+    }
+
+    return items;
+  };
+
+  await renderContent();
+
+  return createWidget('dxDataGrid', {
+    dataSource: getItems(),
+    keyExpr: 'id',
+    showBorders: true,
+    scrolling: {
+      mode: 'virtual',
+    },
+  });
+});
+
+fixture`Remote Scrolling`
+  .page(url(__dirname, '../containerAspNetData.html'));
+
+test('Scroll to the bottom after expand several group', async (t) => {
+  const dataGrid = new DataGrid('#container');
+
+  const scrollToBottom = async () => {
+    await dataGrid.scrollTo({ y: 100000 });
+    await t.expect(dataGrid.isReady()).ok();
+  };
+
+  // act
+  await t.expect(dataGrid.hasScrollable()).ok();
+  await scrollToBottom();
+  await scrollToBottom();
+  await scrollToBottom();
+  await dataGrid.apiExpandRow(['Contoso York Store']);
+  await dataGrid.apiExpandRow(['Contoso York Store', 'Audio']);
+  await scrollToBottom();
+  await scrollToBottom();
+  await dataGrid.scrollBy({ y: -1 });
+  await t.expect(dataGrid.isReady()).ok();
+
+  // assert
+  const visibleRows = await dataGrid.apiGetVisibleRows();
+  await t
+    .expect(visibleRows[0].key)
+    .eql(932043);
+})
+  .before(async () => createWidget('dxDataGrid', () => ({
+    width: 1000,
+    height: 440,
+    dataSource: (window as any).DevExpress.data.AspNet.createStore({
+      key: 'Id',
+      loadUrl: 'https://js.devexpress.com/Demos/WidgetsGalleryDataService/api/Sales',
+    }),
+    remoteOperations: { groupPaging: true },
+    scrolling: {
+      mode: 'virtual',
+      useNative: false,
+    },
+    grouping: {
+      autoExpandAll: false,
+    },
+    groupPanel: {
+      visible: true,
+    },
+    wordWrapEnabled: true,
+    showBorders: true,
+    columns: [{
+      dataField: 'Id',
+      dataType: 'number',
+      width: 75,
+    }, {
+      caption: 'Subcategory',
+      dataField: 'ProductSubcategoryName',
+      width: 150,
+    }, {
+      caption: 'Store',
+      dataField: 'StoreName',
+      groupIndex: 0,
+      width: 150,
+    }, {
+      caption: 'Category',
+      dataField: 'ProductCategoryName',
+      groupIndex: 1,
+      width: 120,
+    }, {
+      caption: 'Product',
+      dataField: 'ProductName',
+    }],
+  })));
+
+test('New virtual mode. Virtual rows should not be in view port after scrolling large data (T1043156)', async (t) => {
+  const dataGrid = new DataGrid('#container');
+  const scrollbarVerticalThumbTrack = dataGrid.getScrollBarThumbTrack('vertical');
+
+  // assert
+  await t
+    .expect(scrollbarVerticalThumbTrack.exists)
+    .ok();
+
+  // act
+  await t
+    .hover(scrollbarVerticalThumbTrack)
+    .drag(scrollbarVerticalThumbTrack, 0, 400)
+    .wait(1000);
+
+  // assert
+  await t
+    .expect(dataGrid.isVirtualRowIntersectViewport())
+    .notOk();
+
+  // act
+  await t
+    .hover(scrollbarVerticalThumbTrack)
+    .drag(scrollbarVerticalThumbTrack, 0, -200)
+    .wait(1000);
+
+  // assert
+  await t
+    .expect(dataGrid.isVirtualRowIntersectViewport())
+    .notOk();
+}).before(async () => {
+  const initStore = ClientFunction(() => {
+    const getItems = (): Record<string, unknown>[] => {
+      const items: Record<string, unknown>[] = [];
+      for (let i = 0; i < 1000000; i += 1) {
+        items.push({
+          ID: i + 1,
+          Name: `Name ${i + 1}`,
+        });
+      }
+      return items;
+    };
+
+    (window as any).myStore = new (window as any).DevExpress.data.ArrayStore({
+      key: 'ID',
+      data: getItems(),
+    });
+  });
+
+  await initStore();
+
+  return createWidget('dxDataGrid', {
+    dataSource: {
+      key: 'ID',
+      load(loadOptions) {
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            (window as any).myStore.load(loadOptions).done((data) => {
+              resolve(data);
+            });
+          }, 300);
+        });
+      },
+      totalCount(loadOptions) {
+        return (window as any).myStore.totalCount(loadOptions);
+      },
+    },
+    height: 500,
+    remoteOperations: true,
+    scrolling: {
+      mode: 'virtual',
     },
   });
 });

@@ -39,6 +39,20 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
     inputAttr?: any;
     /**
      * @docid
+     * @default ''
+     * @public
+     */
+    label?: string;
+    /**
+     * @docid
+     * @type Enums.EditorLabelMode
+     * @default 'static'
+     * @default 'floating' &for(Material)
+     * @public
+     */
+    labelMode?: 'static' | 'floating' | 'hidden';
+    /**
+     * @docid
      * @default ""
      * @public
      */
@@ -78,7 +92,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onChange?: ((e: NativeEventInfo<TComponent>) => void);
+    onChange?: ((e: NativeEventInfo<TComponent, Event>) => void);
     /**
      * @docid
      * @default null
@@ -90,7 +104,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onCopy?: ((e: NativeEventInfo<TComponent>) => void);
+    onCopy?: ((e: NativeEventInfo<TComponent, ClipboardEvent>) => void);
     /**
      * @docid
      * @default null
@@ -102,7 +116,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onCut?: ((e: NativeEventInfo<TComponent>) => void);
+    onCut?: ((e: NativeEventInfo<TComponent, ClipboardEvent>) => void);
     /**
      * @docid
      * @default null
@@ -114,7 +128,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onEnterKey?: ((e: NativeEventInfo<TComponent>) => void);
+    onEnterKey?: ((e: NativeEventInfo<TComponent, KeyboardEvent>) => void);
     /**
      * @docid
      * @default null
@@ -126,7 +140,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onFocusIn?: ((e: NativeEventInfo<TComponent>) => void);
+    onFocusIn?: ((e: NativeEventInfo<TComponent, FocusEvent>) => void);
     /**
      * @docid
      * @default null
@@ -138,7 +152,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onFocusOut?: ((e: NativeEventInfo<TComponent>) => void);
+    onFocusOut?: ((e: NativeEventInfo<TComponent, FocusEvent>) => void);
     /**
      * @docid
      * @default null
@@ -150,7 +164,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onInput?: ((e: NativeEventInfo<TComponent>) => void);
+    onInput?: ((e: NativeEventInfo<TComponent, UIEvent>) => void);
     /**
      * @docid
      * @type_function_param1 e:object
@@ -162,20 +176,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onKeyDown?: ((e: NativeEventInfo<TComponent>) => void);
-    /**
-     * @docid
-     * @default null
-     * @type_function_param1 e:object
-     * @type_function_param1_field4 event:event
-     * @deprecated
-     * @type_function_param1_field1 component:this
-     * @type_function_param1_field2 element:DxElement
-     * @type_function_param1_field3 model:any
-     * @action
-     * @public
-     */
-    onKeyPress?: ((e: NativeEventInfo<TComponent>) => void);
+    onKeyDown?: ((e: NativeEventInfo<TComponent, KeyboardEvent>) => void);
     /**
      * @docid
      * @default null
@@ -187,7 +188,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onKeyUp?: ((e: NativeEventInfo<TComponent>) => void);
+    onKeyUp?: ((e: NativeEventInfo<TComponent, KeyboardEvent>) => void);
     /**
      * @docid
      * @default null
@@ -199,7 +200,7 @@ export interface dxTextEditorOptions<TComponent> extends EditorOptions<TComponen
      * @action
      * @public
      */
-    onPaste?: ((e: NativeEventInfo<TComponent>) => void);
+    onPaste?: ((e: NativeEventInfo<TComponent, ClipboardEvent>) => void);
     /**
      * @docid
      * @default ""
@@ -280,7 +281,6 @@ export default class dxTextEditor<TProperties = Properties> extends Editor<TProp
     /**
      * @docid
      * @publicName getButton(name)
-     * @param1 name:string
      * @return dxButton | undefined
      * @public
      */

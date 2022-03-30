@@ -1,3 +1,4 @@
+import { getHeight, setHeight } from '../core/utils/size';
 import $ from '../core/renderer';
 import { getWindow } from '../core/utils/window';
 const window = getWindow();
@@ -11,6 +12,7 @@ import DataHelperMixin from '../data_helper';
 import List from './list_light';
 import { isMaterial } from './themes';
 import { ChildDefaultTemplate } from '../core/templates/child_default_template';
+import { toggleItemFocusableElementTabIndex } from './toolbar/ui.toolbar.utils';
 
 const DROP_DOWN_MENU_CLASS = 'dx-dropdownmenu';
 const DROP_DOWN_MENU_POPUP_CLASS = 'dx-dropdownmenu-popup';
@@ -321,10 +323,15 @@ const DropDownMenu = Widget.inherit({
 
         this._setListDataSource();
 
-        const listMaxHeight = $(window).height() * 0.5;
-        if($content.height() > listMaxHeight) {
-            $content.height(listMaxHeight);
+        const listMaxHeight = getHeight(window) * 0.5;
+        if(getHeight($content) > listMaxHeight) {
+            setHeight($content, listMaxHeight);
         }
+    },
+
+    _itemOptionChanged: function(item, property, value) {
+        this._list?._itemOptionChanged(item, property, value);
+        toggleItemFocusableElementTabIndex(this._list, item);
     },
 
     _listOptions: function() {
@@ -429,7 +436,9 @@ const DropDownMenu = Widget.inherit({
                     this._refreshDataSource();
                     this._setListDataSource();
                 }
+
                 this._toggleMenuVisibility(value);
+                this._updateFocusableItemsTabIndex();
                 break;
             case 'deferRendering':
             case 'popupPosition':
@@ -438,9 +447,18 @@ const DropDownMenu = Widget.inherit({
             case 'container':
                 this._popup && this._popup.option(args.name, args.value);
                 break;
+            case 'disabled':
+                if(this._list) {
+                    this._updateFocusableItemsTabIndex();
+                }
+                break;
             default:
                 this.callBase(args);
         }
+    },
+
+    _updateFocusableItemsTabIndex() {
+        this.option('items').forEach(item => toggleItemFocusableElementTabIndex(this._list, item));
     },
 
     open: function() {

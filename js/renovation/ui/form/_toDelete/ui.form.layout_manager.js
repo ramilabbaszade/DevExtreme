@@ -1,3 +1,4 @@
+import { getWidth } from '../../../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import Guid from '../../core/guid';
@@ -12,7 +13,7 @@ import { each } from '../../core/utils/iterator';
 import { extend } from '../../core/utils/extend';
 import { inArray, normalizeIndexes } from '../../core/utils/array';
 import { compileGetter } from '../../core/utils/data';
-import { removeEvent } from '../../core/remove_event';
+import { removeEvent } from '../../events/remove';
 import { name as clickEventName } from '../../events/click';
 import errors from '../widget/ui.errors';
 import messageLocalization from '../../localization/message';
@@ -481,7 +482,7 @@ const LayoutManager = Widget.inherit({
         }
 
         const minColWidth = this.option('minColWidth');
-        const width = this.$element().width();
+        const width = getWidth(this.$element());
         const itemsCount = this._items.length;
         const maxColCount = Math.floor(width / minColWidth) || 1;
 

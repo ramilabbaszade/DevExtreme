@@ -1,3 +1,4 @@
+import { DataSourceLike } from '../data/data_source';
 import {
     UserDefinedElement,
     DxElement,
@@ -6,12 +7,6 @@ import {
 import {
     template,
 } from '../core/templates/template';
-
-import DataSource, {
-    DataSourceOptions,
-} from '../data/data_source';
-
-import Store from '../data/abstract_store';
 
 import {
     EventInfo,
@@ -26,6 +21,10 @@ import Editor, {
 } from './editor/editor';
 
 import {
+  MenuBasePlainItem,
+} from './menu';
+
+import {
     Item as dxToolbarItem,
 } from './toolbar';
 
@@ -36,10 +35,10 @@ export type ContentReadyEvent = EventInfo<dxHtmlEditor>;
 export type DisposingEvent = EventInfo<dxHtmlEditor>;
 
 /** @public */
-export type FocusInEvent = NativeEventInfo<dxHtmlEditor>;
+export type FocusInEvent = NativeEventInfo<dxHtmlEditor, FocusEvent>;
 
 /** @public */
-export type FocusOutEvent = NativeEventInfo<dxHtmlEditor>;
+export type FocusOutEvent = NativeEventInfo<dxHtmlEditor, FocusEvent>;
 
 /** @public */
 export type InitializedEvent = InitializedEventInfo<dxHtmlEditor>;
@@ -48,7 +47,7 @@ export type InitializedEvent = InitializedEventInfo<dxHtmlEditor>;
 export type OptionChangedEvent = EventInfo<dxHtmlEditor> & ChangedOptionInfo;
 
 /** @public */
-export type ValueChangedEvent = NativeEventInfo<dxHtmlEditor> & ValueChangedInfo;
+export type ValueChangedEvent = NativeEventInfo<dxHtmlEditor, KeyboardEvent | ClipboardEvent | Event> & ValueChangedInfo;
 
 /** @public */
 export interface MentionTemplateData {
@@ -99,7 +98,7 @@ export interface dxHtmlEditorOptions extends EditorOptions<dxHtmlEditor> {
     mentions?: Array<dxHtmlEditorMention>;
     /**
      * @docid
-     * @default true
+     * @default null
      * @public
      */
     tableContextMenu?: dxHtmlEditorTableContextMenu;
@@ -171,8 +170,6 @@ export interface dxHtmlEditorOptions extends EditorOptions<dxHtmlEditor> {
  * @inherits Editor
  * @hasTranscludedContent
  * @isEditor
- * @module ui/html_editor
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -192,8 +189,6 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName delete(index, length)
-     * @param1 index:number
-     * @param2 length:number
      * @public
      */
     delete(index: number, length: number): void;
@@ -201,25 +196,19 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
      * @docid
      * @publicName format(formatName, formatValue)
      * @param1 formatName:Enums.HtmlEditorFormat|string
-     * @param2 formatValue:any
      * @public
      */
     format(formatName: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'size' | 'strike' | 'script' | 'underline' | 'blockquote' | 'header' | 'indent' | 'list' | 'align' | 'code-block' | string, formatValue: any): void;
     /**
      * @docid
      * @publicName formatLine(index, length, formatName, formatValue)
-     * @param1 index:number
-     * @param2 length:number
      * @param3 formatName:Enums.HtmlEditorFormat|string
-     * @param4 formatValue:any
      * @public
      */
     formatLine(index: number, length: number, formatName: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'size' | 'strike' | 'script' | 'underline' | 'blockquote' | 'header' | 'indent' | 'list' | 'align' | 'code-block' | string, formatValue: any): void;
     /**
      * @docid
      * @publicName formatLine(index, length, formats)
-     * @param1 index:number
-     * @param2 length:number
      * @param3 formats:object
      * @public
      */
@@ -227,18 +216,13 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName formatText(index, length, formatName, formatValue)
-     * @param1 index:number
-     * @param2 length:number
      * @param3 formatName:Enums.HtmlEditorFormat|string
-     * @param4 formatValue:any
      * @public
      */
     formatText(index: number, length: number, formatName: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'size' | 'strike' | 'script' | 'underline' | 'blockquote' | 'header' | 'indent' | 'list' | 'align' | 'code-block' | string, formatValue: any): void;
     /**
      * @docid
      * @publicName formatText(index, length, formats)
-     * @param1 index:number
-     * @param2 length:number
      * @param3 formats:object
      * @public
      */
@@ -246,7 +230,6 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName get(componentPath)
-     * @param1 componentPath:string
      * @return Object
      * @public
      */
@@ -254,8 +237,6 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName getBounds(index, length)
-     * @param1 index:number
-     * @param2 length:number
      * @return Object
      * @public
      */
@@ -270,8 +251,6 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName getFormat(index, length)
-     * @param1 index:number
-     * @param2 length:number
      * @return Object
      * @public
      */
@@ -279,14 +258,12 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName getLength()
-     * @return number
      * @public
      */
     getLength(): number;
     /**
      * @docid
      * @publicName getModule(moduleName)
-     * @param1 moduleName:string
      * @return Object
      * @public
      */
@@ -301,7 +278,6 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName getSelection()
-     * @param1 focus:boolean|undefined
      * @return Object
      * @public
      */
@@ -309,35 +285,25 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName getText(index, length)
-     * @param1 index:number
-     * @param2 length:number
      * @public
      */
     getText(index: number, length: number): string;
     /**
      * @docid
      * @publicName insertEmbed(index, type, config)
-     * @param1 index:number
-     * @param2 type:string
-     * @param3 config:any
      * @public
      */
     insertEmbed(index: number, type: string, config: any): void;
     /**
      * @docid
      * @publicName insertText(index, text, formatName, formatValue)
-     * @param1 index:number
-     * @param2 text:string
      * @param3 formatName:Enums.HtmlEditorFormat|string
-     * @param4 formatValue:any
      * @public
      */
     insertText(index: number, text: string, formatName: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'size' | 'strike' | 'script' | 'underline' | 'blockquote' | 'header' | 'indent' | 'list' | 'align' | 'code-block' | string, formatValue: any): void;
     /**
      * @docid
      * @publicName insertText(index, text, formats)
-     * @param1 index:number
-     * @param2 text:string
      * @param3 formats:object
      * @public
      */
@@ -358,16 +324,12 @@ export default class dxHtmlEditor extends Editor<dxHtmlEditorOptions> {
     /**
      * @docid
      * @publicName removeFormat(index, length)
-     * @param1 index:number
-     * @param2 length:number
      * @public
      */
     removeFormat(index: number, length: number): void;
     /**
      * @docid
      * @publicName setSelection(index, length)
-     * @param1 index:number
-     * @param2 length:number
      * @public
      */
     setSelection(index: number, length: number): void;
@@ -404,27 +366,32 @@ export interface dxHtmlEditorMediaResizing {
  * @type object
  * @namespace DevExpress.ui
  */
- export interface dxHtmlEditorTableResizing {
-  /**
-   * @docid
-   * @default 40
-   * @public
-   */
-   minColumnWidth?: number;
-  /**
-   * @docid
-   * @default 24
-   * @public
-   */
-  minRowHeight?: number;
-  /**
-   * @docid
-   * @default false
-   * @public
-   */
-  enabled?: boolean;
+export interface dxHtmlEditorTableResizing {
+ /**
+  * @docid
+  * @default 40
+  * @public
+  */
+  minColumnWidth?: number;
+ /**
+  * @docid
+  * @default 24
+  * @public
+  */
+ minRowHeight?: number;
+ /**
+  * @docid
+  * @default false
+  * @public
+  */
+ enabled?: boolean;
 }
 
+/**
+ * @docid
+ * @type object
+ * @namespace DevExpress.ui
+ */
 export interface dxHtmlEditorTableContextMenu {
     /**
      * @docid
@@ -432,7 +399,39 @@ export interface dxHtmlEditorTableContextMenu {
      * @public
      */
     enabled?: boolean;
-  }
+    /**
+     * @docid
+     * @type Array<dxHtmlEditorTableContextMenuItem,Enums.HtmlEditorContextMenuItem>
+     * @public
+     */
+    items?: Array<ContextMenuItem | 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable'>;
+}
+
+/**
+ * @public
+ * @namespace DevExpress.ui.dxHtmlEditor
+ */
+export type ContextMenuItem = dxHtmlEditorTableContextMenuItem;
+
+/**
+ * @deprecated Use ContextMenuItem instead
+ * @namespace DevExpress.ui
+ */
+export interface dxHtmlEditorTableContextMenuItem extends MenuBasePlainItem {
+    /**
+     * @docid
+     * @default undefined
+     * @type Enums.HtmlEditorContextMenuItem
+     * @public
+     */
+    name?: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable';
+    /**
+     * @docid
+     * @public
+     * @type Array<dxHtmlEditorTableContextMenuItem,Enums.HtmlEditorContextMenuItem>
+     */
+    items?: Array<ContextMenuItem | 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable'>;
+}
 
 /**
  * @docid
@@ -444,13 +443,13 @@ export interface dxHtmlEditorMention {
      * @docid
      * @default null
      * @public
+     * @type Store|DataSource|DataSourceOptions|string|Array<any>
      */
-    dataSource?: Array<string> | Store | DataSource | DataSourceOptions;
+    dataSource?: DataSourceLike<string>;
     /**
      * @docid
      * @default "this"
      * @type_function_param1 item:object
-     * @type_function_return string
      * @public
      */
     displayExpr?: string | ((item: any) => string);
@@ -458,8 +457,6 @@ export interface dxHtmlEditorMention {
      * @docid
      * @default "item"
      * @type_function_param1 itemData:object
-     * @type_function_param2 itemIndex:number
-     * @type_function_param3 itemElement:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -496,7 +493,6 @@ export interface dxHtmlEditorMention {
      * @type_function_param1_field1 marker:string
      * @type_function_param1_field2 id:string|number
      * @type_function_param1_field3 value:any
-     * @type_function_param2 contentElement:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -525,7 +521,7 @@ export interface dxHtmlEditorToolbar {
      * @type Array<dxHtmlEditorToolbarItem,Enums.HtmlEditorToolbarItem>
      * @public
      */
-    items?: Array<ToolbarItem | 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'size' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable'>;
+    items?: Array<ToolbarItem | 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'size' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertHeaderRow' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable' | 'cellProperties' | 'tableProperties'>;
     /**
      * @docid
      * @default true
@@ -550,13 +546,13 @@ export interface dxHtmlEditorToolbarItem extends dxToolbarItem {
      * @type Enums.HtmlEditorToolbarItem|string
      * @public
      */
-    name?: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'size' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable' | string;
+    name?: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'size' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertHeaderRow' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable' | 'cellProperties' | 'tableProperties' | string;
     /**
      * @docid
      * @type Enums.HtmlEditorToolbarItem|string
      * @deprecated dxHtmlEditorToolbarItem.name
      */
-    formatName?: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'size' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable' | string;
+    formatName?: 'background' | 'bold' | 'color' | 'font' | 'italic' | 'link' | 'image' | 'size' | 'strike' | 'subscript' | 'superscript' | 'underline' | 'blockquote' | 'header' | 'increaseIndent' | 'decreaseIndent' | 'orderedList' | 'bulletList' | 'alignLeft' | 'alignCenter' | 'alignRight' | 'alignJustify' | 'codeBlock' | 'variable' | 'separator' | 'undo' | 'redo' | 'clear' | 'insertTable' | 'insertHeaderRow' | 'insertRowAbove' | 'insertRowBelow' | 'insertColumnLeft' | 'insertColumnRight' | 'deleteColumn' | 'deleteRow' | 'deleteTable' | 'cellProperties' | 'tableProperties' | string;
     /**
      * @docid
      * @public
@@ -586,8 +582,9 @@ export interface dxHtmlEditorVariables {
      * @docid
      * @default null
      * @public
+     * @type Store|DataSource|DataSourceOptions|string|Array<string>
      */
-    dataSource?: string | Array<string> | Store | DataSource | DataSourceOptions;
+    dataSource?: DataSourceLike<string>;
     /**
      * @docid
      * @default ""
@@ -601,6 +598,3 @@ export type Properties = dxHtmlEditorOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxHtmlEditorOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxHtmlEditorOptions;

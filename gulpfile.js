@@ -27,8 +27,10 @@ require('./build/gulp/localization');
 require('./build/gulp/generator/gulpfile');
 require('./build/gulp/check_licenses');
 require('./build/gulp/qunit-in-docker');
+require('./build/gulp/renovation-testing-playground');
+require('./build/gulp/renovation-npm');
 
-if(!env.TEST_CI && !env.DOCKER_CI) {
+if(!env.TEST_CI) {
     require('./build/gulp/create_timezones_data');
     require('./build/gulp/test_timezones_data');
 }
@@ -61,9 +63,7 @@ function createMainBatch(dev) {
         tasks.push('js-bundles-prod');
     }
     tasks.push('style-compiler-batch', 'misc-batch');
-    return env.DOCKER_CI
-        ? gulp.series(tasks)
-        : (callback) => multiProcess(tasks, callback, true);
+    return (callback) => multiProcess(tasks, callback, true);
 }
 
 function createDefaultBatch(dev) {
@@ -80,9 +80,11 @@ function createDefaultBatch(dev) {
         }
         tasks.push('check-license-notices');
     }
+    tasks.push('discover-declarations');
     return gulp.series(tasks);
 }
 
+gulp.task('discover-declarations', shell.task('npm run discover-declarations'));
 gulp.task('misc-batch', createMiscBatch());
 gulp.task('style-compiler-batch', createStyleCompilerBatch());
 gulp.task('main-batch', createMainBatch(false));

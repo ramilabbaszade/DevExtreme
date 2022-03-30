@@ -15,6 +15,9 @@ import { Event as dxEvent } from '../../events/index';
 import scrollEvents from '../../events/gesture/emitter.gesture.scroll';
 import { prepareScrollData } from '../text_box/utils.scroll';
 
+import pointerEvents from '../../events/pointer';
+import devices from '../../core/devices';
+
 import QuillRegistrator from './quill_registrator';
 import './converters/delta';
 import ConverterController from './converterController';
@@ -32,6 +35,8 @@ const HTML_EDITOR_CONTENT_CLASS = 'dx-htmleditor-content';
 const MARKDOWN_VALUE_TYPE = 'markdown';
 
 const ANONYMOUS_TEMPLATE_NAME = 'htmlContent';
+
+const isIos = devices.current().platform === 'ios';
 
 const HtmlEditor = Editor.inherit({
 
@@ -215,6 +220,12 @@ const HtmlEditor = Editor.inherit({
         return renderContentPromise;
     },
 
+    _pointerMoveHandler: function(e) {
+        if(isIos) {
+            e.stopPropagation();
+        }
+    },
+
     _attachFocusEvents: function() {
         deferRender(this.callBase.bind(this));
     },
@@ -263,6 +274,8 @@ const HtmlEditor = Editor.inherit({
         const initScrollData = prepareScrollData($scrollContainer);
 
         eventsEngine.on($scrollContainer, addNamespace(scrollEvents.init, this.NAME), initScrollData, noop);
+
+        eventsEngine.on($scrollContainer, addNamespace(pointerEvents.move, this.NAME), this._pointerMoveHandler.bind(this));
     },
 
     _applyTranscludedContent: function() {
@@ -405,7 +418,7 @@ const HtmlEditor = Editor.inherit({
         const userOptions = extend(true, {
             width: 'auto',
             height: 'auto',
-            closeOnOutsideClick: true
+            hideOnOutsideClick: true
         }, this.option('formDialogOptions'));
 
         this._formDialog = new FormDialog(this, userOptions);
@@ -419,24 +432,15 @@ const HtmlEditor = Editor.inherit({
         return this._$htmlContainer;
     },
 
-    _tableResizingOptionChanged: function(args) {
-        const tableResizingModule = this._quillInstance?.getModule('tableResizing');
-        const shouldPassOptionsToModule = Boolean(tableResizingModule);
+    _moduleOptionChanged: function(moduleName, args) {
+        const moduleInstance = this._quillInstance?.getModule(moduleName);
+        const shouldPassOptionsToModule = Boolean(moduleInstance);
 
         if(shouldPassOptionsToModule) {
             const optionData = args.fullName?.split('.');
             const optionName = optionData.length === 2 ? optionData[1] : args.name;
 
-            tableResizingModule.option(optionName, args.value);
-        } else {
-            this._invalidate();
-        }
-    },
-
-    _tableContextMenuOptionChanged: function(args) {
-        const contextMenuModule = this._quillInstance?.getModule('tableContextMenu');
-        if(contextMenuModule) {
-            contextMenuModule.option(args.name, args.value);
+            moduleInstance.option(optionName, args.value);
         } else {
             this._invalidate();
         }
@@ -469,7 +473,7 @@ const HtmlEditor = Editor.inherit({
                 this._invalidate();
                 break;
             case 'tableResizing':
-                this._tableResizingOptionChanged(args);
+                this._moduleOptionChanged('tableResizing', args);
                 break;
             case 'valueType': {
                 this._prepareConverters();
@@ -494,7 +498,7 @@ const HtmlEditor = Editor.inherit({
                 this._renderFormDialog();
                 break;
             case 'tableContextMenu':
-                this._tableContextMenuOptionChanged();
+                this._moduleOptionChanged('tableContextMenu', args);
                 break;
             case 'mediaResizing':
                 if(!args.previousValue || !args.value) {

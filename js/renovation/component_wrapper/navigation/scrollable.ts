@@ -1,5 +1,5 @@
 import type { Scrollable } from '../../ui/scroll_view/scrollable';
-import { DxMouseEvent } from '../../ui/scroll_view/common/types.d';
+import { DxMouseEvent } from '../../ui/scroll_view/common/types';
 import Component from '../common/component';
 import { Option } from '../common/types';
 import { Deferred } from '../../../core/utils/deferred';
@@ -11,11 +11,19 @@ export class ScrollableWrapper extends Component {
   }
 
   update(): unknown {
-    (this.viewRef as Scrollable).updateHandler();
+    (this.viewRef as Scrollable)?.updateHandler();
     return Deferred().resolve();
   }
 
+  isRenovated(): boolean {
+    return !!Component.IS_RENOVATED_WIDGET;
+  }
+
   _visibilityChanged(): void {}
+
+  _dimensionChanged(): void {
+    (this.viewRef as Scrollable)?.updateHandler();
+  }
 
   $content(): dxElementWrapper {
     return (this.$element() as unknown as dxElementWrapper).find('.dx-scrollable-content').eq(0);

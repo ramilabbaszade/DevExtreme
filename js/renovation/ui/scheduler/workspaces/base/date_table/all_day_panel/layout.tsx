@@ -1,70 +1,40 @@
 import {
-  Component, ComponentBindings, ForwardRef, JSXComponent, OneWay, RefObject,
+  Component, ComponentBindings, ForwardRef, JSXComponent, RefObject, Slot,
 } from '@devextreme-generator/declarations';
-import { combineClasses } from '../../../../../../utils/combine_classes';
-import { Table } from '../../table';
-import { AllDayPanelTableBody } from './table_body';
-import { ViewCellData } from '../../../types.d';
+import { AppointmentLayout } from '../../../../appointment/layout';
 import { LayoutProps } from '../../layout_props';
-import { DefaultSizes } from '../../../const';
+import { AllDayTable } from './table';
 
-export const viewFunction = (viewModel: AllDayPanelLayout): JSX.Element => (
+export const viewFunction = ({
+  props: {
+    tableRef,
+    viewData,
+    dataCellTemplate,
+    width,
+  },
+}: AllDayPanelLayout): JSX.Element => (
   <div
-    // eslint-disable-next-line react/jsx-props-no-spreading
-    {...viewModel.restAttributes}
-    className={viewModel.classes}
+    className="dx-scheduler-all-day-panel"
   >
-    {viewModel.props.visible && (
-      <Table
-        className="dx-scheduler-all-day-table"
-        height={viewModel.emptyTableHeight}
-        tableRef={viewModel.props.tableRef}
-      >
-        <AllDayPanelTableBody
-          viewData={viewModel.allDayPanelData}
-          leftVirtualCellWidth={viewModel.props.viewData.leftVirtualCellWidth}
-          rightVirtualCellWidth={viewModel.props.viewData.rightVirtualCellWidth}
-          leftVirtualCellCount={viewModel.props.viewData.leftVirtualCellCount}
-          rightVirtualCellCount={viewModel.props.viewData.rightVirtualCellCount}
-          dataCellTemplate={viewModel.props.dataCellTemplate}
-        />
-      </Table>
-    )}
+    <AppointmentLayout isAllDay />
+    <AllDayTable
+      tableRef={tableRef}
+      viewData={viewData}
+      dataCellTemplate={dataCellTemplate}
+      width={width}
+    />
   </div>
 );
 
 @ComponentBindings()
 export class AllDayPanelLayoutProps extends LayoutProps {
-  @OneWay() className = '';
-
-  @OneWay() visible? = true;
-
   @ForwardRef() tableRef?: RefObject<HTMLTableElement>;
+
+  @Slot() allDayAppointments?: JSX.Element;
 }
 
 @Component({
   defaultOptionRules: null,
   view: viewFunction,
-  jQuery: {
-    register: true,
-  },
 })
-export class AllDayPanelLayout extends JSXComponent(AllDayPanelLayoutProps) {
-  get allDayPanelData(): ViewCellData[] | undefined {
-    return this.props.viewData.groupedData[0].allDayPanel;
-  }
-
-  get emptyTableHeight(): number | undefined {
-    return this.allDayPanelData
-      ? undefined
-      : DefaultSizes.allDayPanelHeight;
-  }
-
-  get classes(): string {
-    return combineClasses({
-      'dx-scheduler-all-day-panel': true,
-      'dx-hidden': !this.props.visible,
-      [this.props.className]: !!this.props.className,
-    });
-  }
-}
+export class AllDayPanelLayout extends JSXComponent(AllDayPanelLayoutProps) {}

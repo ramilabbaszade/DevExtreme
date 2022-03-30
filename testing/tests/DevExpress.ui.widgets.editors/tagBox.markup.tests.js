@@ -3,6 +3,7 @@ import TagBox from 'ui/tag_box';
 import fx from 'animation/fx';
 import { isRenderer } from 'core/utils/type';
 import config from 'core/config';
+import windowModule from 'core/utils/window';
 
 QUnit.testStart(function() {
     const markup =
@@ -23,6 +24,7 @@ const TAGBOX_DEFAULT_FIELD_TEMPLATE_CLASS = 'dx-tagbox-default-template';
 const TAGBOX_CUSTOM_FIELD_TEMPLATE_CLASS = 'dx-tagbox-custom-template';
 const SKIP_GESTURE_EVENT_CLASS = 'dx-skip-gesture-event';
 const TAGBOX_TEXTEDITOR_INPUT_CONTAINER_CLASS = 'dx-texteditor-input-container';
+const SELECT_ALL_CLASS = 'dx-list-select-all';
 
 const moduleSetup = {
     beforeEach: function() {
@@ -89,13 +91,6 @@ QUnit.module('base markup', moduleSetup, () => {
         });
 
         assert.ok($tagBox.hasClass(EMPTY_INPUT_CLASS), 'element has an empty class');
-    });
-
-    QUnit.test('tag container should have native click class', function(assert) {
-        const $tagContainer = $('#tagBox').dxTagBox()
-            .find('.' + TAGBOX_TAG_CONTAINER_CLASS);
-
-        assert.ok($tagContainer.hasClass('dx-native-click'));
     });
 
     QUnit.test('tagBox should render tags with the custom displayExpr for simple items', function(assert) {
@@ -267,6 +262,24 @@ QUnit.module('select element', moduleSetup, () => {
         const $select = $element.find('select');
 
         assert.equal($select.attr('name'), expectedName, 'the select element \'name\' attribute has correct value');
+    });
+
+    QUnit.test('Custom selectAllText', function(assert) {
+        if(!windowModule.hasWindow()) {
+            assert.ok(true, 'no window');
+            return;
+        }
+
+        const selectAllText = 'Test';
+
+        $('#tagBox').dxTagBox({
+            items: ['P1', 'P2'],
+            selectAllText,
+            showSelectionControls: true,
+            opened: true
+        });
+
+        assert.equal($(`.${SELECT_ALL_CLASS}`).text(), selectAllText);
     });
 });
 

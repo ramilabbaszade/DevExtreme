@@ -1,3 +1,4 @@
+import { getHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { compileGetter, compileSetter } from '../../core/utils/data';
 import { extend } from '../../core/utils/extend';
@@ -83,11 +84,24 @@ class Gantt extends Widget {
         delete this._ganttView;
         delete this._dialogInstance;
         delete this._loadPanel;
+        delete this._exportHelper;
         super._clean();
     }
     _refresh() {
         this._isGanttRendered = false;
         super._refresh();
+    }
+    _dimensionChanged() {
+        this._ganttView?._onDimensionChanged();
+    }
+    _visibilityChanged(visible) {
+        if(visible) {
+            this._refreshGantt();
+        }
+    }
+    _refreshGantt() {
+        this._refreshDataSources();
+        this._refresh();
     }
     _refreshDataSources() {
         this._refreshDataSource(GANTT_TASKS);
@@ -158,6 +172,7 @@ class Gantt extends Widget {
             firstDayOfWeek: this.option('firstDayOfWeek'),
             showRowLines: this.option('showRowLines'),
             scaleType: this.option('scaleType'),
+            scaleTypeRange: this.option('scaleTypeRange'),
             editing: this.option('editing'),
             validation: this.option('validation'),
             stripLines: this.option('stripLines'),
@@ -167,6 +182,7 @@ class Gantt extends Widget {
             onScroll: (e) => { this._ganttTreeList.scrollBy(e.scrollTop); },
             onDialogShowing: this._showDialog.bind(this),
             onPopupMenuShowing: this._showPopupMenu.bind(this),
+            onPopupMenuHiding: this._hidePopupMenu.bind(this),
             onExpandAll: this._expandAll.bind(this),
             onCollapseAll: this._collapseAll.bind(this),
             modelChangesListener: ModelChangesListener.create(this),
@@ -313,27 +329,29 @@ class Gantt extends Widget {
         this._actionsManager.raiseUpdatedAction(GANTT_TASKS, mappedData, data.id);
     }
     _onParentTasksRecalculated(data) {
-        if(!this.isSorting) {
+        if(!this.isSieving) {
             const setters = GanttHelper.compileSettersByOption(this.option(GANTT_TASKS));
             const treeDataSource = this._customFieldsManager.appendCustomFields(data.map(GanttHelper.prepareSetterMapHandler(setters)));
             this._ganttTreeList?.setOption('dataSource', treeDataSource);
         }
-        this.isSorting = false;
+        this.isSieving = false;
     }
 
-    _sort() {
+    _sortAndFilter() {
         const columns = this._treeList.getVisibleColumns();
         const sortColumn = columns.filter(c => c.sortIndex === 0)[0];
-        const isClearSorting = (this.sortColumn && !sortColumn);
+        const filterColumn = columns.filter(c => isDefined(c.filterValue) || c.filterValues?.length)[0];
+        const sieveColumn = sortColumn || filterColumn;
+        const isClearSieving = (this.sieveColumn && !sieveColumn);
 
-        if(sortColumn || isClearSorting) {
-            const sortedItems = this._ganttTreeList.getSortedItems();
-            const sortOptions = { sortedItems: sortedItems, sortColumn: sortColumn };
-            this.isSorting = !isClearSorting;
-            this._setGanttViewOption('sorting', isClearSorting ? undefined : sortOptions);
+        if(sieveColumn || isClearSieving) {
+            const sievedItems = this._ganttTreeList.getSievedItems();
+            const sieveOptions = { sievedItems: sievedItems, sieveColumn: sieveColumn };
+            this.isSieving = !isClearSieving;
+            this._setGanttViewOption('sieve', isClearSieving ? undefined : sieveOptions);
         }
 
-        this.sortColumn = sortColumn;
+        this.sieveColumn = sieveColumn;
     }
 
     _getToolbarItems() {
@@ -384,6 +402,9 @@ class Gantt extends Widget {
             }
         }
     }
+    _hidePopupMenu() {
+        this._contextMenuBar.hide();
+    }
 
     _getLoadPanel() {
         if(!this._loadPanel) {
@@ -398,6 +419,11 @@ class Gantt extends Widget {
 
     _getTaskKeyGetter() {
         return compileGetter(this.option(`${GANTT_TASKS}.keyExpr`));
+    }
+    _findTaskByKey(key) {
+        const tasks = this._tasksOption?._getItems();
+        const keyGetter = this._getTaskKeyGetter();
+        return tasks.find(t => keyGetter(t) === key);
     }
     _setGanttViewOption(optionName, value) {
         this._ganttView && this._ganttView.option(optionName, value);
@@ -512,7 +538,14 @@ class Gantt extends Widget {
         const coreTaskData = this._mappingHelper.convertMappedToCoreData(GANTT_TASKS, data);
         const isCustomFieldsUpdateOnly = !Object.keys(coreTaskData).length;
         this._customFieldsManager.saveCustomFieldsDataToCache(key, data, true, isCustomFieldsUpdateOnly);
-        this._ganttView._ganttViewCore.updateTask(key, coreTaskData);
+        if(isCustomFieldsUpdateOnly) {
+            const customFieldsData = this._customFieldsManager._getCustomFieldsData(data);
+            if(Object.keys(customFieldsData).length > 0) {
+                this._actionsManager.raiseUpdatingAction(GANTT_TASKS, { cancel: false, key: key, newValues: { } });
+            }
+        } else {
+            this._ganttView._ganttViewCore.updateTask(key, coreTaskData);
+        }
     }
     getDependencyData(key) {
         if(!isDefined(key)) {
@@ -565,11 +598,15 @@ class Gantt extends Widget {
         this._ganttView._ganttViewCore.showTaskDetailsDialog(taskKey);
     }
     exportToPdf(options) {
+        return this._exportToPdf(options);
+    }
+    _exportToPdf(options) {
         this._exportHelper.reset();
         const fullOptions = extend({}, options);
         if(fullOptions.createDocumentMethod) {
             fullOptions.docCreateMethod = fullOptions.createDocumentMethod;
         }
+        fullOptions.pdfDocument ??= fullOptions.jsPDFDocument;
         fullOptions.docCreateMethod ??= window['jspdf']?.['jsPDF'] ?? window['jsPDF'];
         fullOptions.format ??= 'a4';
         return new Promise((resolve) => {
@@ -580,8 +617,7 @@ class Gantt extends Widget {
     refresh() {
         return new Promise((resolve, reject) => {
             try {
-                this._refreshDataSources();
-                this._refresh();
+                this._refreshGantt();
                 resolve();
             } catch(e) {
                 reject(e.message);
@@ -747,6 +783,9 @@ class Gantt extends Widget {
             case 'onContextMenuPreparing':
                 this._actionsManager?.createContextMenuPreparingAction();
                 break;
+            case 'onScaleCellPrepared':
+                this._actionsManager?.createScaleCellPreparedAction();
+                break;
             case 'allowSelection':
                 this._ganttTreeList?.setOption('selection.mode', GanttHelper.getSelectionMode(args.value));
                 this._setGanttViewOption('allowSelection', args.value);
@@ -760,6 +799,9 @@ class Gantt extends Widget {
                 break;
             case 'scaleType':
                 this._setGanttViewOption('scaleType', args.value);
+                break;
+            case 'scaleTypeRange':
+                this._setGanttViewOption('scaleTypeRange', this.option(args.name));
                 break;
             case 'editing':
                 this._setGanttViewOption('editing', this.option(args.name));
@@ -794,10 +836,16 @@ class Gantt extends Widget {
                 break;
             case 'height':
                 super._optionChanged(args);
-                this._sizeHelper?.setGanttHeight(this._$element.height());
+                this._sizeHelper?.setGanttHeight(getHeight(this._$element));
                 break;
             case 'sorting':
-                this._ganttTreeList?.setOption('sorting', args.value);
+                this._ganttTreeList?.setOption('sorting', this.option(args.name));
+                break;
+            case 'filterRow':
+                this._ganttTreeList?.setOption('filterRow', this.option(args.name));
+                break;
+            case 'headerFilter':
+                this._ganttTreeList?.setOption('headerFilter', this.option(args.name));
                 break;
             default:
                 super._optionChanged(args);

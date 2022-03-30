@@ -1,3 +1,4 @@
+import { getOuterWidth, getWidth, getOuterHeight, getHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import domAdapter from '../../core/dom_adapter';
 import { getWindow } from '../../core/utils/window';
@@ -30,8 +31,10 @@ const TABLE_FIXED_CLASS = 'table-fixed';
 const CONTENT_FIXED_CLASS = 'content-fixed';
 const ROW_CLASS = 'dx-row';
 const GROUP_ROW_CLASS = 'dx-group-row';
+const GROUP_CELL_CLASS = 'dx-group-cell';
 const DETAIL_ROW_CLASS = 'dx-master-detail-row';
 const FILTER_ROW_CLASS = 'filter-row';
+const ERROR_ROW_CLASS = 'dx-error-row';
 const CELL_UPDATED_ANIMATION_CLASS = 'cell-updated-animation';
 
 const HIDDEN_COLUMNS_WIDTH = '0.0001px';
@@ -68,7 +71,7 @@ const subscribeToRowEvents = function(that, $table) {
         }
     });
 
-    eventsEngine.on($table, [clickEventName, dblclickEvent, pointerEvents.down].join(' '), '.dx-row', { useNative: that._isNativeClick() }, that.createAction(function(e) {
+    eventsEngine.on($table, [clickEventName, dblclickEvent, pointerEvents.down].join(' '), '.dx-row', that.createAction(function(e) {
         const event = e.event;
 
         if(touchTarget) {
@@ -193,8 +196,9 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
         return $cell;
     },
 
-    _createRow: function(rowObject) {
-        const $element = $('<tr>').addClass(ROW_CLASS);
+    _createRow: function(rowObject, tagName) {
+        tagName = tagName || 'tr';
+        const $element = $(`<${tagName}>`).addClass(ROW_CLASS);
         this.setAria('role', 'row', $element);
         return $element;
     },
@@ -322,8 +326,6 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
         return $table;
     },
 
-    _isNativeClick: noop,
-
     _rowPointerDown: noop,
 
     _rowClick: noop,
@@ -356,14 +358,14 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
         return col;
     },
 
-    renderDelayedTemplates: function() {
+    renderDelayedTemplates: function(change) {
         const delayedTemplates = this._delayedTemplates;
         const syncTemplates = delayedTemplates.filter(template => !template.async);
         const asyncTemplates = delayedTemplates.filter(template => template.async);
 
         this._delayedTemplates = [];
 
-        this._renderDelayedTemplatesCore(syncTemplates);
+        this._renderDelayedTemplatesCore(syncTemplates, false, change);
         this._renderDelayedTemplatesCoreAsync(asyncTemplates);
     },
 
@@ -376,7 +378,7 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
         }
     },
 
-    _renderDelayedTemplatesCore: function(templates, isAsync) {
+    _renderDelayedTemplatesCore: function(templates, isAsync, change) {
         const date = new Date();
 
         while(templates.length) {
@@ -386,6 +388,9 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
             const doc = domAdapter.getDocument();
 
             if(!isAsync || $(options.container).closest(doc).length) {
+                if(change) {
+                    options.change = change;
+                }
                 templateParameters.template.render(options);
             }
             if(isAsync && (new Date() - date) > 30) {
@@ -407,14 +412,14 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
             renderingTemplate = {
                 allowRenderToDetachedContainer: template.allowRenderToDetachedContainer,
                 render: function(options) {
-                    template.render(options.container, options.model);
+                    template.render(options.container, options.model, options.change);
                     options.deferred && options.deferred.resolve();
                 }
             };
         } else if(isFunction(template)) {
             renderingTemplate = {
                 render: function(options) {
-                    const renderedTemplate = template(getPublicElement(options.container), options.model);
+                    const renderedTemplate = template(getPublicElement(options.container), options.model, options.change);
                     if(renderedTemplate && (renderedTemplate.nodeType || isRenderer(renderedTemplate))) {
                         options.container.append(renderedTemplate);
                     }
@@ -438,7 +443,7 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
         return renderingTemplate;
     },
 
-    renderTemplate: function(container, template, options, allowRenderToDetachedContainer) {
+    renderTemplate: function(container, template, options, allowRenderToDetachedContainer, change) {
         const that = this;
         const renderingTemplate = that._processTemplate(template, options);
         const column = options.column;
@@ -467,6 +472,10 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
             } else {
                 that._delayedTemplates.push({ template: renderingTemplate, options: templateOptions, async: async });
             }
+            if(change) {
+                change.templateDeferreds = change.templateDeferreds || [];
+                change.templateDeferreds.push(templateDeferred);
+            }
         } else {
             templateDeferred.reject();
         }
@@ -479,7 +488,8 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
     },
 
     _wrapRowIfNeed: function($table, $row) {
-        const $tBodies = this.option('rowTemplate') && this._getBodies(this._tableElement || $table);
+        const hasDataRowTemplate = this.option().rowTemplate || this.option('dataRowTemplate');
+        const $tBodies = hasDataRowTemplate && this._getBodies(this._tableElement || $table);
 
         if($tBodies && $tBodies.filter('.' + ROW_CLASS).length) {
             const $tbody = $('<tbody>').addClass($row.attr('class'));
@@ -614,7 +624,8 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
 
         if(options.columnIndices) {
             if(options.row.cells) {
-                options.row.cells[cellOptions.columnIndex] = cellOptions;
+                const cellIndex = options.row.cells.findIndex(cell => cell.columnIndex === cellOptions.columnIndex);
+                options.row.cells[cellIndex] = cellOptions;
             }
         } else {
             options.row.cells.push(cellOptions);
@@ -665,15 +676,19 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
 
         source = source || options;
 
-        source.watch = source.watch || function(getter, updateFunc) {
+        source.watch = source.watch || function(getter, updateValueFunc, updateRowFunc) {
             let oldValue = getter(source.data);
 
             const watcher = function(row) {
+                if(row && updateRowFunc) {
+                    updateRowFunc(row);
+                }
+
                 const newValue = getter(source.data);
 
                 if(JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
                     if(row) {
-                        updateFunc(newValue, row);
+                        updateValueFunc(newValue);
                     }
                     oldValue = newValue;
                 }
@@ -691,14 +706,14 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
             return stopWatch;
         };
 
-        source.update = source.update || function(row) {
+        source.update = source.update || function(row, keepRow) {
             if(row) {
                 this.data = options.data = row.data;
                 this.rowIndex = options.rowIndex = row.rowIndex;
                 this.dataIndex = options.dataIndex = row.dataIndex;
                 this.isExpanded = options.isExpanded = row.isExpanded;
 
-                if(options.row) {
+                if(options.row && !keepRow) {
                     options.row = row;
                 }
             }
@@ -898,7 +913,7 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
             for(let i = 0; i < $rows.length; i++) {
                 const $row = $rows.eq(i);
                 const isRowVisible = $row.get(0).style.display !== 'none' && !$row.hasClass('dx-state-invisible');
-                if(!$row.is('.' + GROUP_ROW_CLASS) && !$row.is('.' + DETAIL_ROW_CLASS) && isRowVisible) {
+                if(!$row.is('.' + GROUP_ROW_CLASS) && !$row.is('.' + DETAIL_ROW_CLASS) && !$row.is('.' + ERROR_ROW_CLASS) && isRowVisible) {
                     $cells = $row.children('td');
                     break;
                 }
@@ -938,10 +953,17 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
 
                         width = getWidthStyle(width);
                         minWidth = getWidthStyle(columns[i].minWidth || width);
-                        const $rows = $rows || $tableElement.children().children('.dx-row').not('.' + GROUP_ROW_CLASS).not('.' + DETAIL_ROW_CLASS);
+                        const $rows = $rows || $tableElement.children().children('.dx-row').not('.' + DETAIL_ROW_CLASS);
                         for(let rowIndex = 0; rowIndex < $rows.length; rowIndex++) {
+                            const row = $rows[rowIndex];
+
+                            let cell;
                             const visibleIndex = this.getVisibleColumnIndex(i, rowIndex);
-                            const cell = $rows[rowIndex].cells[visibleIndex];
+                            if(row.classList.contains(GROUP_ROW_CLASS)) {
+                                cell = row.querySelector(`td[aria-colindex='${visibleIndex + 1}']:not(.${GROUP_CELL_CLASS})`);
+                            } else {
+                                cell = row.cells[visibleIndex];
+                            }
                             if(cell) {
                                 setCellWidth(cell, columns[i], width);
                                 cell.style.minWidth = minWidth;
@@ -1045,7 +1067,7 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
         let $cells;
 
         if($rows.length > 0 && cellPosition.rowIndex >= 0) {
-            if(this.option('scrolling.mode') !== 'virtual') {
+            if(this.option('scrolling.mode') !== 'virtual' && this.option('scrolling.rowRenderingMode') !== 'virtual') {
                 cellPosition.rowIndex = cellPosition.rowIndex < $rows.length ? cellPosition.rowIndex : $rows.length - 1;
             }
             $cells = this.getCellElements(cellPosition.rowIndex);
@@ -1068,7 +1090,8 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
         tableElement = tableElement || this.getTableElement();
 
         if(tableElement) {
-            const tBodies = this.option('rowTemplate') && tableElement.find('> tbody.' + ROW_CLASS);
+            const hasRowTemplate = this.option().rowTemplate || this.option('dataRowTemplate');
+            const tBodies = hasRowTemplate && tableElement.find('> tbody.' + ROW_CLASS);
 
             return tBodies && tBodies.length ? tBodies : tableElement.find('> tbody > ' + '.' + ROW_CLASS + ', > .' + ROW_CLASS);
         }
@@ -1104,7 +1127,7 @@ export const ColumnsView = modules.View.inherit(columnStateMixin).inherit({
         const $tableElement = this._tableElement;
 
         if($element && $tableElement) {
-            return isHorizontal ? ($tableElement.outerWidth() - $element.width() > 0) : ($tableElement.outerHeight() - $element.height() > 0);
+            return isHorizontal ? (getOuterWidth($tableElement) - getWidth($element) > 0) : (getOuterHeight($tableElement) - getHeight($element) > 0);
         }
 
         return false;

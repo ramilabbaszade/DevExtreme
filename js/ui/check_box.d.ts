@@ -23,7 +23,7 @@ export type InitializedEvent = InitializedEventInfo<dxCheckBox>;
 export type OptionChangedEvent = EventInfo<dxCheckBox> & ChangedOptionInfo;
 
 /** @public */
-export type ValueChangedEvent = NativeEventInfo<dxCheckBox> & ValueChangedInfo;
+export type ValueChangedEvent = NativeEventInfo<dxCheckBox, KeyboardEvent | MouseEvent | PointerEvent | TouchEvent | Event> & ValueChangedInfo;
 
 /**
  * @deprecated use Properties instead
@@ -77,8 +77,6 @@ export interface dxCheckBoxOptions extends EditorOptions<dxCheckBox> {
  * @docid
  * @isEditor
  * @inherits Editor
- * @module ui/check_box
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -96,6 +94,3 @@ export type Properties = dxCheckBoxOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxCheckBoxOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxCheckBoxOptions;

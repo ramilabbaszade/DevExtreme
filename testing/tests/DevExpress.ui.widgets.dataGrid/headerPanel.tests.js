@@ -624,7 +624,7 @@ QUnit.module('Draw buttons in header panel', {
                     },
                     showText: 'inMenu',
                     location: 'after',
-                    name: 'columnChooser',
+                    name: 'columnChooserButton',
                     locateInMenu: 'auto'
                 }
             ];
@@ -819,5 +819,135 @@ QUnit.module('Draw buttons in header panel', {
         assert.equal($buttonsBefore.length, 2, 'count button');
         assert.ok($buttonsBefore.eq(0).hasClass('dx-datagrid-column-chooser-button'), 'has column chooser button');
         assert.ok($buttonsBefore.eq(1).hasClass('dx-datagrid-addrow-button'), 'has add button');
+    });
+
+    QUnit.test('toolbar.item[].location should be \'after\' by default', function(assert) {
+        // arrange
+        const headerPanel = this.headerPanel;
+        const $testElement = $('#container');
+
+        this.options.toolbar = {
+            items: [
+                {
+                    widget: 'dxButton',
+                    options: { text: 'Custom button' },
+                }
+            ]
+        };
+
+        // act
+        headerPanel.init();
+        headerPanel.render($testElement);
+        const $button = $testElement.find('.dx-toolbar .dx-toolbar-after .dx-item');
+
+        // assert
+        assert.equal($button.length, 1, 'button location is after');
+    });
+
+    QUnit.test('toolbar.item[].location should be \'center\' by default if added via onToolbarPrepared', function(assert) {
+        // arrange
+        const headerPanel = this.headerPanel;
+        const $testElement = $('#container');
+
+        this.options.onToolbarPreparing = function(e) {
+            e.toolbarOptions.items.push({
+                widget: 'dxButton',
+                options: { text: 'Custom button' },
+            });
+        };
+
+        headerPanel.init();
+        headerPanel.render($testElement);
+        const $button = $testElement.find('.dx-toolbar .dx-toolbar-center .dx-item');
+
+        // assert
+        assert.equal($button.length, 1, 'button location is center');
+    });
+
+    // T1043654
+    QUnit.test('The default buttons should be hidden when they are specified in the toolbar.items option', function(assert) {
+        // arrange
+        const headerPanel = this.headerPanel;
+        const $testElement = $('#container');
+
+        this.options.toolbar = {
+            items: ['addRowButton', 'applyFilterButton', 'columnChooserButton', 'exportButton', 'groupPanel', 'revertButton', 'saveButton', 'searchPanel']
+        };
+
+        // act
+        headerPanel.init();
+        headerPanel.render($testElement);
+        const $toolbarItemElements = $testElement.find('.dx-toolbar-item');
+
+        // assert
+        assert.strictEqual($toolbarItemElements.length, 8, 'count button');
+        $.each($toolbarItemElements, (_, toolbarItemElement) => {
+            assert.ok($(toolbarItemElement).hasClass('dx-state-invisible'), 'button is hidden');
+        });
+    });
+
+    // T1043654
+    QUnit.test('The default buttons should be hidden when they are specified in the toolbar.items option using name', function(assert) {
+        // arrange
+        const headerPanel = this.headerPanel;
+        const $testElement = $('#container');
+
+        this.options.toolbar = {
+            items: ['addRowButton', 'applyFilterButton', 'columnChooserButton', 'exportButton', 'groupPanel', 'revertButton', 'saveButton', 'searchPanel']
+                .map(name => ({ name }))
+        };
+
+        // act
+        headerPanel.init();
+        headerPanel.render($testElement);
+        const $toolbarItemElements = $testElement.find('.dx-toolbar-item');
+
+        // assert
+        assert.strictEqual($toolbarItemElements.length, 8, 'count button');
+        $.each($toolbarItemElements, (_, toolbarItemElement) => {
+            assert.ok($(toolbarItemElement).hasClass('dx-state-invisible'), 'button is hidden');
+        });
+    });
+
+    QUnit.test('Toolbar item with custom name should be visible', function(assert) {
+        // arrange
+        const headerPanel = this.headerPanel;
+        const $testElement = $('#container');
+
+        this.options.toolbar = {
+            items: [{
+                name: 'myItem',
+                cssClass: 'my-item',
+                widget: 'dxButton',
+                options: {
+                    text: 'My Button'
+                }
+            }]
+        };
+
+        // act
+        headerPanel.init();
+        headerPanel.render($testElement);
+        const $customToolbarItem = $testElement.find('.my-item');
+
+        // assert
+        assert.strictEqual($customToolbarItem.length, 1, 'item is rendered');
+        assert.ok($customToolbarItem.is(':visible'), 'item is visible');
+    });
+
+    QUnit.test('The error should be raised if new default toolbar item is not added to DEFAULT_TOOLBAR_ITEM_NAMES', function(assert) {
+        // arrange
+        const headerPanel = this.headerPanel;
+        const $testElement = $('#container');
+
+        // act
+        headerPanel._getToolbarItems = () => [{ name: 'new' }];
+
+        assert.throws(function() {
+            headerPanel.init();
+            headerPanel.render($testElement);
+        }, function(e) {
+            return e.message === 'Default toolbar item \'new\' is not added to DEFAULT_TOOLBAR_ITEM_NAMES';
+        }, 'exception');
     });
 });

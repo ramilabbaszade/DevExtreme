@@ -19,7 +19,7 @@
     "clean-css": "^5.1.0",
     "less": "^3.13.1",
     "postcss": "^8.2.6",
-    "sass": "^1.38.0",
+    "sass": "1.43.5",
     "semver": "^5.7.1"
   },
   "scripts": {
@@ -43,7 +43,7 @@
     "filing-cabinet": "^2.6.0",
     "fs-extra": "^9.0.0",
     "jest": "^26.6.1",
-    "precinct": "^6.3.1",
+    "precinct": "^8.3.1",
     "sinon": "^9.2.4",
     "ts-jest": "^26.5.2",
     "ts-node": "^8.10.1",

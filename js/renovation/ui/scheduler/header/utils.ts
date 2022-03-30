@@ -2,7 +2,7 @@ import { getViewSwitcher, getDropDownViewSwitcher } from './view_switcher';
 import { getDateNavigator } from './date_navigator';
 
 import { ItemOptions, ItemView } from './types';
-import { ViewType } from '../types.d';
+import { ViewType } from '../types';
 
 import { ToolbarItem } from '../../toolbar/toolbar_props';
 import { ViewProps } from '../props';
@@ -12,6 +12,7 @@ import {
   validateViews, getViewName,
   getViewText, getViewType,
 } from '../../../../ui/scheduler/header/utils';
+import devices from '../../../../core/devices';
 
 const DEFAULT_ELEMENT = 'defaultElement';
 const VIEW_SWITCHER = 'viewSwitcher';
@@ -52,7 +53,7 @@ export const formToolbarItem = (
           isNextButtonDisabled,
         );
       default:
-        break;
+        throw new Error('Unknown default item in the scheduler\'s toolbar'); // TODO: rework with a public api
     }
   }
 
@@ -71,3 +72,5 @@ export const formatViews = (views: (ViewType | ViewProps)[]): ItemView[] => {
 };
 
 export const isMonthView = (currentView: string): boolean => getViewType(currentView) as string === 'month';
+
+export const isMobileLayout = (): boolean => !devices.current().generic;

@@ -1,3 +1,4 @@
+import { DataSourceLike } from '../data/data_source';
 import {
     UserDefinedElement,
     DxElement,
@@ -12,14 +13,8 @@ import {
     ChangedOptionInfo,
 } from '../events/index';
 
-import DataSource, {
-    DataSourceOptions,
-} from '../data/data_source';
-
-import Store from '../data/abstract_store';
-
 import {
-    Column,
+    Column as TreeListColumn,
 } from './tree_list';
 
 import Widget, {
@@ -41,6 +36,7 @@ import {
 import {
     DxPromise,
 } from '../core/utils/deferred';
+import { Skip } from '../core/index';
 
 /** @public */
 export type ContentReadyEvent = EventInfo<dxGantt>;
@@ -49,7 +45,7 @@ export type ContentReadyEvent = EventInfo<dxGantt>;
 export type ContextMenuPreparingEvent = Cancelable & {
     readonly component?: dxGantt;
     readonly element?: DxElement;
-    readonly event?: DxEvent;
+    readonly event?: DxEvent<PointerEvent | MouseEvent | TouchEvent>;
     readonly targetKey?: any;
     readonly targetType?: string;
     readonly data?: any;
@@ -147,13 +143,13 @@ export type SelectionChangedEvent = EventInfo<dxGantt> & {
 };
 
 /** @public */
-export type TaskClickEvent = NativeEventInfo<dxGantt> & {
+export type TaskClickEvent = NativeEventInfo<dxGantt, PointerEvent | MouseEvent> & {
     readonly key?: any;
     readonly data?: any;
 };
 
 /** @public */
-export type TaskDblClickEvent = Cancelable & NativeEventInfo<dxGantt> & {
+export type TaskDblClickEvent = Cancelable & NativeEventInfo<dxGantt, PointerEvent | MouseEvent> & {
     readonly key?: any;
     readonly data?: any;
 };
@@ -213,6 +209,15 @@ export type TaskUpdatingEvent = Cancelable & EventInfo<dxGantt> & {
     readonly values: any;
     readonly key: any;
 };
+/** @public */
+export type ScaleCellPreparedEvent = InitializedEventInfo<dxGantt> & {
+    readonly scaleIndex: number;
+    readonly scaleType: 'minutes' | 'hours' | 'sixHours' | 'days' | 'weeks' | 'months' | 'quarters' | 'years' | 'fiveYears';
+    readonly scaleElement: DxElement;
+    readonly separatorElement: DxElement;
+    readonly start: Date;
+    readonly end: Date;
+};
 
 /** @public */
 export type TaskContentTemplateData = {
@@ -249,7 +254,7 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
     allowSelection?: boolean;
     /**
      * @docid
-     * @type Array<dxTreeListColumn|string>
+     * @type Array<dxGanttColumn|string>
      * @default undefined
      * @public
      */
@@ -263,8 +268,9 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
       /**
        * @docid
        * @default null
+       * @type Store|DataSource|DataSourceOptions|string|Array<any>
        */
-      dataSource?: Array<any> | Store | DataSource | DataSourceOptions;
+      dataSource?: DataSourceLike<any>;
       /**
        * @docid
        * @default "id"
@@ -365,10 +371,19 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
     };
     /**
      * @docid
-     * @type object
      * @public
      */
      sorting?: dxGanttSorting;
+    /**
+     * @docid
+     * @public
+     */
+    filterRow?: dxGanttFilterRow;
+    /**
+     * @docid
+     * @public
+     */
+     headerFilter?: dxGanttHeaderFilter;
     /**
      * @docid
      * @default null
@@ -723,14 +738,32 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
     /**
      * @docid
      * @default null
+     * @type_function_param1 e:object
+     * @type_function_param1_field1 component:dxGantt
+     * @type_function_param1_field2 element:DxElement
+     * @type_function_param1_field3 scaleIndex:number
+     * @type_function_param1_field4 scaleType:Enums.GanttRenderScaleType
+     * @type_function_param1_field5 scaleElement:DxElement
+     * @type_function_param1_field6 separatorElement:DxElement
+     * @type_function_param1_field7 start:Date
+     * @type_function_param1_field7 end:Date
+     * @action
+     * @public
+     */
+    onScaleCellPrepared?: ((e: ScaleCellPreparedEvent) => void);
+
+    /**
+     * @docid
+     * @default null
      * @public
      */
     resourceAssignments?: {
       /**
        * @docid
        * @default null
+       * @type Store|DataSource|DataSourceOptions|string|Array<any>
        */
-      dataSource?: Array<any> | Store | DataSource | DataSourceOptions;
+      dataSource?: DataSourceLike<any>;
       /**
        * @docid
        * @default "id"
@@ -761,8 +794,9 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
       /**
        * @docid
        * @default null
+       * @type Store|DataSource|DataSourceOptions|string|Array<any>
        */
-      dataSource?: Array<any> | Store | DataSource | DataSourceOptions;
+      dataSource?: DataSourceLike<any>;
       /**
        * @docid
        * @default "id"
@@ -780,7 +814,25 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
      * @default "auto"
      * @public
      */
-    scaleType?: 'auto' | 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'quarters' | 'years';
+    scaleType?: 'auto' | 'minutes' | 'hours' | 'sixHours' | 'days' | 'weeks' | 'months' | 'quarters' | 'years';
+    /**
+     * @docid
+     * @public
+     */
+    scaleTypeRange?: {
+        /**
+         * @docid
+         * @type Enums.GanttScaleType
+         * @default "minutes"
+         */
+        min?: 'minutes' | 'hours' | 'sixHours' | 'days' | 'weeks' | 'months' | 'quarters' | 'years';
+        /**
+         * @docid
+         * @type Enums.GanttScaleType
+         * @default "years"
+         */
+        max?: 'minutes' | 'hours' | 'sixHours' | 'days' | 'weeks' | 'months' | 'quarters' | 'years';
+    };
     /**
      * @docid
      * @default undefined
@@ -839,8 +891,9 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
       /**
        * @docid
        * @default null
+       * @type Store|DataSource|DataSourceOptions|string|Array<any>
        */
-      dataSource?: Array<any> | Store | DataSource | DataSourceOptions;
+      dataSource?: DataSourceLike<any>;
       /**
        * @docid
        * @default "end"
@@ -891,15 +944,12 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
     stripLines?: Array<dxGanttStripLine>;
     /**
      * @docid
-     * @type_function_param1 container:DxElement
-     * @type_function_param2 task:any
      * @type_function_return string|Element|jQuery
      * @public
      */
     taskTooltipContentTemplate?: template | ((container: DxElement, task: any) => string | UserDefinedElement);
     /**
      * @docid
-     * @type_function_param1 container:DxElement
      * @type_function_param2 item:object
      * @type_function_param2_field1 start:Date
      * @type_function_param2_field2 end:Date
@@ -909,7 +959,6 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
     taskTimeTooltipContentTemplate?: template | ((container: DxElement, item: TimeTooltipTemplateData) => string | UserDefinedElement);
     /**
      * @docid
-     * @type_function_param1 container:DxElement
      * @type_function_param2 item:object
      * @type_function_param2_field1 progress:number
      * @type_function_return string|Element|jQuery
@@ -918,7 +967,6 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
     taskProgressTooltipContentTemplate?: template | ((container: DxElement, item: ProgressTooltipTemplateData) => string | UserDefinedElement);
     /**
      * @docid
-     * @type_function_param1 container:DxElement
      * @type_function_param2 item:object
      * @type_function_param2_field1 cellSize:object
      * @type_function_param2_field2 isMilestone:boolean
@@ -953,8 +1001,6 @@ export interface dxGanttOptions extends WidgetOptions<dxGantt> {
 /**
  * @docid
  * @inherits Widget
- * @module ui/gantt
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -1103,18 +1149,9 @@ export default class dxGantt extends Widget<dxGanttOptions> {
     /**
      * @docid
      * @publicName scrollToDate(date)
-     * @param1 date:Date|Number|string
      * @public
      */
     scrollToDate(date: Date | Number | string): void;
-    /**
-     * @docid
-     * @publicName exportToPdf(options)
-     * @param1 options:object
-     * @return Promise<any>
-     * @public
-     */
-    exportToPdf(options: any): DxPromise<any>;
     /**
      * @docid
      * @publicName showResourceManagerDialog()
@@ -1171,14 +1208,12 @@ export default class dxGantt extends Widget<dxGanttOptions> {
     /**
      * @docid
      * @publicName showResources(value)
-     * @param1 value:boolean
      * @public
      */
      showResources(value: boolean): void;
      /**
      * @docid
      * @publicName showDependencies(value)
-     * @param1 value:boolean
      * @public
      */
       showDependencies(value: boolean): void;
@@ -1303,14 +1338,12 @@ export interface dxGanttStripLine {
     cssClass?: string;
     /**
      * @docid
-     * @type_function_return Date|number|string
      * @default undefined
      * @public
      */
     end?: Date | number | string | (() => Date | number | string);
     /**
      * @docid
-     * @type_function_return Date|number|string
      * @default undefined
      * @public
      */
@@ -1357,11 +1390,327 @@ export interface dxGanttSorting {
     showSortIndexes?: boolean;
 }
 
+/**
+ * @docid
+ * @type object
+ * @namespace DevExpress.ui
+ */
+export interface dxGanttFilterRow {
+    /**
+     * @docid
+     * @default "End"
+     */
+    betweenEndText?: string;
+    /**
+     * @docid
+     * @default "Start"
+     */
+    betweenStartText?: string;
+    /**
+     * @docid
+     */
+    operationDescriptions?: dxGanttFilterRowOperationDescriptions;
+    /**
+     * @docid
+     * @default "Reset"
+     */
+    resetOperationText?: string;
+    /**
+     * @docid
+     * @default "(All)"
+     */
+    showAllText?: string;
+    /**
+     * @docid
+     * @default true
+     */
+    showOperationChooser?: boolean;
+    /**
+     * @docid
+     * @default false
+     */
+    visible?: boolean;
+}
+
+/**
+ * @docid
+ * @type object
+ * @namespace DevExpress.ui
+ */
+export interface dxGanttFilterRowOperationDescriptions {
+    /**
+     * @docid
+     * @default "Between"
+     */
+    between?: string;
+    /**
+     * @docid
+     * @default "Contains"
+     */
+    contains?: string;
+    /**
+     * @docid
+     * @default "Ends with"
+     */
+    endsWith?: string;
+    /**
+     * @docid
+     * @default "Equals"
+     */
+    equal?: string;
+    /**
+     * @docid
+     * @default "Greater than"
+     */
+    greaterThan?: string;
+    /**
+     * @docid
+     * @default "Greater than or equal to"
+     */
+    greaterThanOrEqual?: string;
+    /**
+     * @docid
+     * @default "Less than"
+     */
+    lessThan?: string;
+    /**
+     * @docid
+     * @default "Less than or equal to"
+     */
+    lessThanOrEqual?: string;
+    /**
+     * @docid
+     * @default "Does not contain"
+     */
+    notContains?: string;
+    /**
+     * @docid
+     * @default "Does not equal"
+     */
+    notEqual?: string;
+    /**
+     * @docid
+     * @default "Starts with"
+     */
+    startsWith?: string;
+}
+
+/**
+ * @docid
+ * @type object
+ * @namespace DevExpress.ui
+ */
+export interface dxGanttHeaderFilter {
+    /**
+     * @docid
+     * @default false
+     */
+    allowSearch?: boolean;
+    /**
+     * @docid
+     * @default 315 &for(Material)
+     * @default 325
+     */
+    height?: number;
+    /**
+     * @docid
+     * @default 500
+     */
+    searchTimeout?: number;
+    /**
+     * @docid
+     */
+    texts?: dxGanttHeaderFilterTexts;
+    /**
+     * @docid
+     * @default false
+     */
+    visible?: boolean;
+    /**
+     * @docid
+     * @default 252
+     */
+    width?: number;
+}
+
+/**
+ * @docid
+ * @type object
+ * @namespace DevExpress.ui
+ */
+export interface dxGanttHeaderFilterTexts {
+    /**
+     * @docid
+     * @default "Cancel"
+     */
+    cancel?: string;
+    /**
+     * @docid
+     * @default "(Blanks)"
+     */
+    emptyValue?: string;
+    /**
+     * @docid
+     * @default "Ok"
+     */
+    ok?: string;
+}
+
 /** @public */
 export type Properties = dxGanttOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxGanttOptions;
 
-/** @deprecated use Properties instead */
-export type IOptions = dxGanttOptions;
+/** @public */
+export type Column<TRowData = any, TKey = any> = dxGanttColumn<TRowData, TKey>;
+
+/**
+ * @namespace DevExpress.ui
+ * @deprecated Use the Column type instead
+ */
+export type dxGanttColumn<TRowData = any, TKey = any> = Skip<dxGanttColumnBlank<TRowData, TKey>, 'allowEditing' | 'allowFixing' | 'allowHiding' | 'allowReordering' | 'allowResizing' | 'allowSearch' | 'buttons' | 'columns' | 'editCellComponent' | 'editCellRender' | 'editCellTemplate' | 'editorOptions' | 'fixed' | 'fixedPosition' | 'formItem' | 'hidingPriority' | 'isBand' | 'lookup' | 'name' | 'ownerBand' | 'renderAsync' | 'setCellValue' | 'showEditorAlways' | 'showInColumnChooser' | 'type' | 'validationRules' | 'visible' >;
+
+/**
+ * @docid dxGanttColumn
+ * @export dxGanttColumn
+ * @inherits dxTreeListColumn
+ * @namespace DevExpress.ui
+ */
+ interface dxGanttColumnBlank<TRowData = any, TKey = any> extends TreeListColumn<TRowData, TKey> {
+    /**
+     * @hidden
+     * @docid dxGanttColumn.allowEditing
+     */
+     allowEditing: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.allowFixing
+     */
+     allowFixing: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.allowHiding
+     */
+     allowHiding: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.allowReordering
+     */
+     allowReordering: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.allowResizing
+     */
+     allowResizing: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.allowSearch
+     */
+     allowSearch: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.buttons
+     */
+    buttons: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.columns
+     */
+    columns: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.editorOptions
+     */
+    editorOptions: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.editCellComponent
+     */
+    editCellComponent: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.editCellRender
+     */
+    editCellRender: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.editCellTemplate
+     */
+    editCellTemplate: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.fixed
+     */
+    fixed: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.fixedPosition
+     */
+    fixedPosition: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.formItem
+     */
+     formItem: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.hidingPriority
+     */
+     hidingPriority: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.isBand
+     */
+     isBand: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.lookup
+     */
+     lookup: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.name
+     */
+     name: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.ownerBand
+     */
+     ownerBand: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.renderAsync
+     */
+     renderAsync: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.setCellValue
+     */
+     setCellValue: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.showEditorAlways
+     */
+     showEditorAlways: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.showInColumnChooser
+     */
+     showInColumnChooser: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.validationRules
+     */
+     validationRules: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.visible
+     */
+     visible: any;
+    /**
+     * @hidden
+     * @docid dxGanttColumn.type
+     */
+    type: any;
+ }

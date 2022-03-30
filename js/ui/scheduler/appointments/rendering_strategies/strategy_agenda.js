@@ -4,10 +4,12 @@ import { merge } from '../../../../core/utils/array';
 import BaseRenderingStrategy from './strategy.base';
 import { ExpressionUtils } from '../../expressionUtils';
 import { groupAppointmentsByResources } from '../../resources/utils';
+import { createAppointmentAdapter } from '../../appointmentAdapter';
+import { replaceWrongEndDate, getAppointmentTakesSeveralDays } from '../dataProvider/utils';
 
 class AgendaRenderingStrategy extends BaseRenderingStrategy {
+    get instance() { return this.options.instance; }
     get agendaDuration() { return this.options.agendaDuration; }
-    get currentDate() { return this.options.currentDate; }
 
     getAppointmentMinSize() {
     }
@@ -24,13 +26,12 @@ class AgendaRenderingStrategy extends BaseRenderingStrategy {
     }
 
     groupAppointmentByResources(appointments) {
-        const resourceManager = this.instance.fire('getResourceManager');
         const groups = this.instance._getCurrentViewOption('groups');
 
         const config = {
-            loadedResources: resourceManager.loadedResources,
+            loadedResources: this.options.loadedResources,
             resources: this.options.resources,
-            dataAccessors: this.options.resourceDataAccessors
+            dataAccessors: this.dataAccessors.resources
         };
 
         return groupAppointmentsByResources(
@@ -178,6 +179,12 @@ class AgendaRenderingStrategy extends BaseRenderingStrategy {
     getCollectorTopOffset() {
     }
 
+    // From subscribe
+    replaceWrongAppointmentEndDate(rawAppointment, startDate, endDate) {
+        const adapter = createAppointmentAdapter(rawAppointment, this.dataAccessors, this.timeZoneCalculator);
+
+        replaceWrongEndDate(adapter, startDate, endDate, this.cellDuration, this.dataAccessors);
+    }
 
     // TODO: get rid of an extra 'needClearSettings' argument
     calculateRows(appointments, agendaDuration, currentDate, needClearSettings) {
@@ -199,10 +206,10 @@ class AgendaRenderingStrategy extends BaseRenderingStrategy {
             }
 
             each(currentAppointments, function(index, appointment) {
-                const startDate = ExpressionUtils.getField(this.key, 'startDate', appointment);
-                const endDate = ExpressionUtils.getField(this.key, 'endDate', appointment);
+                const startDate = ExpressionUtils.getField(this.dataAccessors, 'startDate', appointment);
+                const endDate = ExpressionUtils.getField(this.dataAccessors, 'endDate', appointment);
 
-                this.instance.fire('getAppointmentDataProvider').replaceWrongEndDate(appointment, startDate, endDate);
+                this.replaceWrongAppointmentEndDate(appointment, startDate, endDate);
 
                 needClearSettings && delete appointment.settings;
 
@@ -226,8 +233,10 @@ class AgendaRenderingStrategy extends BaseRenderingStrategy {
 
                 for(let j = 0; j < appointmentCount; j++) {
                     const appointmentData = currentAppointments[j].settings || currentAppointments[j];
-                    const appointmentIsLong = this.instance.fire('getAppointmentDataProvider').appointmentTakesSeveralDays(currentAppointments[j]);
-                    const appointmentIsRecurrence = ExpressionUtils.getField(this.key, 'recurrenceRule', currentAppointments[j]);
+
+                    const adapter = createAppointmentAdapter(currentAppointments[j], this.dataAccessors, this.timeZoneCalculator);
+                    const appointmentIsLong = getAppointmentTakesSeveralDays(adapter);
+                    const appointmentIsRecurrence = ExpressionUtils.getField(this.dataAccessors, 'recurrenceRule', currentAppointments[j]);
 
                     if(this.instance.fire('dayHasAppointment', day, appointmentData, true) || (!appointmentIsRecurrence && appointmentIsLong && this.instance.fire('dayHasAppointment', day, currentAppointments[j], true))) {
                         groupResult[i] += 1;

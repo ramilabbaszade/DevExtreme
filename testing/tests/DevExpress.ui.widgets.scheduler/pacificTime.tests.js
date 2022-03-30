@@ -458,7 +458,7 @@ if((new Date(2020, 2, 7)).getTimezoneOffset() === pacificTimezoneOffset) {
 
                 assert.equal(scheduler.appointmentList.length, 4, 'should be render 4 appointments');
 
-                const positions = [100, 214, 328, 442];
+                const positions = [0, 114, 228, 342];
 
                 for(let i = 0; i < 4; i++) {
                     const element = scheduler.appointmentList[i].getElement();
@@ -471,11 +471,11 @@ if((new Date(2020, 2, 7)).getTimezoneOffset() === pacificTimezoneOffset) {
 
         [{
             view: 'day',
-            left: 100,
+            left: 0,
             top: 100,
         }, {
             view: 'week',
-            left: 100,
+            left: 0,
             top: 100,
         }, {
             view: 'timelineDay',
@@ -780,5 +780,41 @@ if((new Date(2020, 2, 7)).getTimezoneOffset() === pacificTimezoneOffset) {
                 });
             });
         }
+    });
+
+    module('Current Time Indicator', () => {
+        test('Current time indicator should have correct top in week view when DST is present (T1040849)', function(assert) {
+            const clock = sinon.useFakeTimers((new Date(2021, 10, 7, 10)).getTime());
+
+            const scheduler = createWrapper({
+                views: ['week'],
+                currentView: 'week',
+                currentDate: new Date(),
+                height: 580,
+            });
+
+            const currentTimeIndicator = scheduler.workSpace.getCurrentTimeIndicator();
+
+            assert.roughEqual(currentTimeIndicator.eq(0).position().top, 1000, 1.5, 'Current time indicator has correct top');
+
+            clock.restore();
+        });
+
+        test('Current time indicator should have correct left in timeline-week view when DST is present (T1040849)', function(assert) {
+            const clock = sinon.useFakeTimers((new Date(2021, 10, 7, 10)).getTime());
+
+            const scheduler = createWrapper({
+                views: ['timelineWeek'],
+                currentView: 'timelineWeek',
+                currentDate: new Date(),
+                height: 580,
+            });
+
+            const currentTimeIndicator = scheduler.workSpace.getCurrentTimeIndicator();
+
+            assert.roughEqual(currentTimeIndicator.eq(0).position().left, 4000, 1.5, 'Current time indicator has correct left');
+
+            clock.restore();
+        });
     });
 }

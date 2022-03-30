@@ -11,6 +11,7 @@ import { Table } from '../table';
 import { CellTemplateProps, DateTableBody } from './table_body';
 import { LayoutProps } from '../layout_props';
 import { DateTableCellBase } from './cell';
+import { DateTable } from '../../../../../component_wrapper/scheduler/date_table';
 
 export const viewFunction = ({
   props: {
@@ -19,6 +20,8 @@ export const viewFunction = ({
     cellTemplate,
     dataCellTemplate,
     tableRef,
+    addVerticalSizesClassToRows,
+    width,
   },
   topVirtualRowHeight,
   bottomVirtualRowHeight,
@@ -40,6 +43,7 @@ export const viewFunction = ({
     rightVirtualCellCount={viewData.rightVirtualCellCount}
     virtualCellsCount={virtualCellsCount}
     className={classes}
+    width={width}
   >
     <DateTableBody
       cellTemplate={cellTemplate}
@@ -48,6 +52,7 @@ export const viewFunction = ({
       leftVirtualCellWidth={leftVirtualCellWidth}
       rightVirtualCellWidth={rightVirtualCellWidth}
       groupOrientation={groupOrientation}
+      addVerticalSizesClassToRows={addVerticalSizesClassToRows}
     />
   </Table>
 );
@@ -62,7 +67,10 @@ export class DateTableLayoutProps extends LayoutProps {
 @Component({
   defaultOptionRules: null,
   view: viewFunction,
-  jQuery: { register: true },
+  jQuery: {
+    register: true,
+    component: DateTable,
+  },
 })
 export class DateTableLayoutBase extends JSXComponent(DateTableLayoutProps) {
   get classes(): string | undefined {
@@ -88,6 +96,6 @@ export class DateTableLayoutBase extends JSXComponent(DateTableLayoutProps) {
   }
 
   get virtualCellsCount(): number {
-    return this.props.viewData.groupedData[0].dateTable[0].length;
+    return this.props.viewData.groupedData[0].dateTable[0].cells.length;
   }
 }

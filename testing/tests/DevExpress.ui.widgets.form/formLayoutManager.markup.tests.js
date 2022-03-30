@@ -543,6 +543,18 @@ QUnit.module('Layout manager', () => {
         assert.ok(!$testContainer.find('.' + FIELD_ITEM_LABEL_CLASS).length);
     });
 
+    test('Label is not rendered when labelMode option is not "default"', function(assert) {
+        const $testContainer = $('#container').dxLayoutManager({
+            labelMode: 'static',
+            items: [{
+                label: { text: 'Label text' },
+                editorType: 'dxTextBox'
+            }]
+        });
+
+        assert.notOk($testContainer.find('.' + FIELD_ITEM_LABEL_CLASS).length);
+    });
+
     test('If item is not visible we will not render them', function(assert) {
         const $testContainer = $('#container').dxLayoutManager({
             items: [{
@@ -1468,24 +1480,6 @@ QUnit.module('Layout manager', () => {
         });
 
         assert.equal($testContainer.find('.' + FIELD_EMPTY_ITEM_CLASS).length, 1);
-    });
-
-    test('Templates of form\'s items render with deferring_T638831', function(assert) {
-        let spy;
-
-        $('#container').dxLayoutManager({
-            onInitialized: function(e) {
-                spy = sinon.spy(e.component, '_renderTemplates');
-            },
-            items: [{
-                dataField: 'StartDate',
-                editorType: 'dxDateBox'
-            }]
-        });
-
-        const templatesInfo = spy.args[0][0];
-        assert.ok(templatesInfo[0].container.hasClass('dx-field-item'), 'template container of field item');
-        assert.equal(templatesInfo[0].formItem.dataField, 'StartDate', 'correct a form item for template');
     });
 
     test('layoutData with \'null\' fields shouldn\'t reset editor\'s \'isValid\' option', function(assert) {

@@ -1,6 +1,7 @@
 import devices from 'core/devices';
 import errors from 'ui/widget/ui.errors';
 import { createDataGrid, baseModuleConfig } from '../../helpers/dataGridHelper.js';
+import pointerMock from '../../helpers/pointerMock.js';
 import $ from 'jquery';
 
 const DX_STATE_HOVER_CLASS = 'dx-state-hover';
@@ -583,7 +584,7 @@ QUnit.module('Virtual row rendering', baseModuleConfig, () => {
             scrolling: {
                 mode: 'virtual',
                 rowRenderingMode: 'virtual',
-                useNative: false
+                useNative: false,
             }
         }).dxDataGrid('instance');
 
@@ -593,11 +594,11 @@ QUnit.module('Virtual row rendering', baseModuleConfig, () => {
 
         // assert
         const visibleRows = dataGrid.getVisibleRows();
-        assert.equal(visibleRows.length, 10, 'visible row count');
-        assert.equal(visibleRows[0].key, 6, 'first visible row key');
-        assert.equal(visibleRows[6].key, 12, 'selected row key');
-        assert.equal(visibleRows[6].isSelected, true, 'isSelected for selected row');
-        assert.ok($(dataGrid.getRowElement(6)).hasClass('dx-selection'), 'dx-selection class is added');
+        assert.equal(visibleRows.length, 2, 'visible row count');
+        assert.equal(visibleRows[0].key, 11, 'first visible row key');
+        assert.equal(visibleRows[1].key, 12, 'selected row key');
+        assert.equal(visibleRows[1].isSelected, true, 'isSelected for selected row');
+        assert.ok($(dataGrid.getRowElement(1)).hasClass('dx-selection'), 'dx-selection class is added');
     });
 
     // T726385
@@ -633,7 +634,7 @@ QUnit.module('Virtual row rendering', baseModuleConfig, () => {
 
         // assert
         const visibleRows = dataGrid.getVisibleRows();
-        assert.equal(visibleRows.length, 20, 'visible row count');
+        assert.equal(visibleRows.length, 16, 'visible row count');
         assert.equal(dataGrid.getSelectedRowKeys().length, 30, 'selected row key count equals pageSize');
     });
 
@@ -650,15 +651,16 @@ QUnit.module('Virtual row rendering', baseModuleConfig, () => {
             height: 100,
             dataSource: array,
             keyExpr: 'id',
-            loadingTimeout: null,
             selection: {
                 mode: 'single'
             },
             scrolling: {
                 rowRenderingMode: 'virtual',
-                useNative: false
+                useNative: false,
             }
         }).dxDataGrid('instance');
+
+        this.clock.tick(300);
 
         // act
         dataGrid.getScrollable().scrollTo({ y: 10000 });
@@ -667,9 +669,128 @@ QUnit.module('Virtual row rendering', baseModuleConfig, () => {
 
         // assert
         const visibleRows = dataGrid.getVisibleRows();
-        assert.equal(visibleRows.length, 5, 'visible row count');
+        assert.equal(visibleRows.length, 1, 'visible row count');
         assert.equal(visibleRows[0].isSelected, true, 'first visible row is selected');
-        assert.deepEqual(dataGrid.getSelectedRowKeys(), [16], 'selected row key count equals pageSize');
+        assert.deepEqual(dataGrid.getSelectedRowKeys(), [20], 'selected row key count equals pageSize');
+    });
+
+    QUnit.test('selection after scrolling should work correctly if remote paging/sorting/filtering and local grouping (T1056403)', function(assert) {
+        // arrange, act
+        const array = [];
+
+        for(let i = 1; i <= 10; i++) {
+            array.push({ group: i, id: i });
+        }
+
+        const dataGrid = $('#dataGrid').dxDataGrid({
+            height: 100,
+            dataSource: array,
+            keyExpr: 'id',
+            remoteOperations: { sorting: true, filtering: true, paging: true },
+            selection: {
+                mode: 'single'
+            },
+            scrolling: {
+                mode: 'virtual',
+                useNative: false,
+            },
+            columns: [{ dataField: 'group', groupIndex: 0 }, 'id']
+        }).dxDataGrid('instance');
+
+        this.clock.tick(300);
+
+        // act
+        dataGrid.getScrollable().scrollTo({ y: 300 });
+
+        $(dataGrid.getRowElement(1)).trigger('dxclick');
+
+        // assert
+        const visibleRows = dataGrid.getVisibleRows();
+        assert.deepEqual(visibleRows[0].key, [5], 'first visible row key');
+        assert.equal(visibleRows[1].key, 5, 'first visible row key');
+        assert.equal(visibleRows[1].isSelected, true, 'first visible row is selected');
+        assert.deepEqual(dataGrid.getSelectedRowKeys(), [5], 'selected row key count equals pageSize');
+    });
+
+    QUnit.test('selection after paging should work correctly if rowRenderingMode is virtual (T1058757)', function(assert) {
+        // arrange, act
+        const array = [];
+
+        for(let i = 1; i <= 10; i++) {
+            array.push({ id: i });
+        }
+
+        const dataGrid = $('#dataGrid').dxDataGrid({
+            height: 100,
+            dataSource: array,
+            keyExpr: 'id',
+            selection: {
+                mode: 'single'
+            },
+            paging: {
+                pageSize: 5,
+                pageIndex: 1
+            },
+            scrolling: {
+                rowRenderingMode: 'virtual'
+            },
+            columns: ['id']
+        }).dxDataGrid('instance');
+
+        this.clock.tick(300);
+
+        // act
+        $(dataGrid.getRowElement(0)).trigger('dxclick');
+
+        // assert
+        const visibleRows = dataGrid.getVisibleRows();
+        assert.equal(visibleRows[0].key, 6, 'first visible row key');
+        assert.equal(visibleRows[0].isSelected, true, 'first visible row is selected');
+        assert.deepEqual(dataGrid.getSelectedRowKeys(), [6], 'selected row key');
+    });
+
+    QUnit.test('Selection with Shift should work properly when rowRenderingMode is virtual (T1046809)', function(assert) {
+        // arrange, act
+        const array = [];
+
+        for(let i = 1; i <= 100; i++) {
+            array.push({ id: i });
+        }
+
+        const dataGrid = $('#dataGrid').dxDataGrid({
+            height: 500,
+            dataSource: array,
+            keyExpr: 'id',
+            paging: {
+                enabled: false,
+            },
+            scrolling: {
+                mode: 'standard',
+                useNative: false,
+                rowRenderingMode: 'virtual'
+            },
+            selection: {
+                mode: 'multiple',
+                showCheckBoxesMode: 'always'
+            }
+        }).dxDataGrid('instance');
+
+        this.clock.tick(300);
+
+        // act
+        $(dataGrid.getRowElement(0)).find('.dx-command-select .dx-checkbox-icon').trigger('dxclick');
+
+        // assert
+        assert.deepEqual(dataGrid.getSelectedRowKeys(), [1], 'first row selected');
+
+        // act
+        dataGrid.getScrollable().scrollTo({ top: 2400 });
+        this.clock.tick(300);
+        pointerMock($(dataGrid.getRowElement(0)).find('.dx-command-select .dx-checkbox-icon')).start({ shiftKey: true }).click(true);
+        this.clock.tick(300);
+
+        // assert
+        assert.equal(dataGrid.getSelectedRowKeys().length, 71, 'selected rows count');
     });
 });
 

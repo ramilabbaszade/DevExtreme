@@ -1,4 +1,5 @@
 import { Component, JSXComponent } from '@devextreme-generator/declarations';
+import { DateTable } from '../../../../../component_wrapper/scheduler/date_table';
 import { DateTableLayoutBase, DateTableLayoutProps } from '../../base/date_table/layout';
 import { MonthDateTableCell } from './cell';
 
@@ -10,6 +11,8 @@ export const viewFunction = ({
     addDateTableClass,
     groupOrientation,
     tableRef,
+    addVerticalSizesClassToRows,
+    width,
   },
 }: MonthDateTableLayout): JSX.Element => (
   <DateTableLayoutBase
@@ -19,6 +22,8 @@ export const viewFunction = ({
     dataCellTemplate={dataCellTemplate}
     cellTemplate={MonthDateTableCell}
     tableRef={tableRef}
+    addVerticalSizesClassToRows={addVerticalSizesClassToRows}
+    width={width}
     // eslint-disable-next-line react/jsx-props-no-spreading
     {...restAttributes}
   />
@@ -27,6 +32,9 @@ export const viewFunction = ({
 @Component({
   defaultOptionRules: null,
   view: viewFunction,
-  jQuery: { register: true },
+  jQuery: {
+    register: true,
+    component: DateTable,
+  },
 })
 export class MonthDateTableLayout extends JSXComponent(DateTableLayoutProps) {}

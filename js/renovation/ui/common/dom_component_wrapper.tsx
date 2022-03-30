@@ -11,13 +11,29 @@ import {
   RefObject,
   Mutable,
 } from '@devextreme-generator/declarations';
+import { renderTemplate, hasTemplate } from '@devextreme/runtime/declarations';
 import type DomComponent from '../../../core/dom_component';
 import { ComponentClass } from '../../../core/dom_component'; // eslint-disable-line import/named
 import { ConfigContextValue, ConfigContext } from '../../common/config_context';
 import { EventCallback } from './event_callback';
-import { renderTemplate } from '../../utils/render_template';
-import { DisposeEffectReturn } from '../../utils/effect_return.d';
+import { DisposeEffectReturn } from '../../utils/effect_return';
 import { getUpdatedOptions } from './utils/get_updated_options';
+
+interface ComponentProps {
+  className?: string;
+  itemTemplate?: string | (() => string | HTMLElement);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  valueChange?: EventCallback<any>;
+}
+
+const normalizeProps = (props: ComponentProps): ComponentProps => Object
+  .keys(props).reduce((accumulator, key) => {
+    if (props[key] !== undefined) {
+      accumulator[key] = props[key];
+    }
+
+    return accumulator;
+  }, {});
 
 export const viewFunction = ({
   widgetRef,
@@ -39,19 +55,16 @@ export class DomComponentWrapperProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   @OneWay() componentType!: ComponentClass<Record<string, any>>;
 
-  @OneWay() componentProps!: {
-    className?: string;
-    itemTemplate?: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    valueChange?: EventCallback<any>;
-  };
+  @OneWay() templateNames!: string[];
+
+  @OneWay() componentProps!: ComponentProps;
 }
 
 @Component({
   defaultOptionRules: null,
   view: viewFunction,
 })
-export class DomComponentWrapper extends JSXComponent<DomComponentWrapperProps, 'componentType' | 'componentProps'>() {
+export class DomComponentWrapper extends JSXComponent<DomComponentWrapperProps, 'componentType' | 'templateNames' | 'componentProps'>() {
   @Ref()
   widgetRef!: RefObject<HTMLDivElement>;
 
@@ -102,28 +115,34 @@ export class DomComponentWrapper extends JSXComponent<DomComponentWrapperProps, 
       updatedOptions.forEach(({ path, value }) => { instance.option(path, value); });
       instance.endUpdate();
     }
+
     this.prevProps = this.properties;
   }
 
   get properties(): Record<string, unknown> {
+    const normalizedProps = normalizeProps(this.props.componentProps);
+
     const {
-      itemTemplate,
       valueChange,
       ...restProps
-    } = this.props.componentProps;
+    } = normalizedProps;
 
     const properties = ({
       rtlEnabled: !!this.config?.rtlEnabled, // widget expects boolean
+      isRenovated: true,
       ...restProps,
     }) as Record<string, unknown>;
     if (valueChange) {
       properties.onValueChanged = ({ value }): void => valueChange(value);
     }
-    if (itemTemplate) {
-      properties.itemTemplate = (item, index, container): void => {
-        renderTemplate(itemTemplate, { item, index, container }, container);
-      };
-    }
+    const templates = this.props.templateNames;
+    templates.forEach((name) => {
+      if (hasTemplate(name, properties, this)) {
+        properties[name] = (item, index, container): void => {
+          renderTemplate(this.props.componentProps[name], { item, index, container }, this);
+        };
+      }
+    });
     return properties;
   }
 }

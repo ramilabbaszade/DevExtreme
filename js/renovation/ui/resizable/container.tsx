@@ -13,11 +13,11 @@ import {
 } from '@devextreme-generator/declarations';
 import type {
   Handle, Corner, DragStartEvent, DragEvent,
-} from './common/types.d';
+} from './common/types';
 import { ResizableHandle } from './handle';
 import { combineClasses } from '../../utils/combine_classes';
 import { triggerResizeEvent } from '../../../events/visibility_change';
-import { EffectReturn } from '../../utils/effect_return.d';
+import { EffectReturn } from '../../utils/effect_return';
 
 const getCssClasses = (
   disabled: boolean,
@@ -32,7 +32,7 @@ const getCssClasses = (
 
 export const viewFunction = (viewModel: ResizableContainer): JSX.Element => {
   const {
-    handles, styles, props, cssClasses, restAttributes, mainRef,
+    handles, styles, props, cssClasses, restAttributes, mainContainerRef,
     onHandleResizeStart, onHandleResize, onHandleResizeEnd,
   } = viewModel;
 
@@ -41,7 +41,7 @@ export const viewFunction = (viewModel: ResizableContainer): JSX.Element => {
 
   return (
     // eslint-disable-next-line react/jsx-props-no-spreading
-    <div className={cssClasses} ref={mainRef} style={styles} {...restAttributes}>
+    <div className={cssClasses} ref={mainContainerRef} style={styles} {...restAttributes}>
       { children }
       { handles.map((handleType) => (
         <ResizableHandle
@@ -99,12 +99,12 @@ export class ResizableContainer extends JSXComponent(ResizableContainerProps) {
 
   @Mutable() startY = Number.NaN;
 
-  @Ref() mainRef!: RefObject<HTMLDivElement>;
+  @Ref() mainContainerRef!: RefObject<HTMLDivElement>;
 
   @Effect({ run: 'once' })
   forwardRefInitEffect(): EffectReturn {
     if (this.props.mainRef) {
-      this.props.mainRef.current = this.mainRef.current;
+      this.props.mainRef.current = this.mainContainerRef.current;
     }
 
     return undefined;
@@ -131,7 +131,7 @@ export class ResizableContainer extends JSXComponent(ResizableContainerProps) {
         y: event.clientY - this.startY,
       },
     });
-    triggerResizeEvent(this.mainRef.current);
+    triggerResizeEvent(this.mainContainerRef.current);
     return undefined;
   }
 

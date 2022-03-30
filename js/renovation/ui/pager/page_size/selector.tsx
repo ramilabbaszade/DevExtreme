@@ -3,7 +3,7 @@ import {
   ComponentBindings, JSXComponent, OneWay, Component, Ref, ForwardRef, Effect, RefObject,
 } from '@devextreme-generator/declarations';
 
-import { FullPageSize } from '../common/types.d';
+import { FullPageSize } from '../common/types';
 import { PageSizeSmall } from './small';
 import { PageSizeLarge } from './large';
 import { InternalPagerProps } from '../common/pager_props';
@@ -46,6 +46,7 @@ class PageSizeSelectorProps {
 
   @ForwardRef() rootElementRef?: RefObject<HTMLDivElement>;
 }
+// eslint-disable-next-line @typescript-eslint/no-type-alias
 type PageSizeSelectorPropsType = Pick<InternalPagerProps, 'pageSize' | 'pageSizeChange' | 'pageSizes' > & PageSizeSelectorProps;
 @Component({ defaultOptionRules: null, view: viewFunction })
 export class PageSizeSelector

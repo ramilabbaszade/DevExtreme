@@ -1,3 +1,4 @@
+import { DataSourceLike } from '../data/data_source';
 import {
     UserDefinedElement,
     DxElement,
@@ -10,12 +11,6 @@ import {
 import {
     DxPromise,
 } from '../core/utils/deferred';
-
-import DataSource, {
-    DataSourceOptions,
-} from '../data/data_source';
-
-import Store from '../data/abstract_store';
 
 import {
     EventInfo,
@@ -31,44 +26,50 @@ import CollectionWidget, {
     SelectionChangedInfo,
 } from './collection/ui.collection_widget.base';
 
-/** @public */
-export type ContentReadyEvent = EventInfo<dxSlideOut>;
+type ItemLike = string | Item | any;
 
 /** @public */
-export type DisposingEvent = EventInfo<dxSlideOut>;
+export type ContentReadyEvent<TItem extends ItemLike = any, TKey = any> = EventInfo<dxSlideOut<TItem, TKey>>;
 
 /** @public */
-export type InitializedEvent = InitializedEventInfo<dxSlideOut>;
+export type DisposingEvent<TItem extends ItemLike = any, TKey = any> = EventInfo<dxSlideOut<TItem, TKey>>;
 
 /** @public */
-export type ItemClickEvent = NativeEventInfo<dxSlideOut> & ItemInfo;
+export type InitializedEvent<TItem extends ItemLike = any, TKey = any> = InitializedEventInfo<dxSlideOut<TItem, TKey>>;
 
 /** @public */
-export type ItemContextMenuEvent = NativeEventInfo<dxSlideOut> & ItemInfo;
+export type ItemClickEvent<TItem extends ItemLike = any, TKey = any> = NativeEventInfo<dxSlideOut<TItem, TKey>, MouseEvent | PointerEvent> & ItemInfo<TItem>;
 
 /** @public */
-export type ItemHoldEvent = NativeEventInfo<dxSlideOut> & ItemInfo;
+export type ItemContextMenuEvent<TItem extends ItemLike = any, TKey = any> = NativeEventInfo<dxSlideOut<TItem, TKey>, MouseEvent | PointerEvent | TouchEvent> & ItemInfo<TItem>;
 
 /** @public */
-export type ItemRenderedEvent = NativeEventInfo<dxSlideOut> & ItemInfo;
+export type ItemHoldEvent<TItem extends ItemLike = any, TKey = any> = NativeEventInfo<dxSlideOut<TItem, TKey>, MouseEvent | PointerEvent | TouchEvent> & ItemInfo<TItem>;
 
 /** @public */
-export type MenuGroupRenderedEvent = EventInfo<dxSlideOut>;
+export type ItemRenderedEvent<TItem extends ItemLike = any, TKey = any> = EventInfo<dxSlideOut<TItem, TKey>> & ItemInfo<TItem>;
 
 /** @public */
-export type MenuItemRenderedEvent = EventInfo<dxSlideOut>;
+export type MenuGroupRenderedEvent<TItem extends ItemLike = any, TKey = any> = EventInfo<dxSlideOut<TItem, TKey>>;
 
 /** @public */
-export type OptionChangedEvent = EventInfo<dxSlideOut> & ChangedOptionInfo;
+export type MenuItemRenderedEvent<TItem extends ItemLike = any, TKey = any> = EventInfo<dxSlideOut<TItem, TKey>>;
 
 /** @public */
-export type SelectionChangedEvent = EventInfo<dxSlideOut> & SelectionChangedInfo;
+export type OptionChangedEvent<TItem extends ItemLike = any, TKey = any> = EventInfo<dxSlideOut<TItem, TKey>> & ChangedOptionInfo;
+
+/** @public */
+export type SelectionChangedEvent<TItem extends ItemLike = any, TKey = any> = EventInfo<dxSlideOut<TItem, TKey>> & SelectionChangedInfo<TItem>;
 
 /**
  * @deprecated use Properties instead
  * @namespace DevExpress.ui
+ * @public
  */
-export interface dxSlideOutOptions extends CollectionWidgetOptions<dxSlideOut> {
+export interface dxSlideOutOptions<
+    TItem extends ItemLike = any,
+    TKey = any,
+> extends CollectionWidgetOptions<dxSlideOut<TItem, TKey>, TItem, TKey> {
     /**
      * @docid
      * @default false
@@ -78,7 +79,6 @@ export interface dxSlideOutOptions extends CollectionWidgetOptions<dxSlideOut> {
     /**
      * @docid
      * @default "content"
-     * @type_function_param1 container:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -89,19 +89,18 @@ export interface dxSlideOutOptions extends CollectionWidgetOptions<dxSlideOut> {
      * @default null
      * @public
      */
-    dataSource?: string | Array<string | Item | any> | Store | DataSource | DataSourceOptions;
+    dataSource?: DataSourceLike<TItem, TKey>;
     /**
      * @docid
      * @type Array<string | dxSlideOutItem | any>
      * @fires dxSlideOutOptions.onOptionChanged
      * @public
      */
-    items?: Array<string | Item | any>;
+    items?: Array<TItem>;
     /**
      * @docid
      * @default "menuGroup"
      * @type_function_param1 groupData:object
-     * @type_function_param2 groupIndex:number
      * @type_function_param3 groupElement:object
      * @type_function_return string|Element|jQuery
      * @public
@@ -117,12 +116,10 @@ export interface dxSlideOutOptions extends CollectionWidgetOptions<dxSlideOut> {
      * @docid
      * @default "menuItem"
      * @type_function_param1 itemData:object
-     * @type_function_param2 itemIndex:number
-     * @type_function_param3 itemElement:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
-    menuItemTemplate?: template | ((itemData: any, itemIndex: number, itemElement: DxElement) => string | UserDefinedElement);
+    menuItemTemplate?: template | ((itemData: TItem, itemIndex: number, itemElement: DxElement) => string | UserDefinedElement);
     /**
      * @docid
      * @type Enums.SlideOutMenuPosition
@@ -146,7 +143,7 @@ export interface dxSlideOutOptions extends CollectionWidgetOptions<dxSlideOut> {
      * @action
      * @public
      */
-    onMenuGroupRendered?: ((e: MenuGroupRenderedEvent) => void);
+    onMenuGroupRendered?: ((e: MenuGroupRenderedEvent<TItem, TKey>) => void);
     /**
      * @docid
      * @type_function_param1 e:object
@@ -157,7 +154,7 @@ export interface dxSlideOutOptions extends CollectionWidgetOptions<dxSlideOut> {
      * @action
      * @public
      */
-    onMenuItemRendered?: ((e: MenuItemRenderedEvent) => void);
+    onMenuItemRendered?: ((e: MenuItemRenderedEvent<TItem, TKey>) => void);
     /**
      * @docid
      * @default 0
@@ -174,13 +171,14 @@ export interface dxSlideOutOptions extends CollectionWidgetOptions<dxSlideOut> {
 /**
  * @docid
  * @inherits CollectionWidget
- * @module ui/slide_out
- * @export default
  * @namespace DevExpress.ui
  * @deprecated dxDrawer
  * @public
  */
-export default class dxSlideOut extends CollectionWidget<dxSlideOutOptions> {
+export default class dxSlideOut<
+    TItem extends ItemLike = any,
+    TKey = any,
+> extends CollectionWidget<dxSlideOutOptions<TItem, TKey>, TItem, TKey> {
     /**
      * @docid
      * @publicName hideMenu()
@@ -225,10 +223,32 @@ export interface dxSlideOutItem extends CollectionWidgetItem {
 }
 
 /** @public */
-export type Properties = dxSlideOutOptions;
+export type ExplicitTypes<
+    TItem extends ItemLike,
+    TKey,
+> = {
+    Properties: Properties<TItem, TKey>;
+    ContentReadyEvent: ContentReadyEvent<TItem, TKey>;
+    DisposingEvent: DisposingEvent<TItem, TKey>;
+    InitializedEvent: InitializedEvent<TItem, TKey>;
+    ItemClickEvent: ItemClickEvent<TItem, TKey>;
+    ItemContextMenuEvent: ItemContextMenuEvent<TItem, TKey>;
+    ItemHoldEvent: ItemHoldEvent<TItem, TKey>;
+    ItemRenderedEvent: ItemRenderedEvent<TItem, TKey>;
+    MenuGroupRenderedEvent: MenuGroupRenderedEvent<TItem, TKey>;
+    MenuItemRenderedEvent: MenuItemRenderedEvent<TItem, TKey>;
+    OptionChangedEvent: OptionChangedEvent<TItem, TKey>;
+    SelectionChangedEvent: SelectionChangedEvent<TItem, TKey>;
+};
+
+/** @public */
+export type Properties<
+    TItem extends ItemLike = any,
+    TKey = any,
+> = dxSlideOutOptions<TItem, TKey>;
 
 /** @deprecated use Properties instead */
-export type Options = dxSlideOutOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxSlideOutOptions;
+export type Options<
+    TItem extends ItemLike = any,
+    TKey = any,
+> = Properties<TItem, TKey>;

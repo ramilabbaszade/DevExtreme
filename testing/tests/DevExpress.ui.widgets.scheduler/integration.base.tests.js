@@ -1,3 +1,4 @@
+const { getOuterHeight } = require('core/utils/size');
 const $ = require('jquery');
 
 QUnit.testStart(function() {
@@ -103,7 +104,7 @@ QUnit.test('Height of \'dx-scheduler-group-row\' should be equal with height of 
     const groupRow = $element.find('.dx-scheduler-group-flex-container .dx-scheduler-group-row:last-child .dx-scheduler-group-header').eq(0);
     const dataTableRow = $element.find('.dx-scheduler-date-table-row').eq(0);
 
-    assert.roughEqual(groupRow.outerHeight(), dataTableRow.outerHeight(), 0.3, 'Row heights are equal');
+    assert.roughEqual(getOuterHeight(groupRow), getOuterHeight(dataTableRow), 0.3, 'Row heights are equal');
 });
 
 QUnit.test('Header should be updated with correct \'width\' option', function(assert) {
@@ -310,4 +311,23 @@ QUnit.test('min option should be parsed with ISO8601 dates before sending to wor
     this.instance.option('min', '20170206');
 
     assert.deepEqual(header.option('min'), new Date(2017, 1, 6), 'min is OK  after option change');
+});
+
+QUnit.test('dimensionChanged should not generate exception if workspace is not created', function(assert) {
+    this.createInstance({
+        views: ['day'],
+        currentView: 'day',
+        currentDate: new Date(2017, 1, 8),
+        min: '20170207'
+    });
+
+    this.instance._workSpace = null;
+
+    this.instance._dimensionChanged();
+
+    try {
+        assert.ok(true, 'No exception');
+    } catch(e) {
+        assert.ok(false, `${e.message}`);
+    }
 });

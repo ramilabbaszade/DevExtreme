@@ -6,7 +6,6 @@ import GestureEmitter from '../../events/gesture/emitter.gesture';
 import registerEmitter from '../../events/core/emitter_registrator';
 import { requestAnimationFrame, cancelAnimationFrame } from '../../animation/frame';
 import devices from '../../core/devices';
-import { compare as compareVersions } from '../../core/utils/version';
 
 const realDevice = devices.real();
 
@@ -30,8 +29,11 @@ const Locker = Class.inherit((function() {
 
             this._locked = false;
 
-            const that = this;
-            this._proxiedScroll = function(e) { that._scroll(e); };
+            this._proxiedScroll = (e) => {
+                if(!this._disposed) {
+                    this._scroll(e);
+                }
+            };
             eventsEngine.on(this._element, NAMESPACED_SCROLL_EVENT, this._proxiedScroll);
         },
 
@@ -44,6 +46,7 @@ const Locker = Class.inherit((function() {
         },
 
         dispose: function() {
+            this._disposed = true;
             eventsEngine.off(this._element, NAMESPACED_SCROLL_EVENT, this._proxiedScroll);
         }
 
@@ -150,10 +153,9 @@ let PointerLocker = TimeoutLocker.inherit((function() {
 })());
 
 (function() {
-    const ios8_greater = realDevice.ios && compareVersions(realDevice.version, [8]) >= 0;
-    const android5_greater = realDevice.android && compareVersions(realDevice.version, [5]) >= 0;
+    const { ios: isIos, android: isAndroid } = realDevice;
 
-    if(!(ios8_greater || android5_greater)) {
+    if(!(isIos || isAndroid)) {
         return;
     }
 

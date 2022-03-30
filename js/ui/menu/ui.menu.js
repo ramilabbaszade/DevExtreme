@@ -1,3 +1,4 @@
+import { getOuterWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import registerComponent from '../../core/component_registrator';
@@ -238,7 +239,7 @@ class Menu extends MenuBase {
             return;
         }
 
-        const containerWidth = this.$element().outerWidth();
+        const containerWidth = getOuterWidth(this.$element());
         this._toggleAdaptiveMode(this._menuItemsWidth > containerWidth);
     }
 
@@ -342,7 +343,7 @@ class Menu extends MenuBase {
                 this._toggleHamburgerActiveState(false);
             },
             height: 'auto',
-            closeOnOutsideClick(e) {
+            hideOnOutsideClick(e) {
                 return !($(e.target).closest(`.${DX_ADAPTIVE_HAMBURGER_BUTTON_CLASS}`).length);
             },
             position: {

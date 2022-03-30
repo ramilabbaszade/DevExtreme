@@ -1,10 +1,12 @@
 import {
   getAppointmentStyles,
   getAppointmentKey,
+  getReducedIconTooltipText,
 } from '../utils';
 
 describe('Appointment utils', () => {
   const testViewModel = {
+    key: '1-2-10-20',
     appointment: {
       startDate: new Date('2021-08-05T10:00:00.000Z'),
       endDate: new Date('2021-08-05T12:00:00.000Z'),
@@ -36,13 +38,12 @@ describe('Appointment utils', () => {
 
   describe('getAppointmentStyles', () => {
     it('generate styles for the full model', () => {
-      expect(getAppointmentStyles(testViewModel))
+      expect(getAppointmentStyles(testViewModel as any))
         .toEqual({
-          backgroundColor: '#1A2BC',
-          height: 20,
-          left: 1,
-          top: 2,
-          width: 10,
+          height: '20px',
+          left: '1px',
+          top: '2px',
+          width: '10px',
         });
     });
 
@@ -50,21 +51,73 @@ describe('Appointment utils', () => {
       expect(getAppointmentStyles({
         ...testViewModel,
         info: {
-          ...testViewModel.info,
+          ...testViewModel.info as any,
           resourceColor: undefined,
         },
       }))
         .toEqual({
-          height: 20,
-          left: 1,
-          top: 2,
-          width: 10,
+          height: '20px',
+          left: '1px',
+          top: '2px',
+          width: '10px',
+        });
+    });
+
+    it('should return default height if it is not provided', () => {
+      expect(getAppointmentStyles({
+        ...testViewModel as any,
+        geometry: {
+          ...testViewModel.geometry,
+          height: 0,
+        },
+      }))
+        .toEqual({
+          height: '50px',
+          left: '1px',
+          top: '2px',
+          width: '10px',
+        });
+    });
+
+    it('should return default width if it is not provided', () => {
+      expect(getAppointmentStyles({
+        ...testViewModel as any,
+        geometry: {
+          ...testViewModel.geometry,
+          width: 0,
+        },
+      }))
+        .toEqual({
+          height: '20px',
+          left: '1px',
+          top: '2px',
+          width: '50px',
         });
     });
   });
 
-  it('getAppointmentKey', () => {
-    expect(getAppointmentKey(testViewModel))
-      .toBe('99-1628157600000-1628164800000_2-4-10-20');
+  describe('getAppointmentKey', () => {
+    it('should generate correct key', () => {
+      expect(getAppointmentKey(testViewModel.geometry))
+        .toBe('1-2-10-20');
+    });
+  });
+
+  describe('getReducedIconTooltipText', () => {
+    [{
+      endDate: new Date(2021, 11, 21, 19, 13),
+      expected: 'End Date: December 21, 2021',
+    }, {
+      endDate: '2021-12-21T03:03:03.000Z',
+      expected: 'End Date: December 21, 2021',
+    }, {
+      endDate: undefined,
+      expected: 'End Date',
+    }].forEach(({ endDate, expected }) => {
+      it(`should generate correct text if date is ${endDate}`, () => {
+        expect(getReducedIconTooltipText(endDate))
+          .toBe(expected);
+      });
+    });
   });
 });

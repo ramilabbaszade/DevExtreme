@@ -17,10 +17,11 @@ const PRIVATE_JQUERY_WIDGETS = [
     'GridPager', 'Scrollable', 'DraggableContainer', 'Droppable',
     'Editor'
 ];
-const INPROGRESS_WIDGETS = ['Button', 'CheckBox', 'ScrollView', 'DataGrid', 'Bullet', 'Form', 'LayoutManager', 'ResponsiveBox', 'Box'];
 const CUSTOM_ROOT_WIDGET_CLASS = { 'dxGridPager': 'datagrid-pager', 'dxDataGrid': 'widget' };
 
-const widgetsInBundle = publicWidgets.map(widget => widget.name);
+const widgetsInBundle = publicWidgets
+    .filter((item) => !item.inProgress)
+    .map(widget => widget.name);
 const isRenovation = !!Button.IS_RENOVATED_WIDGET;
 
 const widgets = isRenovation ? widgetsMeta
@@ -30,9 +31,7 @@ const widgets = isRenovation ? widgetsMeta
     }) : [];
 
 QUnit.module('Check components registration', () => {
-    widgetsMeta
-        .filter(meta => PRIVATE_JQUERY_WIDGETS.indexOf(meta.name) === -1)
-        .filter(meta => INPROGRESS_WIDGETS.indexOf(meta.name) === -1)
+    widgets
         .forEach((meta) => {
             QUnit.test(`${`dx${meta.name}`} is in bundle`, function(assert) {
                 const message = 'You should add your widget to the bundle.'
@@ -130,7 +129,7 @@ QUnit.module('Mandatory component setup', {
         });
 
     widgets
-        .filter((m) => m.props.template.length && INPROGRESS_WIDGETS.indexOf(m.name) === -1)
+        .filter((m) => m.props.template.length)
         .forEach((meta) => {
             QUnit.test(`${`dx${meta.name}`} - pass right props to template`, function(assert) {
                 const message = 'For templates that jQuery users set.\n'
@@ -146,16 +145,20 @@ QUnit.module('Mandatory component setup', {
                 + '</div>\n\n'
                 + 'If for some reason you don\'t have data (if it is based on other props) - exclude your component from the test below\n'
                 + 'and add correspondig tests in your component\'s test suite.';
-                assert.expect(meta.props.template.length * 3);
+                const templatesToCheck = meta.props.template.filter(templateName => {
+                    // skip template here if you don't want to test its compatibility
+                    return templateName !== 'iconTemplate';
+                });
+                assert.expect(templatesToCheck.length * 3);
 
-                const options = meta.props.template.reduce((r, template) => ({
+                const options = templatesToCheck.reduce((r, template) => ({
                     ...r,
                     [template]: sinon.spy()
                 }), {});
 
                 $('#component')[`dx${meta.name}`](options);
 
-                meta.props.template.forEach((template) => {
+                templatesToCheck.forEach((template) => {
                     const [data, index, element = index] = options[template].getCall(0).args;
 
                     assert.ok($('#component').has(element).length > 0, message);

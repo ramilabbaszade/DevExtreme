@@ -32,10 +32,6 @@
             result.chrome = version[0];
         }
 
-        if(/edge|trident/ig.test(ua)) {
-            result.msie = true;
-        }
-
         return result;
     })();
 
@@ -550,8 +546,6 @@
         };
     })();
 
-    const pointerEventsSupport = !!window.PointerEvent && UA.msie;
-
     const createEvent = function(type, options) {
         if(typeof window.PointerEvent === 'function') {
             return new PointerEvent(type, options);
@@ -780,6 +774,7 @@
             let event = $.extend($.Event(options.type), originalEvent(options), options);
 
             event[$.expando] = false;
+            event.isTrusted = false;
             event = $.event.fix(event);
 
             return event;
@@ -920,7 +915,7 @@
             down: function(x, y) {
                 _x = x || _x;
                 _y = y || _y;
-                pointerEventsSupport ? this.pointerDown() : this.touchStart();
+                this.touchStart();
                 this.mouseDown();
                 return this;
             },
@@ -929,14 +924,14 @@
                 if($.isArray(x)) {
                     this.move.apply(this, x);
                 } else {
-                    pointerEventsSupport ? this.pointerMove(x, y) : this.touchMove(x, y);
+                    this.touchMove(x, y);
                     this.mouseMove();
                 }
                 return this;
             },
 
             up: function() {
-                pointerEventsSupport ? this.pointerUp() : this.touchEnd();
+                this.touchEnd();
                 this.mouseUp();
                 this.click(true);
                 return this;

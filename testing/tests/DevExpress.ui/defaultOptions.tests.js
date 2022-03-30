@@ -37,10 +37,12 @@ const Widget = require('ui/widget/ui.widget');
 const Popup = require('ui/popup');
 const Popover = require('ui/popover');
 const RadioGroup = require('ui/radio_group');
+const Resizable = require('ui/resizable');
 const Scheduler = require('ui/scheduler/ui.scheduler');
 const Scrollable = require('ui/scroll_view/ui.scrollable');
 const ScrollView = require('ui/scroll_view');
 const SelectBox = require('ui/select_box');
+const SliderHandle = require('ui/slider/ui.slider_handle');
 const Tabs = require('ui/tabs');
 const TabPanel = require('ui/tab_panel');
 const TagBox = require('ui/tag_box');
@@ -163,19 +165,6 @@ testComponentDefaults(DateBox,
 );
 
 testComponentDefaults(DateBox,
-    { platform: 'android' },
-    { pickerType: 'rollers' },
-    function() {
-        this._origDevice = devices.real();
-        const deviceConfig = { platform: 'android', android: true, version: [4, 3] };
-        devices.real(deviceConfig);
-    },
-    function() {
-        devices.real(this._origDevice);
-    }
-);
-
-testComponentDefaults(DateBox,
     [
         { platform: 'generic', deviceType: 'desktop' },
     ],
@@ -192,14 +181,7 @@ testComponentDefaults(DateBox,
 
 testComponentDefaults(Box,
     {},
-    { _layoutStrategy: 'fallback' },
-    function() {
-        this._origMSIE = browser.msie;
-        browser.msie = true;
-    },
-    function() {
-        browser.msie = this._origMSIE;
-    }
+    { _layoutStrategy: 'flex' },
 );
 
 testComponentDefaults(ValidationMessage,
@@ -209,7 +191,7 @@ testComponentDefaults(ValidationMessage,
         shading: false,
         width: 'auto',
         height: 'auto',
-        closeOnOutsideClick: false,
+        hideOnOutsideClick: false,
         hideOnParentScroll: false,
         animation: null,
         visible: true,
@@ -234,14 +216,6 @@ testComponentDefaults(FakeDialogComponent,
     { width: 276 }
 );
 
-testComponentDefaults(FakeDialogComponent,
-    { platform: 'android' },
-    {
-        lWidth: '60%',
-        pWidth: '80%'
-    }
-);
-
 testComponentDefaults(DropDownMenu,
     {},
     {
@@ -259,7 +233,8 @@ testComponentDefaults(DropDownMenu,
 testComponentDefaults(TextEditor,
     {},
     {
-        stylingMode: 'filled'
+        stylingMode: 'filled',
+        labelMode: 'floating'
     },
     function() {
         this.origIsMaterial = themes.isMaterial;
@@ -475,7 +450,7 @@ testComponentDefaults(Lookup,
     {},
     {
         usePopover: false,
-        'dropDownOptions.closeOnOutsideClick': true,
+        'dropDownOptions.hideOnOutsideClick': true,
         searchEnabled: false,
         showCancelButton: false,
         'dropDownOptions.showTitle': false,
@@ -593,23 +568,6 @@ testComponentDefaults(Widget,
     }
 );
 
-testComponentDefaults(Widget,
-    {},
-    {
-        useResizeObserver: false
-    },
-    function() {
-        this.originalRealDevice = devices.real();
-        devices.real({
-            platform: 'android',
-            version: '4.4.4'
-        });
-    },
-    function() {
-        devices.real(this.originalRealDevice);
-    }
-);
-
 testComponentDefaults(Popover,
     {},
     {
@@ -638,6 +596,11 @@ testComponentDefaults(RadioGroup,
     { layout: 'horizontal' }
 );
 
+testComponentDefaults(Resizable,
+    { },
+    { keepAspectRatio: true }
+);
+
 testComponentDefaults(Gallery,
     {},
     {
@@ -649,29 +612,12 @@ testComponentDefaults(Gallery,
     }
 );
 
-if(!Scrollable.IS_RENOVATED_WIDGET) {
-    testComponentDefaults(Scrollable,
-        {},
-        {
-            useNative: false,
-            useSimulatedScrollbar: true
-        },
-        function() {
-            this._supportNativeScrolling = support.nativeScrolling;
-            support.nativeScrolling = false;
-        },
-        function() {
-            support.nativeScrolling = this._supportNativeScrolling;
-        }
-    );
-}
-
-
 testComponentDefaults(Scrollable,
     {},
     {
         useNative: false,
-        useSimulatedScrollbar: true
+        // NOTE: useSimulatedScrollbar setting value doesn't affect on simulated strategy
+        useSimulatedScrollbar: Scrollable.IS_RENOVATED_WIDGET ? false : true
     },
     function() {
         this._supportNativeScrolling = support.nativeScrolling;
@@ -1016,6 +962,18 @@ testComponentDefaults(SelectBox, {},
     }
 );
 
+testComponentDefaults(SliderHandle, {},
+    {
+        hoverStateEnabled: false,
+        value: 0,
+        tooltip: {
+            enabled: false,
+            position: 'top',
+            showMode: 'onHover'
+        }
+    }
+);
+
 testComponentDefaults(Tabs,
     { },
     {
@@ -1125,7 +1083,10 @@ testComponentDefaults(DataGrid,
     {
         showRowLines: true,
         showColumnLines: false,
-        editing: { useIcons: true }
+        editing: { useIcons: true },
+        selection: {
+            showCheckBoxesMode: 'always'
+        }
     },
     function() {
         this.origIsMaterial = themes.isMaterial;

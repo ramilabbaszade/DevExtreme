@@ -17,7 +17,7 @@ import { SCROLLABLE_SCROLLBARS_ALWAYSVISIBLE } from '../common/consts';
 
 import { getWindow, setWindow } from '../../../../core/utils/window';
 import { Widget } from '../../common/widget';
-import { ScrollableDirection } from '../common/types.d';
+import { ScrollableDirection } from '../common/types';
 import { ScrollViewProps } from '../common/scrollview_props';
 
 interface Mock extends jest.Mock {}
@@ -50,15 +50,14 @@ describe('ScrollView', () => {
       forceGeneratePockets: false,
       inertiaEnabled: true,
       needScrollViewContentWrapper: false,
-      needScrollViewLoadPanel: false,
       needRenderScrollbars: true,
       pullDownEnabled: false,
       pulledDownText: 'Release to refresh...',
       pullingDownText: 'Pull down to refresh...',
       reachBottomEnabled: false,
       reachBottomText: 'Loading...',
+      refreshStrategy: 'pullDown',
       refreshingText: 'Refreshing...',
-      rtlEnabled: false,
       scrollByContent: false,
       scrollByThumb: true,
       showScrollbar: 'onHover',
@@ -72,7 +71,6 @@ describe('ScrollView', () => {
   each([false, true]).describe('useNative: %o', (useNativeScrolling) => {
     it('should pass all necessary properties to the Widget', () => {
       const config = {
-        activeStateUnit: '.UIFeedback',
         useNative: useNativeScrolling,
         direction: 'vertical' as ScrollableDirection,
         width: '120px',
@@ -82,7 +80,7 @@ describe('ScrollView', () => {
         rtlEnabled: true,
         disabled: true,
         focusStateEnabled: false,
-        hoverStateEnabled: !useNativeScrolling,
+        hoverStateEnabled: false,
         tabIndex: 0,
         visible: true,
       };
@@ -95,6 +93,7 @@ describe('ScrollView', () => {
           ? 'dx-scrollable dx-scrollable-native dx-scrollable-native-generic dx-scrollable-vertical dx-scrollable-disabled dx-scrollview'
           : 'dx-scrollable dx-scrollable-simulated dx-scrollable-vertical dx-scrollable-disabled dx-scrollview',
         ...restProps,
+        disabled: !!useNative,
       });
     });
   });
@@ -112,6 +111,7 @@ describe('ScrollView', () => {
       { name: 'scrollTo', calledWith: ['arg1'] },
       { name: 'scrollBy', calledWith: ['arg1'] },
       { name: 'content', calledWith: [] },
+      { name: 'container', calledWith: [] },
       { name: 'updateHandler', calledWith: [] },
       { name: 'release', calledWith: [] },
       { name: 'startLoading', calledWith: [] },
@@ -229,7 +229,6 @@ describe('ScrollView', () => {
                 expect(rootClasses).toEqual(expect.not.stringMatching('dx-scrollable-scrollbars-hidden'));
                 expect(rootClasses).toEqual(expect.not.stringMatching('dx-scrollable-native'));
                 expect(rootClasses).toEqual(expect.stringMatching('dx-scrollable-simulated'));
-                expect(rootClasses).toEqual(expect.stringMatching('dx-visibility-change-handler'));
               }
             });
           });

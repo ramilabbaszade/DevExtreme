@@ -1,3 +1,4 @@
+import { setHeight, getHeight, setWidth, getWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import domAdapter from '../../core/dom_adapter';
 import eventsEngine from '../../events/core/events_engine';
@@ -64,7 +65,7 @@ const TrackerView = modules.View.inherit({
             const $element = that.element();
             if($element && $element.hasClass(that.addWidgetPrefix(TRACKER_CLASS))) {
                 $element.css({ top: position.top });
-                $element.height(position.height);
+                setHeight($element, position.height);
             }
         };
         this._tablePositionController.positionChanged.add(that._positionChanged);
@@ -102,7 +103,7 @@ const TrackerView = modules.View.inherit({
     },
 
     setHeight: function(value) {
-        this.element().height(value);
+        setHeight(this.element(), value);
     },
 
     dispose: function() {
@@ -133,9 +134,9 @@ const SeparatorView = modules.View.inherit({
         const $element = this.element();
         if($element) {
             if(isDefined(value)) {
-                $element.height(value);
+                setHeight($element, value);
             } else {
-                return $element.height();
+                return getHeight($element);
             }
         }
     },
@@ -144,9 +145,9 @@ const SeparatorView = modules.View.inherit({
         const $element = this.element();
         if($element) {
             if(isDefined(value)) {
-                $element.width(value);
+                setWidth($element, value);
             } else {
-                return $element.width();
+                return getWidth($element);
             }
         }
     }
@@ -168,7 +169,7 @@ const ColumnsSeparatorView = SeparatorView.inherit({
             $element = that.element();
             if($element) {
                 $element.css({ top: position.top });
-                $element.height(position.height);
+                setHeight($element, position.height);
             }
         };
         that._tablePositionController.positionChanged.add(that._positionChanged);
@@ -247,7 +248,7 @@ const ColumnsSeparatorView = SeparatorView.inherit({
     moveByX: function(outerX) {
         const $element = this.element();
         if($element) {
-            $element.css('left', outerX - this._parentElement().offset().left);
+            $element.css('left', outerX === null ? 0 : outerX - this._parentElement().offset().left);
             ///#DEBUG
             this._testPosX = outerX;
             ///#ENDDEBUG
@@ -453,8 +454,8 @@ const DraggingHeaderView = modules.View.inherit({
 
         that.element().css({
             textAlign: columnElement && columnElement.css('textAlign'),
-            height: columnElement && (isCommandColumn && columnElement.get(0).clientHeight || columnElement.height()),
-            width: columnElement && (isCommandColumn && columnElement.get(0).clientWidth || columnElement.width()),
+            height: columnElement && (isCommandColumn && columnElement.get(0).clientHeight || getHeight(columnElement)),
+            width: columnElement && (isCommandColumn && columnElement.get(0).clientWidth || getWidth(columnElement)),
             whiteSpace: columnElement && columnElement.css('whiteSpace')
         })
             .addClass(that.addWidgetPrefix(HEADERS_DRAG_ACTION_CLASS))
@@ -629,9 +630,10 @@ const ColumnsResizerViewController = modules.ViewController.inherit({
         const eventData = getEventData(e);
         const rtlEnabled = that.option('rtlEnabled');
         const isRtlParentStyle = this._isRtlParentStyle();
+        const isDragging = that._draggingHeaderView?.isDragging();
 
         if(that._isResizing && that._resizingInfo) {
-            if((parentOffsetLeft <= eventData.x || !isNextColumnMode && isRtlParentStyle) && (!isNextColumnMode || eventData.x <= parentOffsetLeft + that._$parentContainer.width())) {
+            if((parentOffsetLeft <= eventData.x || !isNextColumnMode && isRtlParentStyle) && (!isNextColumnMode || eventData.x <= parentOffsetLeft + getWidth(that._$parentContainer))) {
                 if(that._updateColumnsWidthIfNeeded(eventData.x)) {
                     const $cell = that._columnHeadersView.getColumnElements().eq(that._resizingInfo.currentColumnIndex);
                     const cell = $cell[0];
@@ -643,7 +645,7 @@ const ColumnsResizerViewController = modules.ViewController.inherit({
                     }
                 }
             }
-        } else {
+        } else if(!isDragging) {
             if(that._isHeadersRowArea(eventData.y)) {
                 if(that._previousParentOffset) {
                     if(that._previousParentOffset.left !== parentOffset.left || that._previousParentOffset.top !== parentOffset.top) {
@@ -663,11 +665,13 @@ const ColumnsResizerViewController = modules.ViewController.inherit({
                     e.preventDefault();
                 } else {
                     that._columnsSeparatorView.changeCursor();
+                    that._columnsSeparatorView.moveByX(null);
                 }
             } else {
                 that.pointsByColumns(null);
                 that._isReadyResizing = false;
                 that._columnsSeparatorView.changeCursor();
+                that._columnsSeparatorView.moveByX(null);
             }
         }
     },
@@ -744,7 +748,7 @@ const ColumnsResizerViewController = modules.ViewController.inherit({
             const scrollable = that.component.getScrollable();
 
             if(scrollable && that._isRtlParentStyle()) {
-                that._scrollRight = scrollable.$content().width() - $(scrollable.container()).width() - scrollable.scrollLeft();
+                that._scrollRight = getWidth(scrollable.$content()) - getWidth(scrollable.container()) - scrollable.scrollLeft();
             }
 
             e.preventDefault();
@@ -899,7 +903,7 @@ const ColumnsResizerViewController = modules.ViewController.inherit({
 
                 const scrollable = this.component.getScrollable();
                 if(scrollable && isRtlParentStyle) {
-                    const left = scrollable.$content().width() - $(scrollable.container()).width() - this._scrollRight;
+                    const left = getWidth(scrollable.$content()) - getWidth(scrollable.container()) - this._scrollRight;
                     scrollable.scrollTo({ left: left });
                 }
             }
@@ -952,6 +956,7 @@ const ColumnsResizerViewController = modules.ViewController.inherit({
         that._columnsController = that.getController('columns');
         that._tablePositionController = that.getController('tablePosition');
         that._$parentContainer = that.component.$element();
+        that._draggingHeaderView = that.component.getView('draggingHeaderView');
 
         that._subscribeToCallback(that._columnHeadersView.renderCompleted, generatePointsByColumnsHandler);
         that._subscribeToCallback(that._columnHeadersView.resizeCompleted, generatePointsByColumnsHandler);

@@ -1,15 +1,47 @@
 import { FilterDescriptor, GroupDescriptor, LoadOptions } from './index';
-import Store, { StoreOptions } from './abstract_store';
+import Store, { Options as StoreOptions } from './abstract_store';
+import { DxPromise } from '../core/utils/deferred';
 
-/** @namespace DevExpress.data */
-export interface CustomStoreOptions<TKey = any, TValue = any> extends StoreOptions<TKey, TValue> {
+/** @public */
+export type Options<
+    TItem = any,
+    TKey = any,
+> = CustomStoreOptions<TItem, TKey>;
+
+/** @public */
+export type GroupItem<
+    TItem = any,
+> = { key: any | string | number; items: Array<TItem> | Array<GroupItem> | null; count?: number; summary?: Array<any> };
+
+/** @public */
+export type ResolvedData<
+    TItem = any,
+> =
+  | Object
+  | Array<TItem>
+  | Array<GroupItem>
+  | {
+      data: Array<TItem> | Array<GroupItem>;
+      totalCount?: number;
+      summary?: Array<any>;
+      groupCount?: number;
+    };
+
+/**
+ * @namespace DevExpress.data
+ * @deprecated Use Options instead
+ */
+export interface CustomStoreOptions<
+    TItem = any,
+    TKey = any,
+> extends StoreOptions<TItem, TKey> {
     /**
      * @docid
      * @type_function_param1 key:object|string|number
      * @type_function_return Promise<any>
      * @public
      */
-    byKey?: ((key: TKey) => PromiseLike<TValue>);
+    byKey?: ((key: TKey) => PromiseLike<TItem>);
     /**
      * @docid
      * @default true
@@ -22,19 +54,21 @@ export interface CustomStoreOptions<TKey = any, TValue = any> extends StoreOptio
      * @type_function_return Promise<any>
      * @public
      */
-    insert?: ((values: TValue) => PromiseLike<TValue>);
+    insert?: ((values: TItem) => PromiseLike<TItem>);
     /**
      * @docid
      * @type_function_param1 options:LoadOptions
-     * @type_function_return Promise<any>|Array<any>
+     * @type_function_return Promise<Array<any>|object>|Array<any>
      * @public
      */
-    load?: ((options: LoadOptions<TValue>) => PromiseLike<TValue> | Array<TValue>);
+    load: ((options: LoadOptions<TItem>) =>
+      | DxPromise<ResolvedData<TItem>>
+      | PromiseLike<ResolvedData<TItem>>
+      | Array<GroupItem>
+      | Array<TItem>);
     /**
      * @docid
-     * @type string
      * @default 'processed'
-     * @acceptValues 'processed'|'raw'
      * @public
      */
     loadMode?: 'processed' | 'raw';
@@ -47,13 +81,12 @@ export interface CustomStoreOptions<TKey = any, TValue = any> extends StoreOptio
     remove?: ((key: TKey) => PromiseLike<void>);
     /**
      * @docid
-     * @type_function_param1 loadOptions:object
      * @type_function_param1_field1 filter:object
      * @type_function_param1_field2 group:object
      * @type_function_return Promise<number>
      * @public
      */
-    totalCount?: ((loadOptions: { filter?: FilterDescriptor | Array<FilterDescriptor>; group?: GroupDescriptor<TValue> | Array<GroupDescriptor<TValue>> }) => PromiseLike<number>);
+    totalCount?: ((loadOptions: { filter?: FilterDescriptor | Array<FilterDescriptor>; group?: GroupDescriptor<TItem> | Array<GroupDescriptor<TItem>> }) => PromiseLike<number>);
     /**
      * @docid
      * @type_function_param1 key:object|string|number
@@ -61,7 +94,7 @@ export interface CustomStoreOptions<TKey = any, TValue = any> extends StoreOptio
      * @type_function_return Promise<any>
      * @public
      */
-    update?: ((key: TKey, values: TValue) => PromiseLike<any>);
+    update?: ((key: TKey, values: TItem) => PromiseLike<any>);
     /**
      * @docid
      * @default undefined
@@ -72,12 +105,13 @@ export interface CustomStoreOptions<TKey = any, TValue = any> extends StoreOptio
 /**
  * @docid
  * @inherits Store
- * @module data/custom_store
- * @export default
  * @public
  */
-export default class CustomStore<TKey = any, TValue = any> extends Store<TKey, TValue> {
-    constructor(options?: CustomStoreOptions<TKey, TValue>)
+export default class CustomStore<
+    TItem = any,
+    TKey = any,
+> extends Store<TItem, TKey> {
+    constructor(options?: Options<TItem, TKey>)
     /**
      * @docid
      * @publicName clearRawDataCache()

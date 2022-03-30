@@ -94,24 +94,26 @@ describe('Model views', () => {
         tabIndex: 3,
         accessKey: undefined,
         focusStateEnabled: true,
+
+        dateCellTemplate: jest.fn(),
+        dataCellTemplate: jest.fn(),
+        timeCellTemplate: jest.fn(),
+        resourceCellTemplate: jest.fn(),
       } as any;
 
       const { height, width, ...viewProps } = schedulerProps;
 
-      expect(getCurrentViewConfig({ type: 'week' }, schedulerProps))
+      expect(getCurrentViewConfig({ type: 'week' }, schedulerProps, schedulerProps.currentDate))
         .toEqual({
           ...viewProps,
           hoursInterval: 0.25,
           type: 'week',
-          groups: [],
-          selectedCellData: [],
-          indicatorTime: expect.any(Date),
           intervalCount: undefined,
           startDate: undefined,
           groupOrientation: undefined,
           schedulerHeight: 500,
           schedulerWidth: 500,
-          allDayPanelExpanded: false,
+          allDayPanelExpanded: true,
           allowMultipleCellSelection: true,
         });
     });
@@ -136,6 +138,11 @@ describe('Model views', () => {
         tabIndex: 3,
         accessKey: undefined,
         focusStateEnabled: true,
+
+        dateCellTemplate: jest.fn(),
+        dataCellTemplate: jest.fn(),
+        timeCellTemplate: jest.fn(),
+        resourceCellTemplate: jest.fn(),
       } as any;
       const currentViewProps = {
         firstDayOfWeek: 1,
@@ -148,22 +155,24 @@ describe('Model views', () => {
         startDate: new Date(2021, 8, 10),
         type: 'month',
         scrolling: { mode: 'virtual' },
+
+        dateCellTemplate: jest.fn(),
+        dataCellTemplate: jest.fn(),
+        timeCellTemplate: jest.fn(),
+        resourceCellTemplate: jest.fn(),
       } as any;
 
       const { height, width, ...viewProps } = schedulerProps;
 
-      expect(getCurrentViewConfig(currentViewProps, schedulerProps))
+      expect(getCurrentViewConfig(currentViewProps, schedulerProps, schedulerProps.currentDate))
         .toEqual({
           ...viewProps,
           ...currentViewProps,
           hoursInterval: 5,
-          groups: [],
-          selectedCellData: [],
           schedulerHeight: 500,
           schedulerWidth: 500,
-          allDayPanelExpanded: false,
+          allDayPanelExpanded: true,
           allowMultipleCellSelection: true,
-          indicatorTime: expect.any(Date),
         });
     });
 
@@ -194,18 +203,15 @@ describe('Model views', () => {
 
       const { height, width, ...viewProps } = schedulerProps;
 
-      expect(getCurrentViewConfig(currentViewProps, schedulerProps))
+      expect(getCurrentViewConfig(currentViewProps, schedulerProps, schedulerProps.currentDate))
         .toEqual({
           ...viewProps,
           ...currentViewProps,
           hoursInterval: 0.25,
-          groups: [],
-          selectedCellData: [],
           schedulerHeight: 500,
           schedulerWidth: 500,
-          allDayPanelExpanded: false,
+          allDayPanelExpanded: true,
           allowMultipleCellSelection: true,
-          indicatorTime: expect.any(Date),
           crossScrollingEnabled: true,
         });
     });
@@ -226,10 +232,6 @@ describe('Model views', () => {
         height: 500,
         width: 500,
         scrolling: { mode: 'standard' },
-
-        tabIndex: 3,
-        accessKey: undefined,
-        focusStateEnabled: true,
       } as any;
       const currentViewProps = {
         type: 'month',
@@ -238,19 +240,80 @@ describe('Model views', () => {
 
       const { height, width, ...viewProps } = schedulerProps;
 
-      expect(getCurrentViewConfig(currentViewProps, schedulerProps))
+      expect(getCurrentViewConfig(currentViewProps, schedulerProps, schedulerProps.currentDate))
         .toEqual({
           ...viewProps,
           ...currentViewProps,
           hoursInterval: 0.25,
-          groups: [],
-          selectedCellData: [],
           schedulerHeight: 500,
           schedulerWidth: 500,
-          allDayPanelExpanded: false,
+          allDayPanelExpanded: true,
           allowMultipleCellSelection: true,
-          indicatorTime: expect.any(Date),
           crossScrollingEnabled: true,
+        });
+    });
+
+    it('return correct templates when some of them are null (in angular defulat templates are nulls)', () => {
+      const dataCellTemplate = () => null;
+      const dateCellTemplate = () => null;
+      const timeCellTemplate = () => null;
+      const resourceCellTemplate = () => null;
+      const appointmentTemplate = () => null;
+      const appointmentCollectorTemplate = () => null;
+      const appointmentTooltipTemplate = () => null;
+
+      const schedulerProps = {
+        firstDayOfWeek: 3,
+        startDayHour: 5,
+        endDayHour: 8,
+        cellDuration: 15,
+        groupByDate: true,
+        currentDate: new Date(2021, 8, 10),
+        showAllDayPanel: true,
+        showCurrentTimeIndicator: true,
+        indicatorUpdateInterval: 3000,
+        shadeUntilCurrentTime: true,
+        crossScrollingEnabled: false,
+        height: 500,
+        width: 500,
+        scrolling: { mode: 'standard' },
+        dataCellTemplate,
+        dateCellTemplate,
+        timeCellTemplate,
+        resourceCellTemplate,
+        appointmentTemplate,
+        appointmentCollectorTemplate,
+        appointmentTooltipTemplate,
+      } as any;
+      const currentViewProps = {
+        type: 'month',
+        dataCellTemplate: null,
+        dateCellTemplate: null,
+        timeCellTemplate: null,
+        resourceCellTemplate: null,
+        appointmentTemplate: null,
+        appointmentCollectorTemplate: null,
+        appointmentTooltipTemplate: null,
+      } as any;
+
+      const { height, width, ...viewProps } = schedulerProps;
+
+      expect(getCurrentViewConfig(currentViewProps, schedulerProps, schedulerProps.currentDate))
+        .toEqual({
+          ...viewProps,
+          ...currentViewProps,
+          hoursInterval: 0.25,
+          schedulerHeight: 500,
+          schedulerWidth: 500,
+          allDayPanelExpanded: true,
+          allowMultipleCellSelection: true,
+          dataCellTemplate,
+          dateCellTemplate,
+          timeCellTemplate,
+          resourceCellTemplate,
+          appointmentTemplate,
+          appointmentCollectorTemplate,
+          appointmentTooltipTemplate,
         });
     });
   });

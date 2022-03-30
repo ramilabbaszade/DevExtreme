@@ -1,3 +1,5 @@
+import DataSource, { DataSourceLike } from '../data/data_source';
+
 import {
     DxElement,
 } from '../core/element';
@@ -5,12 +7,6 @@ import {
 import {
     template,
 } from '../core/templates/template';
-
-import DataSource, {
-    DataSourceOptions,
-} from '../data/data_source';
-
-import Store from '../data/abstract_store';
 
 import {
   EventInfo,
@@ -471,8 +467,9 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
       /**
        * @docid
        * @default null
+       * @type Store|DataSource|DataSourceOptions|string|Array<any>
        */
-      dataSource?: Array<any> | Store | DataSource | DataSourceOptions;
+      dataSource?: DataSourceLike<any>;
       /**
        * @docid
        * @default "from"
@@ -578,6 +575,7 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
       items?: Array<number>;
       /**
        * @docid
+       * @fires dxDiagramOptions.onOptionChanged
        */
       value?: number;
     };
@@ -611,15 +609,15 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
       autoSizeEnabled?: boolean;
       /**
        * @docid
-       * @default "children"
+       * @default "containerKey"
        */
-      containerChildrenExpr?: string | ((data: any, value?: any) => any);
+      containerKeyExpr?: string | ((data: any, value?: any) => any);
       /**
        * @docid
        * @default undefined
        */
-      containerKeyExpr?: string | ((data: any, value?: any) => any);
-      /**
+       containerChildrenExpr?: string | ((data: any, value?: any) => any);
+       /**
        * @docid
        * @default undefined
        */
@@ -627,8 +625,9 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
       /**
        * @docid
        * @default null
+       * @type Store|DataSource|DataSourceOptions|string|Array<any>
        */
-      dataSource?: Array<any> | Store | DataSource | DataSourceOptions;
+      dataSource?: DataSourceLike<any>;
       /**
        * @docid
        * @default undefined
@@ -790,6 +789,7 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
     pageSize?: {
       /**
        * @docid
+       * @fires dxDiagramOptions.onOptionChanged
        */
       height?: number;
       /**
@@ -811,6 +811,7 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
       }>;
       /**
        * @docid
+       * @fires dxDiagramOptions.onOptionChanged
        */
       width?: number;
     };
@@ -874,6 +875,13 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
      * @public
      */
     simpleView?: boolean;
+    /**
+     * @docid
+     * @default true
+     * @default false &for(desktop except Mac)
+     * @public
+     */
+     useNativeScrolling?: boolean;
     /**
      * @docid
      * @default true
@@ -1020,6 +1028,7 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
       /**
        * @docid
        * @default undefined
+       * @fires dxDiagramOptions.onOptionChanged
        */
       value?: number;
     };
@@ -1027,8 +1036,6 @@ export interface dxDiagramOptions extends WidgetOptions<dxDiagram> {
 /**
  * @docid
  * @inherits Widget
- * @module ui/diagram
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -1036,21 +1043,18 @@ export default class dxDiagram extends Widget<dxDiagramOptions> {
     /**
      * @docid
      * @publicName getNodeDataSource()
-     * @return DataSource
      * @public
      */
     getNodeDataSource(): DataSource;
     /**
      * @docid
      * @publicName getEdgeDataSource()
-     * @return DataSource
      * @public
      */
     getEdgeDataSource(): DataSource;
     /**
      * @docid
      * @publicName getItemByKey(key)
-     * @param1 key:Object
      * @return dxDiagramItem
      * @public
      */
@@ -1094,7 +1098,6 @@ export default class dxDiagram extends Widget<dxDiagramOptions> {
     /**
      * @docid
      * @publicName export()
-     * @return string
      * @public
      */
     export(): string;
@@ -1102,14 +1105,12 @@ export default class dxDiagram extends Widget<dxDiagramOptions> {
      * @docid
      * @publicName exportTo(format, callback)
      * @param1 format:Enums.DiagramExportFormat
-     * @param2 callback:function
      * @public
      */
     exportTo(format: 'svg' | 'png' | 'jpg', callback: Function): void;
     /**
      * @docid
      * @publicName import(data, updateExistingItemsOnly)
-     * @param1 data:string
      * @param2 updateExistingItemsOnly?:boolean
      * @public
      */
@@ -1120,6 +1121,18 @@ export default class dxDiagram extends Widget<dxDiagramOptions> {
      * @public
      */
     updateToolbox(): void;
+    /**
+     * @docid
+     * @publicName fitToContent()
+     * @public
+     */
+     fitToContent(): void;
+    /**
+     * @docid
+     * @publicName fitToWidth()
+     * @public
+     */
+     fitToWidth(): void;
 }
 
 /**
@@ -1273,7 +1286,6 @@ export interface dxDiagramShape extends Item {
     containerId?: string;
     /**
      * @docid dxDiagramShape.containerChildItemIds
-     * @type Array<String>
      * @public
      */
     containerChildItemIds?: Array<String>;
@@ -1311,6 +1323,13 @@ export interface dxDiagramCustomCommand {
      * @public
      */
     items?: Array<dxDiagramCustomCommand>;
+    /**
+     * @docid
+     * @default "before"
+     * @type Enums.ToolbarItemLocation
+     * @public
+     */
+    location?: 'after' | 'before' | 'center';
 }
 
 /**
@@ -1595,6 +1614,3 @@ export type Properties = dxDiagramOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxDiagramOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxDiagramOptions;

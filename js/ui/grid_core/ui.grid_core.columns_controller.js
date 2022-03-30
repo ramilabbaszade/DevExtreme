@@ -494,7 +494,7 @@ export const columnsControllerModule = {
             };
 
             function checkUserStateColumn(column, userStateColumn) {
-                return column && userStateColumn && (userStateColumn.name === column.name || !column.name) && (userStateColumn.dataField === column.dataField || column.name);
+                return column && userStateColumn && (userStateColumn.name === (column.name || column.dataField)) && (userStateColumn.dataField === column.dataField || column.name);
             }
 
             const applyUserState = function(that) {
@@ -735,13 +735,6 @@ export const columnsControllerModule = {
                         that._checkColumns();
                     }
 
-                    fullOptionName && fireOptionChanged(that, {
-                        fullOptionName: fullOptionName,
-                        optionName: optionName,
-                        value: value,
-                        prevValue: prevValue
-                    });
-
                     if(!isDefined(prevValue) && !isDefined(value) && optionName.indexOf('buffer') !== 0) {
                         notFireEvent = true;
                     }
@@ -762,6 +755,13 @@ export const columnsControllerModule = {
                     } else {
                         resetColumnsCache(that);
                     }
+
+                    fullOptionName && fireOptionChanged(that, {
+                        fullOptionName: fullOptionName,
+                        optionName: optionName,
+                        value: value,
+                        prevValue: prevValue
+                    });
                 }
             };
 
@@ -1191,6 +1191,7 @@ export const columnsControllerModule = {
                             return that.updateColumns(dataSource, forceApplying);
                         } else {
                             that._dataSourceApplied = false;
+                            updateIndexes(that);
                         }
                     } else if(isDataSourceLoaded && !that.isAllDataTypesDefined(true) && that.updateColumnDataTypes(dataSource)) {
                         updateColumnChanges(that, 'columns');
@@ -1199,6 +1200,7 @@ export const columnsControllerModule = {
                     }
                 },
                 reset: function() {
+                    this._dataSource = null;
                     this._dataSourceApplied = false;
                     this._dataSourceColumnsCount = undefined;
                     this.reinit();
@@ -1403,6 +1405,7 @@ export const columnsControllerModule = {
                     const firstGroupColumn = expandColumns.filter((column) => column.groupIndex === 0)[0];
                     const isFixedFirstGroupColumn = firstGroupColumn && firstGroupColumn.fixed;
                     const isColumnFixing = this._isColumnFixing();
+                    const rtlEnabled = this.option('rtlEnabled');
 
                     if(expandColumns.length) {
                         expandColumn = this.columnOption('command:expand');
@@ -1415,6 +1418,7 @@ export const columnsControllerModule = {
                             cellTemplate: !isDefined(column.groupIndex) ? column.cellTemplate : null,
                             headerCellTemplate: null,
                             fixed: !isDefined(column.groupIndex) || !isFixedFirstGroupColumn ? isColumnFixing : true,
+                            fixedPosition: rtlEnabled ? 'right' : 'left',
                         }, expandColumn, {
                             index: column.index,
                             type: column.type || GROUP_COMMAND_COLUMN_NAME
@@ -1431,7 +1435,8 @@ export const columnsControllerModule = {
                         let isPlain = true;
 
                         columns.forEach(function(column) {
-                            let parentIndex = column.ownerBand;
+                            const ownerBand = column.ownerBand;
+                            let parentIndex = isObject(ownerBand) ? ownerBand.index : ownerBand;
                             const parent = columns[parentIndex];
 
                             if(column.hasColumns) {
@@ -1808,10 +1813,16 @@ export const columnsControllerModule = {
 
                     each(['calculateSortValue', 'calculateGroupValue', 'calculateDisplayValue'], function(_, calculateCallbackName) {
                         const calculateCallback = column[calculateCallbackName];
-                        if(isFunction(calculateCallback) && !calculateCallback.originalCallback) {
-                            column[calculateCallbackName] = function(data) { return calculateCallback.call(column, data); };
-                            column[calculateCallbackName].originalCallback = calculateCallback;
-                            column[calculateCallbackName].columnIndex = columnIndex;
+                        if(isFunction(calculateCallback)) {
+                            if(!calculateCallback.originalCallback) {
+                                const context = { column };
+                                column[calculateCallbackName] = function(data) { return calculateCallback.call(context.column, data); };
+                                column[calculateCallbackName].originalCallback = calculateCallback;
+                                column[calculateCallbackName].columnIndex = columnIndex;
+                                column[calculateCallbackName].context = context;
+                            } else {
+                                column[calculateCallbackName].context.column = column;
+                            }
                         }
                     });
 
@@ -1840,7 +1851,7 @@ export const columnsControllerModule = {
                             setFilterOperationsAsDefaultValues(column);
                         }
                         column.defaultFilterOperation = column.filterOperations && column.filterOperations[0] || '=';
-                        column.showEditorAlways = isDefined(column.showEditorAlways) ? column.showEditorAlways : (dataType === 'boolean' && !column.cellTemplate);
+                        column.showEditorAlways = isDefined(column.showEditorAlways) ? column.showEditorAlways : (dataType === 'boolean' && !column.cellTemplate && !column.lookup);
                     }
                 },
                 updateColumnDataTypes: function(dataSource) {
@@ -2015,6 +2026,9 @@ export const columnsControllerModule = {
                         const groupParameters = gridCoreUtils.normalizeSortingInfo(dataSource.group());
                         const columnsGroupParameters = that.getGroupDataSourceParameters();
                         const columnsSortParameters = that.getSortDataSourceParameters();
+                        const groupingChanged = !gridCoreUtils.equalSortParameters(groupParameters, columnsGroupParameters, true);
+                        const groupExpandingChanged = !groupingChanged && !gridCoreUtils.equalSortParameters(groupParameters, columnsGroupParameters);
+
                         if(!that._columns.length) {
                             each(groupParameters, function(index, group) {
                                 that._columns.push(group.selector);
@@ -2024,13 +2038,15 @@ export const columnsControllerModule = {
                             });
                             assignColumns(that, createColumnsFromOptions(that, that._columns));
                         }
-                        if((fromDataSource || (!columnsGroupParameters && !that._hasUserState)) && !gridCoreUtils.equalSortParameters(groupParameters, columnsGroupParameters)) {
+
+                        if((fromDataSource || (!columnsGroupParameters && !that._hasUserState)) && (groupingChanged || groupExpandingChanged)) {
                             ///#DEBUG
                             that.__groupingUpdated = true;
                             ///#ENDDEBUG
                             updateSortGroupParameterIndexes(that._columns, groupParameters, 'groupIndex');
                             if(fromDataSource) {
-                                updateColumnChanges(that, 'grouping');
+                                groupingChanged && updateColumnChanges(that, 'grouping');
+                                groupExpandingChanged && updateColumnChanges(that, 'groupExpanding');
                                 isColumnsChanged = true;
                             }
                         }
@@ -2218,11 +2234,7 @@ export const columnsControllerModule = {
                     return result;
                 },
                 setName: function(column) {
-                    const dataField = column.dataField;
-
-                    if(!isDefined(column.name) && isDefined(dataField)) {
-                        column.name = dataField;
-                    }
+                    column.name = column.name || column.dataField || column.type;
                 },
                 setUserState: function(state) {
                     const that = this;

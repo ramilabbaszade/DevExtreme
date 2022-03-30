@@ -2,8 +2,20 @@ import ArrayStore, {
     ArrayStoreOptions,
 } from './array_store';
 
-/** @namespace DevExpress.data */
-export interface LocalStoreOptions extends ArrayStoreOptions<LocalStore> {
+/** @public */
+export type Options<
+    TItem = any,
+    TKey = any,
+> = LocalStoreOptions<TItem, TKey>;
+
+/**
+ * @namespace DevExpress.data
+ * @deprecated Use Options instead
+ */
+export interface LocalStoreOptions<
+    TItem = any,
+    TKey = any,
+> extends ArrayStoreOptions<TItem, TKey> {
     /**
      * @docid
      * @default 10000
@@ -25,12 +37,13 @@ export interface LocalStoreOptions extends ArrayStoreOptions<LocalStore> {
 /**
  * @docid
  * @inherits ArrayStore
- * @module data/local_store
- * @export default
  * @public
  */
-export default class LocalStore extends ArrayStore {
-    constructor(options?: LocalStoreOptions)
+export default class LocalStore<
+    TItem = any,
+    TKey = any,
+> extends ArrayStore<TItem, TKey> {
+    constructor(options?: Options<TItem, TKey>)
     /**
      * @docid
      * @publicName clear()

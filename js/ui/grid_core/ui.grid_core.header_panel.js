@@ -3,7 +3,6 @@ import Toolbar from '../toolbar';
 import { ColumnsView } from './ui.grid_core.columns_view';
 import { noop } from '../../core/utils/common';
 import { isDefined, isString } from '../../core/utils/type';
-import { triggerResizeEvent } from '../../events/visibility_change';
 import messageLocalization from '../../localization/message';
 
 import '../drop_down_menu';
@@ -13,6 +12,8 @@ const HEADER_PANEL_CLASS = 'header-panel';
 const TOOLBAR_BUTTON_CLASS = 'toolbar-button';
 
 const TOOLBAR_ARIA_LABEL = '-ariaToolbar';
+
+const DEFAULT_TOOLBAR_ITEM_NAMES = ['addRowButton', 'applyFilterButton', 'columnChooserButton', 'exportButton', 'groupPanel', 'revertButton', 'saveButton', 'searchPanel'];
 
 const HeaderPanel = ColumnsView.inherit({
     _getToolbarItems: function() {
@@ -30,9 +31,13 @@ const HeaderPanel = ColumnsView.inherit({
     },
 
     _getToolbarOptions: function() {
+        const userToolbarOptions = this.option('toolbar');
+
         const options = {
             toolbarOptions: {
                 items: this._getToolbarItems(),
+                visible: userToolbarOptions?.visible,
+                disabled: userToolbarOptions?.disabled,
                 onItemRendered: function(e) {
                     const itemRenderedCallback = e.itemData.onItemRendered;
 
@@ -43,20 +48,30 @@ const HeaderPanel = ColumnsView.inherit({
             }
         };
 
-        const userItems = this.option('toolbar.items');
+        const userItems = userToolbarOptions?.items;
         options.toolbarOptions.items = this._normalizeToolbarItems(options.toolbarOptions.items, userItems);
 
         this.executeAction('onToolbarPreparing', options);
 
         if(options.toolbarOptions && !isDefined(options.toolbarOptions.visible)) {
             const toolbarItems = options.toolbarOptions.items;
-            options.toolbarOptions.visible = !!(toolbarItems && toolbarItems.length);
+            options.toolbarOptions.visible = !!(toolbarItems?.length);
         }
 
         return options.toolbarOptions;
     },
 
     _normalizeToolbarItems(defaultItems, userItems) {
+        defaultItems.forEach(button => {
+            if(!DEFAULT_TOOLBAR_ITEM_NAMES.includes(button.name)) {
+                throw new Error(`Default toolbar item '${button.name}' is not added to DEFAULT_TOOLBAR_ITEM_NAMES`);
+            }
+        });
+
+        const defaultProps = {
+            location: 'after',
+        };
+
         const isArray = Array.isArray(userItems);
 
         if(!isDefined(userItems)) {
@@ -72,17 +87,21 @@ const HeaderPanel = ColumnsView.inherit({
             defaultButtonsByNames[button.name] = button;
         });
 
-        const normalizedItems = extend(true, [], userItems.map(button => {
+        const normalizedItems = userItems.map(button => {
             if(isString(button)) {
                 button = { name: button };
             }
 
-            if(!isDefined(button.name) || !isDefined(defaultButtonsByNames[button.name])) {
-                return button;
+            if(isDefined(button.name)) {
+                if(isDefined(defaultButtonsByNames[button.name])) {
+                    button = extend(true, {}, defaultButtonsByNames[button.name], button);
+                } else if(DEFAULT_TOOLBAR_ITEM_NAMES.includes(button.name)) {
+                    button.visible = false;
+                }
             }
 
-            return extend(true, defaultButtonsByNames[button.name], button);
-        }));
+            return extend(true, {}, defaultProps, button);
+        });
 
         return isArray ? normalizedItems : normalizedItems[0];
     },
@@ -138,9 +157,7 @@ const HeaderPanel = ColumnsView.inherit({
     },
 
     updateToolbarDimensions: function() {
-        if(this._toolbar) {
-            triggerResizeEvent(this.getHeaderPanel());
-        }
+        this._toolbar?.updateDimensions();
     },
 
     getHeaderPanel: function() {
@@ -158,20 +175,32 @@ const HeaderPanel = ColumnsView.inherit({
             args.handled = true;
         }
         if(args.name === 'toolbar') {
-            const parts = getPathParts(args.fullName);
-            const optionName = args.fullName.replace(/^toolbar\./, '');
+            args.handled = true;
+            if(this._toolbar) {
+                const parts = getPathParts(args.fullName);
+                const optionName = args.fullName.replace(/^toolbar\./, '');
 
-            if(parts.length <= 2) {
-                // toolbar and toolbar.items case
-                const toolbarOptions = this._getToolbarOptions();
-                this._toolbar.option(toolbarOptions);
-            } else if(parts.length === 3) {
-                // toolbar.items[i] case
-                const normalizedItem = this._normalizeToolbarItems(this._getToolbarItems(), args.value);
-                this._toolbar.option(optionName, normalizedItem);
-            } else if(parts.length >= 4) {
-                // toolbar.items[i].prop case
-                this._toolbar.option(optionName, args.value);
+                if(parts.length === 1) {
+                    // `toolbar` case
+                    const toolbarOptions = this._getToolbarOptions();
+                    this._toolbar.option(toolbarOptions);
+                } else if(parts[1] === 'items') {
+                    if(parts.length === 2) {
+                        // `toolbar.items` case
+                        const toolbarOptions = this._getToolbarOptions();
+                        this._toolbar.option('items', toolbarOptions.items);
+                    } else if(parts.length === 3) {
+                        // `toolbar.items[i]` case
+                        const normalizedItem = this._normalizeToolbarItems(this._getToolbarItems(), args.value);
+                        this._toolbar.option(optionName, normalizedItem);
+                    } else if(parts.length >= 4) {
+                        // `toolbar.items[i].prop` case
+                        this._toolbar.option(optionName, args.value);
+                    }
+                } else {
+                    // `toolbar.visible`, `toolbar.disabled` case
+                    this._toolbar.option(optionName, args.value);
+                }
             }
         }
         this.callBase(args);
