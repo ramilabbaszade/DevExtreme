@@ -1,12 +1,34 @@
 import {
- FilterDescriptor, GroupDescriptor, SelectDescriptor, SortDescriptor, LoadOptions, SearchOperation,
+ FilterDescriptor,
+ GroupDescriptor,
+ LoadOptions,
+ SearchOperation,
+ SelectDescriptor,
+ SortDescriptor,
+ Store,
+ StoreOptions,
 } from './index';
-import { DxPromise } from '../core/utils/deferred';
-import Store, { StoreOptions } from './abstract_store';
-import { CustomStoreOptions } from './custom_store';
+import { DxExtendedPromise } from '../core/utils/deferred';
+import { Options as CustomStoreOptions } from './custom_store';
 
-/** @namespace DevExpress.data */
-export interface DataSourceOptions<TKey = any, TSourceValue = any, TValue = TSourceValue, TMappedValue = TValue> {
+/** @public */
+export type Options<
+    TStoreItem = any,
+    TMappedItem = TStoreItem,
+    TItem = TMappedItem,
+    TKey = any,
+> = DataSourceOptions<TStoreItem, TItem, TMappedItem, TKey>;
+
+/**
+ * @namespace DevExpress.data
+ * @deprecated Use Options instead
+ */
+export interface DataSourceOptions<
+    TStoreItem = any,
+    TMappedItem = TStoreItem,
+    TItem = TMappedItem,
+    TKey = any,
+> {
     /**
      * @docid
      * @public
@@ -28,14 +50,14 @@ export interface DataSourceOptions<TKey = any, TSourceValue = any, TValue = TSou
      * @type Group expression
      * @public
      */
-    group?: GroupDescriptor<TValue> | Array<GroupDescriptor<TValue>>;
+    group?: GroupDescriptor<TItem> | Array<GroupDescriptor<TItem>>;
     /**
      * @docid
      * @type_function_param1 dataItem:object
      * @type_function_return object
      * @public
      */
-    map?: ((dataItem: TSourceValue) => TMappedValue);
+    map?: ((dataItem: TStoreItem) => TMappedItem);
     /**
      * @docid
      * @type_function_param1 e:Object
@@ -43,18 +65,16 @@ export interface DataSourceOptions<TKey = any, TSourceValue = any, TValue = TSou
      * @action
      * @public
      */
-    onChanged?: ((e: { readonly changes?: Array<TMappedValue> }) => void);
+    onChanged?: ((e: { readonly changes?: Array<TMappedItem> }) => void);
     /**
      * @docid
      * @type_function_param1 error:Object
-     * @type_function_param1_field1 message:string
      * @action
      * @public
      */
     onLoadError?: ((error: { readonly message?: string }) => void);
     /**
      * @docid
-     * @type_function_param1 isLoading:boolean
      * @action
      * @public
      */
@@ -77,7 +97,7 @@ export interface DataSourceOptions<TKey = any, TSourceValue = any, TValue = TSou
      * @type_function_return Array<any>
      * @public
      */
-    postProcess?: ((data: Array<TMappedValue>) => Array<TValue>);
+    postProcess?: ((data: Array<TMappedItem>) => Array<TItem>);
     /**
      * @docid
      * @default undefined
@@ -118,35 +138,35 @@ export interface DataSourceOptions<TKey = any, TSourceValue = any, TValue = TSou
      * @type Select expression
      * @public
      */
-    select?: SelectDescriptor<TValue> | Array<SelectDescriptor<TValue>>;
+    select?: SelectDescriptor<TItem>;
     /**
      * @docid
      * @type Sort expression
      * @public
      */
-    sort?: SortDescriptor<TValue> | Array<SortDescriptor<TValue>>;
+    sort?: SortDescriptor<TItem> | Array<SortDescriptor<TItem>>;
     /**
      * @docid
      * @public
      * @type Store|StoreOptions|Array<any>
      */
-    store?: Store<TKey, TSourceValue> | StoreOptions<TKey, TSourceValue> | Array<TSourceValue>;
+    store?: Array<TStoreItem> | Store<TStoreItem, TKey> | StoreOptions<TStoreItem, TKey>;
 }
 /**
  * @docid
- * @module data/data_source
- * @export default
  * @public
  */
-export default class DataSource<TKey = any, TValue = any> {
-    constructor(data: Array<TValue>);
-    constructor(options: CustomStoreOptions<TKey, TValue> | DataSourceOptions<TKey, any, TValue, any>);
-    constructor(store: Store<TKey, TValue>);
+export default class DataSource<
+    TItem = any,
+    TKey = any,
+> {
+    constructor(data: Array<TItem>);
+    constructor(options: CustomStoreOptions<TItem, TKey> | Options<any, any, TItem, TKey>);
+    constructor(store: Store<TItem, TKey>);
     constructor(url: string);
     /**
      * @docid
      * @publicName cancel(operationId)
-     * @return boolean
      * @public
      */
     cancel(operationId: number): boolean;
@@ -176,46 +196,41 @@ export default class DataSource<TKey = any, TValue = any> {
      * @return object
      * @public
      */
-    group(): GroupDescriptor<TValue> | Array<GroupDescriptor<TValue>>;
+    group(): GroupDescriptor<TItem> | Array<GroupDescriptor<TItem>>;
     /**
      * @docid
      * @publicName group(groupExpr)
      * @param1 groupExpr:object
      * @public
      */
-    group(groupExpr: GroupDescriptor<TValue> | Array<GroupDescriptor<TValue>>): void;
+    group(groupExpr: GroupDescriptor<TItem> | Array<GroupDescriptor<TItem>>): void;
     /**
      * @docid
      * @publicName isLastPage()
-     * @return boolean
      * @public
      */
     isLastPage(): boolean;
     /**
      * @docid
      * @publicName isLoaded()
-     * @return boolean
      * @public
      */
     isLoaded(): boolean;
     /**
      * @docid
      * @publicName isLoading()
-     * @return boolean
      * @public
      */
     isLoading(): boolean;
     /**
      * @docid
      * @publicName items()
-     * @return Array<any>
      * @public
      */
     items(): Array<any>;
     /**
      * @docid
      * @publicName key()
-     * @return object|string|number
      * @public
      */
     key(): string | Array<string>;
@@ -225,14 +240,14 @@ export default class DataSource<TKey = any, TValue = any> {
      * @return Promise<any>
      * @public
      */
-    load(): DxPromise<any>;
+    load(): DxExtendedPromise<any>;
     /**
      * @docid
      * @publicName loadOptions()
      * @return object
      * @public
      */
-    loadOptions(): LoadOptions<TValue>;
+    loadOptions(): LoadOptions<TItem>;
     /**
      * @docid
      * @publicName off(eventName)
@@ -245,7 +260,6 @@ export default class DataSource<TKey = any, TValue = any> {
      * @docid
      * @publicName off(eventName, eventHandler)
      * @param1 eventName:string
-     * @param2 eventHandler:function
      * @return this
      * @public
      */
@@ -254,7 +268,6 @@ export default class DataSource<TKey = any, TValue = any> {
      * @docid
      * @publicName on(eventName, eventHandler)
      * @param1 eventName:string
-     * @param2 eventHandler:function
      * @return this
      * @public
      */
@@ -315,18 +328,16 @@ export default class DataSource<TKey = any, TValue = any> {
      * @return Promise<any>
      * @public
      */
-    reload(): DxPromise<any>;
+    reload(): DxExtendedPromise<any>;
     /**
      * @docid
      * @publicName requireTotalCount()
-     * @return boolean
      * @public
      */
     requireTotalCount(): boolean;
     /**
      * @docid
      * @publicName requireTotalCount(value)
-     * @param1 value:boolean
      * @public
      */
     requireTotalCount(value: boolean): void;
@@ -347,28 +358,24 @@ export default class DataSource<TKey = any, TValue = any> {
     /**
      * @docid
      * @publicName searchOperation()
-     * @return string
      * @public
      */
     searchOperation(): string;
     /**
      * @docid
      * @publicName searchOperation(op)
-     * @param1 op:string
      * @public
      */
     searchOperation(op: string): void;
     /**
      * @docid
      * @publicName searchValue()
-     * @return any
      * @public
      */
     searchValue(): any;
     /**
      * @docid
      * @publicName searchValue(value)
-     * @param1 value:any
      * @public
      */
     searchValue(value: any): void;
@@ -378,35 +385,35 @@ export default class DataSource<TKey = any, TValue = any> {
      * @return any
      * @public
      */
-    select(): SelectDescriptor<TValue> | Array<SelectDescriptor<TValue>>;
+    select(): SelectDescriptor<TItem>;
     /**
      * @docid
      * @publicName select(expr)
      * @param1 expr:any
      * @public
      */
-    select(expr: SelectDescriptor<TValue> | Array<SelectDescriptor<TValue>>): void;
+    select(expr: SelectDescriptor<TItem>): void;
     /**
      * @docid
      * @publicName sort()
      * @return any
      * @public
      */
-    sort(): SortDescriptor<TValue> | Array<SortDescriptor<TValue>>;
+    sort(): SortDescriptor<TItem> | Array<SortDescriptor<TItem>>;
     /**
      * @docid
      * @publicName sort(sortExpr)
      * @param1 sortExpr:any
      * @public
      */
-    sort(sortExpr: SortDescriptor<TValue> | Array<SortDescriptor<TValue>>): void;
+    sort(sortExpr: SortDescriptor<TItem> | Array<SortDescriptor<TItem>>): void;
     /**
      * @docid
      * @publicName store()
      * @return object
      * @public
      */
-    store(): Store<TKey, TValue> | StoreOptions<TKey, TValue> | Array<TValue>;
+    store(): Store<TItem, TKey>;
     /**
      * @docid
      * @publicName totalCount()
@@ -414,6 +421,44 @@ export default class DataSource<TKey = any, TValue = any> {
      * @public
      */
     totalCount(): number;
+}
+
+/**
+ * @docid
+ * @type Store|DataSource|DataSourceOptions|string|Array<any>
+ * */
+export type DataSourceLike<TItem, TKey = any> =
+    string |
+    Array<TItem> |
+    Store<TItem, TKey> |
+    DataSourceOptionsStub<any, any, TItem> |
+    DataSource<TItem, TKey>;
+
+interface DataSourceOptionsStub<
+    TStoreItem = any,
+    TMappedItem = TStoreItem,
+    TItem = TMappedItem,
+> {
+    customQueryParams?: any;
+    expand?: Array<string> | string;
+    filter?: FilterDescriptor | Array<FilterDescriptor>;
+    group?: GroupDescriptor<TItem> | Array<GroupDescriptor<TItem>>;
+    map?: ((dataItem: TStoreItem) => TMappedItem);
+    onChanged?: ((e: { readonly changes?: Array<TMappedItem> }) => void);
+    onLoadError?: ((error: { readonly message?: string }) => void);
+    onLoadingChanged?: ((isLoading: boolean) => void);
+    pageSize?: number;
+    paginate?: boolean;
+    postProcess?: ((data: Array<TMappedItem>) => Array<TItem>);
+    pushAggregationTimeout?: number;
+    requireTotalCount?: boolean;
+    reshapeOnPush?: boolean;
+    searchExpr?: string | Function | Array<string | Function>;
+    searchOperation?: SearchOperation;
+    searchValue?: any;
+    select?: SelectDescriptor<TItem>;
+    sort?: SortDescriptor<TItem> | Array<SortDescriptor<TItem>>;
+    store?: Array<TStoreItem> | Store<TStoreItem, any> | StoreOptions<TStoreItem, any>;
 }
 
 type EventName = 'changed' | 'loadError' | 'loadingChanged';

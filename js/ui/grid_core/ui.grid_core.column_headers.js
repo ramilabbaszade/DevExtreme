@@ -1,3 +1,4 @@
+import { getHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import { ColumnsView } from './ui.grid_core.columns_view';
@@ -164,7 +165,9 @@ export const columnHeadersModule = {
                 },
 
                 _createRow: function(row) {
-                    const $row = this.callBase(row).toggleClass(COLUMN_LINES_CLASS, this.option('showColumnLines'));
+                    const $row = this.callBase.apply(this, arguments);
+
+                    $row.toggleClass(COLUMN_LINES_CLASS, this.option('showColumnLines'));
 
                     if(row.rowType === 'header') {
                         $row.addClass(HEADER_ROW_CLASS);
@@ -271,8 +274,10 @@ export const columnHeadersModule = {
                     const changeTypes = e.changeTypes;
                     const optionNames = e.optionNames;
 
-                    if(changeTypes.grouping) {
-                        this._isGroupingChanged = true;
+                    if(changeTypes.grouping || changeTypes.groupExpanding) {
+                        if(changeTypes.grouping) {
+                            this._isGroupingChanged = true;
+                        }
                         return;
                     }
 
@@ -337,7 +342,7 @@ export const columnHeadersModule = {
                     const $headerRows = $tableElement && $tableElement.find('.' + HEADER_ROW_CLASS);
 
                     return $headerRows && $headerRows.toArray().reduce(function(sum, headerRow) {
-                        return sum + $(headerRow).height();
+                        return sum + getHeight(headerRow);
                     }, 0) || 0;
                 },
 

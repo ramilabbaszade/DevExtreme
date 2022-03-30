@@ -32,10 +32,10 @@ import $ from 'jquery';
 import commonUtils from 'core/utils/common';
 import devices from 'core/devices';
 import browser from 'core/utils/browser';
-import getScrollRtlBehavior from 'core/utils/scroll_rtl_behavior';
 import pointerEvents from 'events/pointer';
 import DataGridWrapper from '../../helpers/wrappers/dataGridWrappers.js';
 import { createDataGrid, baseModuleConfig } from '../../helpers/dataGridHelper.js';
+import { getHeight, getWidth } from 'core/utils/size';
 
 const dataGridWrapper = new DataGridWrapper('#dataGrid');
 
@@ -47,8 +47,6 @@ if('chrome' in window && devices.real().deviceType !== 'desktop') {
 
 QUnit.module('Scrolling', baseModuleConfig, () => {
     [true, false].forEach(nativeScrolling => {
-        const isRtlNegative = nativeScrolling && !(getScrollRtlBehavior().positive && getScrollRtlBehavior().decreasing);
-
         QUnit.test(`Correct start scroll position when RTL with nativeScrolling: ${nativeScrolling}`, function(assert) {
             // arrange, act
             const dataGrid = createDataGrid({
@@ -70,7 +68,7 @@ QUnit.module('Scrolling', baseModuleConfig, () => {
 
             // assert
             assert.equal(scrollLeft, 0);
-            assert.equal($headerScrollContainer.scrollLeft(), isRtlNegative ? 0 : 100);
+            assert.equal($headerScrollContainer.scrollLeft(), nativeScrolling ? 0 : 100);
         });
 
         QUnit.test(`Correct start scroll position when RTL with vertical scrollbar and nativeScrolling: ${nativeScrolling}`, function(assert) {
@@ -101,7 +99,7 @@ QUnit.module('Scrolling', baseModuleConfig, () => {
 
             // assert
             assert.equal(scrollLeft, 0);
-            assert.equal($headerScrollContainer.scrollLeft(), isRtlNegative ? 0 : 100);
+            assert.equal($headerScrollContainer.scrollLeft(), nativeScrolling ? 0 : 100);
         });
 
         QUnit.test(`Correct scroll position after resizing when RTL with vertical scrollbar and nativeScrolling: ${nativeScrolling}`, function(assert) {
@@ -152,7 +150,7 @@ QUnit.module('Scrolling', baseModuleConfig, () => {
             assert.equal(scrollable.scrollLeft(), $scrollableContainer.get(0).scrollWidth - $scrollableContainer.get(0).clientWidth, 'scrollable');
 
             const $headerScrollContainer = dataGrid.$element().find('.dx-datagrid-headers .dx-datagrid-scroll-container');
-            assert.equal($headerScrollContainer.scrollLeft(), isRtlNegative ? 0 : 100, 'headers');
+            assert.equal($headerScrollContainer.scrollLeft(), nativeScrolling ? 0 : 100, 'headers');
         });
     });
 
@@ -883,7 +881,7 @@ QUnit.module('Scrolling', baseModuleConfig, () => {
         const content = dataGrid.$element().find('.dx-datagrid-rowsview .dx-datagrid-content')[0];
         const scrollbarWidth = dataGrid.getView('rowsView').getScrollbarWidth(true);
 
-        assert.roughEqual(scrollable.$element().height() - content.clientHeight, scrollbarWidth, 1.1, 'Content height is correct');
+        assert.roughEqual(getHeight(scrollable.$element()) - content.clientHeight, scrollbarWidth, 1.1, 'Content height is correct');
     });
 
     // T628787
@@ -1054,7 +1052,7 @@ QUnit.module('Scrolling', baseModuleConfig, () => {
 
         // assert
         const scrollable = dataGrid.getScrollable();
-        assert.roughEqual(scrollable.$content().width(), $(scrollable.container()).width(), 0.01, 'no scrollbar');
+        assert.roughEqual(getWidth(scrollable.$content()), getWidth(scrollable.container()), 0.01, 'no scrollbar');
     });
 
     QUnit.test('The scroll position should be updated after resizing column', function(assert) {
@@ -1165,5 +1163,220 @@ QUnit.module('Scrolling', baseModuleConfig, () => {
 
         // assert
         assert.strictEqual(parseFloat($(dataGrid.getView('columnHeadersView').element()).css('paddingRight')), dataGrid.getView('rowsView').getScrollbarWidth(), 'padding-right');
+    });
+
+    QUnit.test('New mode. Rows should be scrolled properly when rowRenderingMode is virtual', function(assert) {
+        // arrange
+        const getData = function() {
+            const items = [];
+            for(let i = 0; i < 40; i++) {
+                items.push({
+                    id: i + 1,
+                    name: `Name ${i + 1}`
+                });
+            }
+            return items;
+        };
+        const dataGrid = createDataGrid({
+            dataSource: getData(),
+            keyExpr: 'id',
+            showBorders: true,
+            scrolling: {
+                rowRenderingMode: 'virtual',
+                useNative: false
+            },
+            paging: {
+                pageSize: 20,
+            },
+            height: 400,
+            pager: {
+                visible: true
+            },
+        });
+
+        this.clock.tick();
+        let visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 16, 'visible row count on the first page');
+        assert.equal(visibleRows[0].key, 1, 'first visible row key on the first page');
+        assert.equal(visibleRows[15].key, 16, 'last visible row key on the first page');
+
+        // act
+        dataGrid.getScrollable().scrollTo({ top: 375 });
+        this.clock.tick();
+        visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 10, 'visible row count on the first page after srolling');
+        assert.equal(visibleRows[0].key, 11, 'first visible row key on the first page after srolling');
+        assert.equal(visibleRows[9].key, 20, 'last visible row key on the first page after srolling');
+
+        // act
+        $(dataGrid.element()).find('.dx-pager .dx-page:eq(1)').trigger('dxclick');
+        this.clock.tick(300);
+        visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 10, 'visible row count on the second page');
+        assert.equal(visibleRows[0].key, 21, 'first visible row key on the second page');
+        assert.equal(visibleRows[9].key, 30, 'last visible row key on the second page');
+
+        // act
+        dataGrid.getScrollable().scrollTo({ top: 375 });
+        this.clock.tick();
+        visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 10, 'visible row count on the second page after srolling');
+        assert.equal(visibleRows[0].key, 31, 'first visible row key on the second page after srolling');
+        assert.equal(visibleRows[9].key, 40, 'last visible row key on the second page after srolling');
+    });
+
+    QUnit.test('New mode. Rows should be scrolled properly when rowRenderingMode is virtual with pageSize == all', function(assert) {
+        // arrange
+        const getData = function() {
+            const items = [];
+            for(let i = 0; i < 100; i++) {
+                items.push({
+                    id: i + 1,
+                    name: `Name ${i + 1}`
+                });
+            }
+            return items;
+        };
+        const dataGrid = createDataGrid({
+            dataSource: getData(),
+            keyExpr: 'id',
+            showBorders: true,
+            scrolling: {
+                rowRenderingMode: 'virtual',
+                useNative: false
+            },
+            paging: {
+                pageSize: 0,
+            },
+            height: 400,
+            pager: {
+                visible: true
+            },
+        });
+
+        this.clock.tick();
+        let visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 16, 'visible row count on the first page');
+        assert.equal(visibleRows[0].key, 1, 'first visible row key on the first page');
+        assert.equal(visibleRows[15].key, 16, 'last visible row key on the first page');
+
+        // act (scroll down to the middle)
+        dataGrid.getScrollable().scrollTo({ top: 1500 });
+        this.clock.tick();
+        visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 13, 'visible row count on the first page after srolling down to middle');
+        assert.equal(visibleRows[0].key, 45, 'first visible row key on the first page after srolling down to middle');
+        assert.equal(visibleRows[12].key, 57, 'last visible row key on the first page after srolling down to middle');
+
+        // act (scroll down to the bottom)
+        dataGrid.getScrollable().scrollTo({ top: 3050 });
+        this.clock.tick();
+        visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 11, 'visible row count on the second page after srolling down to bottom');
+        assert.equal(visibleRows[0].key, 90, 'first visible row key on the second page after srolling down to bottom');
+        assert.equal(visibleRows[10].key, 100, 'last visible row key on the second page after srolling down to bottom');
+
+        // act (scroll up to the middle)
+        dataGrid.getScrollable().scrollTo({ top: 1500 });
+        this.clock.tick();
+        visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 13, 'visible row count on the first page after srolling up to middle');
+        assert.equal(visibleRows[0].key, 44, 'first visible row key on the first page after srolling up to middle');
+        assert.equal(visibleRows[12].key, 56, 'last visible row key on the first page after srolling up to middle');
+
+        // act (scroll up to the top)
+        dataGrid.getScrollable().scrollTo({ top: 0 });
+        this.clock.tick();
+        visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 11, 'visible row count on the first page after srolling up to top');
+        assert.equal(visibleRows[0].key, 1, 'first visible row key on the first page after srolling up to top');
+        assert.equal(visibleRows[10].key, 11, 'last visible row key on the first page after srolling up to top');
+    });
+
+    QUnit.test('New mode. No data text should not be shown when rowRenderingMode is virtual and max height (T1054920)', function(assert) {
+        // arrange
+        const getData = function() {
+            const items = [];
+            for(let i = 0; i < 100; i++) {
+                items.push({
+                    id: i + 1,
+                    name: `Name ${i + 1}`
+                });
+            }
+            return items;
+        };
+
+        $('#dataGrid').css('max-height', '600px');
+        const dataGrid = createDataGrid({
+            dataSource: getData(),
+            keyExpr: 'id',
+            showBorders: true,
+            remoteOperations: true,
+            scrolling: {
+                rowRenderingMode: 'virtual',
+                useNative: false
+            },
+            paging: {
+                pageSize: 10,
+            },
+            pager: {
+                visible: true,
+                allowedPageSizes: [10, 'all'],
+                showPageSizeSelector: true
+            },
+        });
+        this.clock.tick(300);
+        let visibleRows = dataGrid.getVisibleRows();
+
+        // assert
+        assert.equal(visibleRows.length, 10, 'visible row count on the first page');
+
+        // act (pageSize all)
+        $(dataGrid.element()).find('.dx-pager .dx-page-sizes .dx-page-size:eq(1)').trigger('dxclick');
+        this.clock.tick(300);
+        visibleRows = dataGrid.getVisibleRows();
+        let $virtualRowElement = $(dataGrid.element()).find('.dx-virtual-row');
+
+        // assert
+        assert.ok(visibleRows.length > 0, 'visible row count when all rows are enabled');
+        assert.notOk(dataGridWrapper.rowsView.isElementIntersectViewport($virtualRowElement), 'virtual row is rendered outside viewport');
+
+        // act (scroll down)
+        dataGrid.getScrollable().scrollTo({ top: 2000 });
+        this.clock.tick(300);
+        visibleRows = dataGrid.getVisibleRows();
+        $virtualRowElement = $(dataGrid.element()).find('.dx-virtual-row');
+
+        // assert
+        assert.equal(visibleRows.length, 18, 'visible row count after scroll');
+        assert.notOk(dataGridWrapper.rowsView.isElementIntersectViewport($virtualRowElement), 'virtual row is rendered outside viewport');
+
+        // act (pageSize 10)
+        $(dataGrid.element()).find('.dx-pager .dx-page-sizes .dx-page-size:eq(0)').trigger('dxclick');
+        this.clock.tick();
+        const $noDataElement = $(dataGrid.element()).find('.dx-datagrid-nodata');
+
+        // assert
+        assert.ok(!$noDataElement.is(':visible'), 'No data element is hidden');
+
+        $('#dataGrid').css('max-height', '');
     });
 });

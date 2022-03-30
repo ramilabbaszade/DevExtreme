@@ -13,6 +13,11 @@ import 'ui/data_grid';
 
 const TEN_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
+const rowsViewMock = {
+    getTopVisibleItemIndex: () => 0,
+    _getCellElement: () => {}
+};
+
 const createDataSource = function(data, storeOptions, dataSourceOptions) {
     const arrayStore = new ArrayStore(storeOptions ? $.extend(true, { data: data }, storeOptions) : data);
     const dataSource = new DataSource($.extend(true, { store: arrayStore, requireTotalCount: true, _preferSync: true }, dataSourceOptions));
@@ -194,6 +199,64 @@ QUnit.module('Initialization', { beforeEach: setupModule, afterEach: teardownMod
         assert.equal(lastArgs.items.length, 2);
         assert.ok(lastArgs.items[0].data);
         assert.ok(lastArgs.items[0].values);
+    });
+
+    QUnit.test('The pushed callback on initialize', function(assert) {
+        // arrange
+        const pushedSpy = sinon.spy();
+        const array = [
+            { id: 0, name: 'Alex', phone: '55-55-55' },
+            { id: 1, name: 'Dan', phone: '98-75-21' }
+        ];
+        const dataSource = createDataSource(array, { key: 'id' });
+
+        this.dataController.pushed.add(pushedSpy);
+
+        // assert
+        assert.strictEqual(pushedSpy.callCount, 0, 'the pushed callback was not called');
+
+        this.dataController.setDataSource(dataSource);
+        dataSource.load();
+
+        // act
+        dataSource.store().push([{ type: 'remove', key: 1 }]);
+        this.clock.tick();
+
+        // assert
+        assert.strictEqual(pushedSpy.callCount, 1, 'the pushed callback was called only once');
+        assert.deepEqual(pushedSpy.getCall(0).args[0], [{ type: 'remove', key: 1 }], 'the pushed callback args');
+    });
+
+    QUnit.test('The handler of the dataSource pushed callback should be removed after disposing dataSource', function(assert) {
+        // arrange
+        const dataPushedHandlerSpy = sinon.spy();
+        const array = [
+            { id: 0, name: 'Alex', phone: '55-55-55' },
+            { id: 1, name: 'Dan', phone: '98-75-21' }
+        ];
+        let dataSource = createDataSource(array, { key: 'id' });
+
+        this.dataController._dataPushedHandler = dataPushedHandlerSpy;
+        this.dataController.setDataSource(dataSource);
+        dataSource = this.dataController.dataSource();
+        dataSource.load();
+
+        // assert
+        assert.ok(dataSource.pushed.has(dataPushedHandlerSpy), 'the pushed callback has handler');
+        assert.strictEqual(dataPushedHandlerSpy.callCount, 0);
+
+        // act
+        dataSource.store().push([{ type: 'remove', key: 1 }]);
+        this.clock.tick();
+
+        // assert
+        assert.strictEqual(dataPushedHandlerSpy.callCount, 1, 'the handler of the pushed callback was called only once');
+
+        // act
+        this.dataController.dispose();
+
+        // assert
+        assert.notOk(dataSource.pushed.has(dataPushedHandlerSpy), 'the pushed callback has no handler');
     });
 
     // B255430
@@ -949,6 +1012,37 @@ QUnit.module('Initialization', { beforeEach: setupModule, afterEach: teardownMod
             assert.equal(pageIndex, 1);
         });
         assert.equal(count, 1, 'Count');
+    });
+
+    QUnit.test('Get page index by group key if there is no groouping and remoteOperations is true and data (T1042661)', function(assert) {
+        // arrange
+        let count = 0;
+        const loadingSpy = sinon.spy();
+        const dataSource = createDataSource([
+            { team: 'internal', name: 'Alex', age: 30 },
+            { team: 'internal', name: 'Dan', age: 25 },
+            { team: 'internal', name: 'Bob', age: 20 },
+            { team: 'public', name: 'Alice', age: 19 }],
+        { key: 'name' },
+        { pageSize: 1, asyncLoadEnabled: false });
+
+        this.applyOptions({
+            remoteOperations: true,
+            dataSource: dataSource
+        });
+
+        dataSource.store().on('loading', loadingSpy);
+
+        // act
+        this.dataController._refreshDataSource();
+        assert.equal(loadingSpy.callCount, 1, 'loading count');
+
+        this.dataController.getPageIndexByKey(['Alice']).done(function(pageIndex) {
+            ++count;
+            assert.equal(pageIndex, -1);
+        });
+        assert.equal(count, 1, 'Count');
+        assert.equal(loadingSpy.callCount, 1, 'loading count is not changed');
     });
 
     QUnit.test('Get page index by composite key', function(assert) {
@@ -2038,6 +2132,40 @@ QUnit.module('Initialization', { beforeEach: setupModule, afterEach: teardownMod
         assert.equal(this.dataController.pageIndex(), 0);
         assert.equal(this.dataController.items().length, 2);
         assert.deepEqual(this.dataController.items()[0].values, ['Dan', 25]);
+    });
+
+    QUnit.test('calculateSortValue should have correct context on sorting if customizeColumns is used (T1036411)', function(assert) {
+        const array = [
+            { name: 'Alex', age: 30 },
+            { name: 'Dan', age: 25 },
+            { name: 'Bob', age: 20 }
+        ];
+
+        const dataSource = createDataSource(array, { key: 'name' });
+
+        const ascOrder = ['Dan', 'Alex', 'Bob'];
+
+        this.applyOptions({
+            commonColumnSettings: { allowSorting: true },
+            customizeColumns: function() {},
+            columns: [{
+                dataField: 'name', calculateSortValue: function(data) {
+                    if(this.sortOrder === 'asc') {
+                        return $.inArray(data.name, ascOrder);
+                    }
+
+                    return data.name;
+                }
+            }, 'age'],
+            sorting: { mode: 'single' }
+        });
+        this.dataController.setDataSource(dataSource);
+        dataSource.load();
+
+        // act
+        this.columnsController.changeSortOrder(0, 'asc');
+
+        assert.deepEqual(this.dataController.items().map(item => item.key), ascOrder);
     });
 
     QUnit.test('sorting when sortingMethod is defined', function(assert) {
@@ -3559,7 +3687,7 @@ const setupVirtualRenderingModule = function() {
     this.clock = sinon.useFakeTimers();
 
     const options = {
-        scrolling: { mode: 'virtual', rowRenderingMode: 'virtual', minGap: 0 },
+        scrolling: { mode: 'virtual', rowRenderingMode: 'virtual', prerenderedRowCount: 0 },
         keyExpr: 'id',
         paging: {
             pageSize: 20
@@ -3577,7 +3705,7 @@ const setupVirtualRenderingModule = function() {
 
 
     this.dataController.viewportItemSize(10);
-    this.dataController.viewportSize(9);
+    this.dataController.viewportSize(10);
     this.dataController._dataSource._renderTime = 50;
 
     this.clock.tick();
@@ -3589,6 +3717,8 @@ const setupVirtualRenderingModule = function() {
     this.dataController.changed.add(function(e) {
         that.changedArgs.push(e);
     });
+
+    this._views.rowsView = { ...rowsViewMock };
 };
 
 const teardownVirtualRenderingModule = function() {
@@ -3610,9 +3740,9 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
         this.dataController.setViewportPosition(49);
 
         assert.strictEqual(this.dataController.pageIndex(), 0);
-        assert.strictEqual(this.dataController.items().length, 15);
-        assert.strictEqual(this.dataController.items()[0].key, 0);
-        assert.strictEqual(this.dataController.getContentOffset('begin'), 0);
+        assert.strictEqual(this.dataController.items().length, 11);
+        assert.strictEqual(this.dataController.items()[0].key, 4);
+        assert.strictEqual(this.dataController.getContentOffset('begin'), 40);
         assert.strictEqual(this.dataController.getContentOffset('end'), 850);
     });
 
@@ -3629,6 +3759,7 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
             changeType: 'update',
             isLiveUpdate: true,
             repaintChangesOnly: true,
+            needUpdateDimensions: true,
             changeTypes: [
                 'remove',
                 'remove',
@@ -3653,6 +3784,19 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
                 undefined,
                 undefined,
             ],
+            operationTypes: {
+                filtering: false,
+                fullReload: false,
+                groupExpanding: undefined,
+                grouping: false,
+                pageIndex: false,
+                pageSize: false,
+                paging: true,
+                reload: false,
+                skip: false,
+                sorting: false,
+                take: true
+            },
             rowIndices: [0, 0, 0, 0, 0, 5, 6, 7, 8, 9],
             items: oldItems.slice(0, 5).concat(this.dataController.items().slice(5, 10)),
         }]);
@@ -3760,7 +3904,7 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
         assert.strictEqual(this.dataController.items()[0].key, 20);
         assert.strictEqual(this.dataController.getContentOffset('begin'), 200);
         assert.strictEqual(this.dataController.getContentOffset('end'), 700);
-        assert.deepEqual(this.changedArgs.length, 1);
+        assert.deepEqual(this.changedArgs.length, 2);
         assert.deepEqual(this.changedArgs[0].changeTypes, [
             'remove',
             'remove',
@@ -3784,6 +3928,7 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
             'insert',
         ]);
         assert.deepEqual(this.changedArgs[0].rowIndices, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert.strictEqual(this.changedArgs[1].changeType, 'pageIndex');
     });
 
     QUnit.test('scroll to far', function(assert) {
@@ -3794,7 +3939,7 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
         assert.strictEqual(this.dataController.items()[0].key, 50);
         assert.strictEqual(this.dataController.getContentOffset('begin'), 500);
         assert.strictEqual(this.dataController.getContentOffset('end'), 400);
-        assert.deepEqual(this.changedArgs.length, 1);
+        assert.deepEqual(this.changedArgs.length, 2);
         assert.deepEqual(this.changedArgs[0].changeTypes, [
             'remove',
             'remove',
@@ -3818,11 +3963,12 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
             'insert',
         ]);
         assert.deepEqual(this.changedArgs[0].rowIndices, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert.strictEqual(this.changedArgs[1].changeType, 'pageIndex');
 
     });
 
     // T730143
-    QUnit.test('scroll to end if data if grouped and remoteOperations are enabled (sorting, filtering, paging)', function(assert) {
+    QUnit.test('scroll to end if data is grouped and remoteOperations are enabled (sorting, filtering, paging)', function(assert) {
         this.pageSize(200);
         this.columnOption('value', 'groupIndex', 0);
         this.option('remoteOperations', {
@@ -3831,15 +3977,19 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
             paging: true
         });
         this.dataController._refreshDataSource();
-        this.clock.tick();
+        this.clock.tick(300);
+
+        const rowsScrollController = this.dataController._rowsScrollController;
+        const defaultItemSize = rowsScrollController.getItemSize();
+        const bottomPosition = (this.dataController.totalItemsCount() - this.dataController.viewportSize()) * defaultItemSize;
 
         // act
-        this.dataController.setViewportPosition(100000);
-        this.clock.tick();
+        this.dataController.setViewportPosition(bottomPosition);
+        this.clock.tick(300);
 
         // assert
         const itemCount = this.dataController.items().length;
-        assert.strictEqual(itemCount, 30);
+        assert.strictEqual(itemCount, 20);
         assert.deepEqual(this.dataController.items()[itemCount - 2].key, ['value99']);
         assert.strictEqual(this.dataController.items()[itemCount - 1].key, 99);
         assert.strictEqual(this.dataController.pageIndex(), 0);
@@ -3873,7 +4023,7 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
     QUnit.test('disabled row render virtualization does not disable it', function(assert) {
         this.option('scrolling.rowRenderingMode', 'standard');
         this.dataController.viewportItemSize(10);
-        this.dataController.viewportSize(9);
+        this.dataController.viewportSize(10);
         this.clock.tick(0);
 
         assert.strictEqual(this.dataController.items().length, 10);
@@ -3899,7 +4049,7 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
 
         this.dataController.optionChanged({ name: 'scrolling' });
         this.dataController.viewportItemSize(10);
-        this.dataController.viewportSize(9);
+        this.dataController.viewportSize(10);
         this.clock.tick(0);
 
         assert.strictEqual(this.dataController.items().length, 10);
@@ -3922,7 +4072,7 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
     QUnit.test('scroll to to the next page after expand', function(assert) {
         this.option('scrolling.rowRenderingMode', 'standard');
         this.dataController.viewportItemSize(10);
-        this.dataController.viewportSize(9);
+        this.dataController.viewportSize(10);
         this.clock.tick();
 
         this.dataController.expandRow(1);
@@ -3942,11 +4092,12 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
         assert.strictEqual(this.dataController.items()[0].key, 40);
         assert.strictEqual(this.dataController.getContentOffset('begin'), 400);
         assert.strictEqual(this.dataController.getContentOffset('end'), 500);
-        assert.deepEqual(this.changedArgs.length, 1);
+        assert.deepEqual(this.changedArgs.length, 2);
         assert.deepEqual(this.changedArgs[0].changeType, 'update');
         assert.deepEqual(this.changedArgs[0].changeTypes.filter(type => type === 'remove').length, 11);
         assert.deepEqual(this.changedArgs[0].changeTypes.filter(type => type === 'insert').length, 10);
         assert.deepEqual(this.changedArgs[0].items.length, 21);
+        assert.strictEqual(this.changedArgs[1].changeType, 'pageIndex');
     });
 
     // T641290
@@ -3986,30 +4137,33 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
     });
 
     QUnit.test('addRow > scroll to near > add row > scroll back', function(assert) {
+        this.options.scrolling.prerenderedRowChunkSize = 5;
+
         // act
         this.addRow();
-        this.dataController.setViewportPosition(60);
+        this.dataController.setViewportPosition(70);
+        this._views.rowsView.getTopVisibleItemIndex = () => 1;
+
         this.addRow();
         this.dataController.setViewportPosition(0);
 
         // assert
-        assert.strictEqual(this.dataController.items().length, 11, 'item count');
+        assert.strictEqual(this.dataController.items().length, 12, 'item count');
         assert.strictEqual(this.dataController.items()[0].isNewRow, true, 'item 0 is new');
-        assert.strictEqual(this.dataController.items()[6].isNewRow, true, 'item 6 is new');
+        assert.strictEqual(this.dataController.items()[7].isNewRow, true, 'item 7 is new');
     });
 
     QUnit.test('addRow > scroll to little near > add row', function(assert) {
+        this.options.scrolling.prerenderedRowChunkSize = 5;
+
         // act
         this.addRow();
         this.dataController.setViewportPosition(20);
-        this._views.rowsView = {
-            getTopVisibleItemIndex: () => 2,
-            _getCellElement: () => {}
-        };
+        this._views.rowsView.getTopVisibleItemIndex = () => 2;
         this.addRow();
 
         // assert
-        assert.strictEqual(this.dataController.items().length, 16, 'item count');
+        assert.strictEqual(this.dataController.items().length, 17, 'item count');
         assert.strictEqual(this.dataController.items()[0].isNewRow, true, 'item 0 is new');
         assert.strictEqual(this.dataController.items()[2].isNewRow, true, 'item 2 is new');
     });
@@ -4027,16 +4181,17 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
     });
 
     QUnit.test('add row > scroll to second page', function(assert) {
-        this.options.scrolling.minGap = 1;
+        this.options.scrolling.prerenderedRowCount = 1;
+
         // act
         this.addRow();
-        this.dataController.setViewportPosition(150);
+        this.dataController.setViewportPosition(160);
 
         // assert
-        assert.strictEqual(this.dataController.items().length, 15, 'item count');
-        assert.strictEqual(this.dataController.items()[0].key, 10, 'item 10 from first page');
-        assert.strictEqual(this.dataController.items()[9].key, 19, 'item 19 from first page');
-        assert.strictEqual(this.dataController.items()[10].key, 20, 'item 20 from second page');
+        assert.strictEqual(this.dataController.items().length, 11, 'item count');
+        assert.strictEqual(this.dataController.items()[0].key, 16, 'item 16 from first page');
+        assert.strictEqual(this.dataController.items()[4].key, 20, 'item 20 from first page');
+        assert.strictEqual(this.dataController.items()[5].key, 21, 'item 21 from second page');
     });
 
     QUnit.test('scroll to second page > add row > scroll back > scroll to second page', function(assert) {
@@ -4069,14 +4224,14 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
         [{
             changeType: 'update',
             addCount: 5,
-            removeCount: 5
+            removeCount: 6
         }, {
             changeType: 'update',
-            addCount: 5,
+            addCount: 6,
             removeCount: 5
         }], 'changed call args');
 
-        assert.strictEqual(this.dataController.items().length, 21, 'item count');
+        assert.strictEqual(this.dataController.items().length, 17, 'item count');
         assert.strictEqual(this.dataController.items()[15].isNewRow, true, 'item 15 is new');
     });
 
@@ -4092,7 +4247,7 @@ QUnit.module('Virtual rendering', { beforeEach: setupVirtualRenderingModule, aft
         this.dataController.setViewportPosition(600);
 
         // assert
-        assert.strictEqual(this.dataController.items().length, 10, 'item count');
+        assert.strictEqual(this.dataController.items().length, 11, 'item count');
         assert.strictEqual(this.dataController.items()[0].isNewRow, true, 'item 0 is new');
     });
 // =================================
@@ -4204,6 +4359,7 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         const changedArgs = [];
 
         this.options.loadingTimeout = 0;
+        this.options.scrolling.renderAsync = true;
         this.setupDataSource({
             pageSize: 2
         });
@@ -4288,6 +4444,7 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         const virtualItems = [];
 
         this.options.loadingTimeout = 0;
+        this.options.scrolling.renderAsync = true;
         this.setupDataSource({
             pageSize: 2
         });
@@ -4544,7 +4701,7 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
 
         // assert
         assert.deepEqual(this.getDataItems(), items);
-        assert.equal(dataController.itemsCount(), 10);
+        assert.equal(dataController.itemsCount(), 5);
         assert.ok(dataController.isLoaded());
         assert.ok(!dataController.isLoading(), 'loading completed');
         assert.ok(!isLoadingByEvent, 'loading completed');
@@ -4785,13 +4942,13 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         assert.equal(items[pageSize].dataIndex, 1);
     });
 
-    QUnit.test('New mode. rowRenderingMode should be considered as \'virtual\' when newMode is enabled', function(assert) {
+    QUnit.test('New mode. rowRenderingMode should be considered as \'virtual\' when legacyMode is disabled', function(assert) {
         // arrange
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
         this.dataController.init();
@@ -4814,9 +4971,9 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         };
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -4840,15 +4997,54 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         const loadedItems = this.dataController.dataSource().items();
 
         // assert
-        assert.deepEqual(this.dataController.getLoadPageParams(), { pageIndex: 2, loadPageCount: 3, skipForCurrentPage: 0 }, 'load page params after scrolling');
+        assert.deepEqual(this.dataController.getLoadPageParams(), { pageIndex: 2, loadPageCount: 4, skipForCurrentPage: 5 }, 'load page params after scrolling');
         assert.deepEqual(this.dataController.pageIndex(), 2, 'page index after scrolling');
-        assert.strictEqual(this.dataController.dataSource().loadPageCount(), 3, 'load page count after scrolling');
-        assert.equal(loadedItems.length, 30, 'loaded items count');
+        assert.strictEqual(this.dataController.dataSource().loadPageCount(), 4, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 40, 'loaded items count');
         assert.deepEqual(loadedItems[0], { id: 21, name: 'Name 21' }, 'first loaded item');
-        assert.deepEqual(loadedItems[29], { id: 50, name: 'Name 50' }, 'last loaded item');
-        assert.equal(visibleItems.length, 25, 'visible items count');
-        assert.deepEqual(visibleItems[0].data, { id: 21, name: 'Name 21' }, 'first visible item');
-        assert.deepEqual(visibleItems[24].data, { id: 45, name: 'Name 45' }, 'last visible item');
+        assert.deepEqual(loadedItems[39], { id: 60, name: 'Name 60' }, 'last loaded item');
+        assert.equal(visibleItems.length, 16, 'visible items count');
+        assert.deepEqual(visibleItems[0].data, { id: 26, name: 'Name 26' }, 'first visible item');
+        assert.deepEqual(visibleItems[15].data, { id: 41, name: 'Name 41' }, 'last visible item');
+    });
+
+    QUnit.test('New mode. Load params if pageSize is 0 (All) and scrolling mode is standart', function(assert) {
+        // arrange
+        const getData = function(count) {
+            const items = [];
+            for(let i = 0; i < count; i++) {
+                items.push({
+                    id: i + 1,
+                    name: `Name ${i + 1}`
+                });
+            }
+            return items;
+        };
+        this.applyOptions({
+            scrolling: {
+                rowRenderingMode: 'virtual',
+                mode: 'standart',
+                legacyMode: false,
+                rowPageSize: 5,
+                prerenderedRowCount: 1
+            }
+        });
+
+        this.dataController.init();
+        this.setupDataSource({
+            data: getData(10),
+            pageSize: 0
+        });
+
+        // act
+        this.dataController.viewportSize(15);
+        this.dataController.setViewportPosition(100);
+        this.clock.tick();
+
+        // assert
+        assert.deepEqual(this.dataController.getLoadPageParams(), { pageIndex: 0, loadPageCount: 1, skipForCurrentPage: 5 }, 'load page params after scrolling');
+        assert.deepEqual(this.dataController.pageIndex(), 0, 'page index after scrolling');
+        assert.deepEqual(this.getVisibleRows()[0].data.id, 6, 'first visible row id');
     });
 
     QUnit.test('New mode. View port items should be rendered partially on scroll', function(assert) {
@@ -4867,9 +5063,9 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
 
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -4889,7 +5085,7 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         let renderedItemIds = this.dataController.items().map(i => i.data.id);
 
         // assert
-        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 'initially rendered item IDs');
+        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 'initially rendered item IDs');
 
         // act
         this.dataController.setViewportPosition(100);
@@ -4902,10 +5098,10 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         // assert
         assert.equal(changedSpy.callCount, 1, 'changed called');
         assert.ok(change.repaintChangesOnly, 'repaint changes only');
-        assert.strictEqual(change.items.length, 5, 'items count');
-        assert.deepEqual(changedItemIds, [21, 22, 23, 24, 25], 'change item IDs');
-        assert.deepEqual(change.changeTypes, ['insert', 'insert', 'insert', 'insert', 'insert'], 'change types');
-        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], 'finally rendered item IDs');
+        assert.strictEqual(change.items.length, 11, 'items count');
+        assert.deepEqual(changedItemIds, [1, 2, 3, 4, 5, 16, 17, 18, 19, 20, 21], 'change item IDs');
+        assert.deepEqual(change.changeTypes, ['remove', 'remove', 'remove', 'remove', 'remove', 'insert', 'insert', 'insert', 'insert', 'insert', 'insert'], 'change types');
+        assert.deepEqual(renderedItemIds, [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21], 'finally rendered item IDs');
     });
 
     QUnit.test('New mode. View port items should not be changed on small scroll', function(assert) {
@@ -4924,9 +5120,9 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
 
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -4940,38 +5136,33 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         this.dataController.setViewportPosition(50);
         this.clock.tick();
         this.dataController.setViewportPosition(0);
+        this.dataController.setViewportPosition(1);
         this.clock.tick();
         this.dataController.changed.add(changedSpy);
 
         let renderedItemIds = this.dataController.items().map(i => i.data.id);
 
         // assert
-        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 'initially rendered item IDs');
+        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], 'initially rendered item IDs');
 
         // act
-        this.dataController.setViewportPosition(20);
+        this.dataController.setViewportPosition(10);
         this.clock.tick();
 
         renderedItemIds = this.dataController.items().map(i => i.data.id);
-        const change = changedSpy.args[0][0];
-        const changedItemIds = change.items.map(i => i.data.id);
 
         // assert
-        assert.equal(changedSpy.callCount, 1, 'changed called');
-        assert.ok(change.repaintChangesOnly, 'repaint changes only');
-        assert.strictEqual(change.items.length, 0, 'items count');
-        assert.deepEqual(changedItemIds, [], 'change item IDs');
-        assert.deepEqual(change.changeTypes, [], 'change types');
-        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 'finally rendered item IDs');
+        assert.equal(changedSpy.callCount, 0, 'changed not called');
+        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], 'finally rendered item IDs');
     });
 
     QUnit.test('New mode. DataSourceAdapter.viewportSize should not be called when viewPortSize is called', function(assert) {
         // arrange
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -4996,9 +5187,9 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         // arrange
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -5023,9 +5214,9 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         // arrange
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -5046,13 +5237,13 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         }
     });
 
-    QUnit.test('New mode. updateItems should not be called on data loading when loadViewport method is called', function(assert) {
+    QUnit.test('New mode. updateItems should be called on data loading when loadViewport method is called', function(assert) {
         // arrange
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -5070,7 +5261,7 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
             this.dataController.loadViewport();
 
             // assert
-            assert.notOk(updateItemsSpy.called, 'not called');
+            assert.ok(updateItemsSpy.called, 'called');
 
             // act
             this.dataController._isLoading = false;
@@ -5083,6 +5274,396 @@ QUnit.module('Virtual scrolling (ScrollingDataSource)', {
         }
     });
 
+    QUnit.test('New mode. updateItems should not be called on data loading when updateViewport method is called', function(assert) {
+        // arrange
+        this.applyOptions({
+            scrolling: {
+                legacyMode: false,
+                rowPageSize: 5,
+                prerenderedRowCount: 1
+            }
+        });
+
+        this.dataController.init();
+        this.setupDataSource({
+            data: [
+                { id: 1, name: 'test' }
+            ],
+            pageSize: 10
+        });
+
+        const updateItemsSpy = sinon.spy(this.dataController, 'updateItems');
+
+        try {
+            // act
+            this.dataController._isLoading = true;
+            this.dataController.updateViewport();
+
+            // assert
+            assert.notOk(updateItemsSpy.called, 'not called');
+
+            // act
+            this.dataController._isLoading = false;
+            this.dataController.updateViewport();
+
+            // assert
+            assert.ok(updateItemsSpy.called, 'called');
+        } finally {
+            updateItemsSpy.restore();
+        }
+    });
+
+    QUnit.test('loadViewport should not throw an error when dataSource is null (T1045898)', function(assert) {
+        // arrange
+        this.applyOptions({
+            scrolling: {
+                legacyMode: false,
+                rowPageSize: 5,
+                prerenderedRowCount: 1
+            }
+        });
+        this.dataController.init();
+        this.setupDataSource({
+            data: [{ id: 1, name: 'test' }],
+            pageSize: 10
+        });
+
+        try {
+            // act
+            this.dataController.option('dataSource', null);
+            this.dataController.loadViewport();
+
+            assert.ok(true, 'error is not thrown');
+        } catch(e) {
+            assert.ok(false, `the error is thrown: ${e.message}`);
+        }
+    });
+
+
+    QUnit.test('Scrolling timeout should be zero when renderAsync is false', function(assert) {
+        // arrange
+        this.applyOptions({
+            scrolling: {
+                legacyMode: false,
+                rowPageSize: 5,
+                timeout: 100,
+                renderingThreshold: 100,
+                minTimeout: 50,
+                renderAsync: false
+            }
+        });
+
+        this.dataController.init();
+        this.setupDataSource({
+            data: [{ id: 1, name: 'test' }],
+            pageSize: 10
+        });
+
+        const timeout = this.dataController._rowsScrollController.getScrollingTimeout();
+
+        // assert
+        assert.equal(timeout, 0);
+    });
+
+    QUnit.test('Scrolling timeout should be set to minTimeout if renderAsync is not defined', function(assert) {
+        // arrange
+        this.applyOptions({
+            scrolling: {
+                legacyMode: false,
+                rowPageSize: 5,
+                timeout: 100,
+                renderingThreshold: 100,
+                minTimeout: 50
+            }
+        });
+
+        this.dataController.init();
+        this.setupDataSource({
+            data: [{ id: 1, name: 'test' }],
+            pageSize: 10
+        });
+
+        const timeout = this.dataController._rowsScrollController.getScrollingTimeout();
+
+        // assert
+        assert.equal(timeout, 50);
+    });
+
+    QUnit.test('Scrolling timeout should be set to timeout if renderAsync is true', function(assert) {
+        // arrange
+        this.applyOptions({
+            scrolling: {
+                legacyMode: false,
+                rowPageSize: 5,
+                timeout: 100,
+                renderingThreshold: 100,
+                minTimeout: 50,
+                renderAsync: true
+            }
+        });
+
+        this.dataController.init();
+        this.setupDataSource({
+            data: [{ id: 1, name: 'test' }],
+            pageSize: 10
+        });
+
+        const timeout = this.dataController._rowsScrollController.getScrollingTimeout();
+
+        // assert
+        assert.equal(timeout, 100);
+    });
+
+    QUnit.test('Options are reset when dataSource is changed to null (T1054920)', function(assert) {
+        // arrange
+        this.applyOptions({
+            scrolling: {
+                legacyMode: false,
+                rowPageSize: 5,
+                timeout: 100,
+                renderingThreshold: 100,
+                minTimeout: 50,
+                renderAsync: true
+            }
+        });
+
+        this.dataController.init();
+        this.setupDataSource({
+            data: [{ id: 1, name: 'test' }],
+            pageSize: 10
+        });
+
+        // assert
+        assert.equal(this.dataController._itemCount, 1, 'itemCount');
+        assert.equal(this.dataController._allItems[0].data.id, 1, 'first item id');
+
+        // act
+        this.option('dataSource', null);
+
+        // assert
+        assert.equal(this.dataController._itemCount, 0, 'itemCount is reset');
+        assert.strictEqual(this.dataController._allItems, null, 'all items are reset');
+    });
+});
+
+QUnit.module('Virtual scrolling preload', {
+    beforeEach: function() {
+
+        const getData = function(count) {
+            const items = [];
+            for(let i = 0; i < count; i++) {
+                items.push({ id: i + 1 });
+            }
+            return items;
+        };
+
+        this.options = {
+            dataSource: getData(100),
+            scrolling: { mode: 'virtual', legacyMode: false, prerenderedRowCount: 0, rowPageSize: 5 },
+            pager: { visible: 'auto' },
+            paging: { pageSize: 20 },
+            remoteOperations: { filtering: true, sorting: true, paging: true },
+            grouping: { autoExpandAll: true }
+        };
+        setupModule.apply(this);
+
+        this.dataController.viewportSize(15);
+        this.dataController.updateViewport();
+    },
+    afterEach: teardownModule
+}, () => {
+    QUnit.test('New mode. One page should be loaded on start', function(assert) {
+        // arrange
+        assert.strictEqual(this.dataController.dataSource().loadPageCount(), 1, 'initial load page count');
+        assert.strictEqual(this.getVisibleRows().length, 20, 'initial visible items count');
+    });
+
+    QUnit.test('New mode. One viewport should be preloaded on scroll', function(assert) {
+        // act
+        this.dataController.setViewportPosition(1);
+        const visibleRows = this.getVisibleRows();
+        const dataSourceAdapter = this.dataController.dataSource();
+        const loadedItems = dataSourceAdapter.items();
+
+        // assert
+        assert.deepEqual(dataSourceAdapter.pageIndex(), 0, 'page index after scrolling');
+        assert.strictEqual(dataSourceAdapter.loadPageCount(), 2, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 40, 'loaded items count');
+        assert.deepEqual(loadedItems[0].id, 1, 'first loaded item');
+        assert.equal(visibleRows.length, 16, 'visible items count');
+        assert.deepEqual(visibleRows[0].data.id, 1, 'first visible item');
+    });
+
+    QUnit.test('New mode. Two viewports should be preloaded on scroll if preloadEnabled', function(assert) {
+        this.options.scrolling.preloadEnabled = true;
+        // act
+        this.dataController.setViewportPosition(1);
+        const visibleRows = this.getVisibleRows();
+        const dataSourceAdapter = this.dataController.dataSource();
+        const loadedItems = dataSourceAdapter.items();
+
+        // assert
+        assert.deepEqual(dataSourceAdapter.pageIndex(), 0, 'page index after scrolling');
+        assert.strictEqual(dataSourceAdapter.loadPageCount(), 3, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 60, 'loaded items count');
+        assert.deepEqual(loadedItems[0].id, 1, 'first loaded item');
+        assert.equal(visibleRows.length, 16, 'visible items count');
+        assert.deepEqual(visibleRows[0].data.id, 1, 'first visible item');
+    });
+
+    QUnit.test('New mode. Data should not be preloaded on scroll if preloadedRowCount is 0', function(assert) {
+        this.options.scrolling.preloadedRowCount = 0;
+        // act
+        this.dataController.setViewportPosition(1);
+        const visibleRows = this.getVisibleRows();
+        const dataSourceAdapter = this.dataController.dataSource();
+        const loadedItems = dataSourceAdapter.items();
+
+        // assert
+        assert.deepEqual(dataSourceAdapter.pageIndex(), 0, 'page index after scrolling');
+        assert.strictEqual(dataSourceAdapter.loadPageCount(), 1, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 20, 'loaded items count');
+        assert.deepEqual(loadedItems[0].id, 1, 'first loaded item');
+        assert.equal(visibleRows.length, 16, 'visible items count');
+        assert.deepEqual(visibleRows[0].data.id, 1, 'first visible item');
+    });
+
+    QUnit.test('New mode. Data should be preloaded on scroll if preloadedRowCount is defined', function(assert) {
+        this.options.scrolling.preloadedRowCount = 50;
+        // act
+        this.dataController.setViewportPosition(1);
+        const visibleRows = this.getVisibleRows();
+        const dataSourceAdapter = this.dataController.dataSource();
+        const loadedItems = dataSourceAdapter.items();
+
+        // assert
+        assert.deepEqual(dataSourceAdapter.pageIndex(), 0, 'page index after scrolling');
+        assert.strictEqual(dataSourceAdapter.loadPageCount(), 4, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 80, 'loaded items count');
+        assert.deepEqual(loadedItems[0].id, 1, 'first loaded item');
+        assert.equal(visibleRows.length, 16, 'visible items count');
+        assert.deepEqual(visibleRows[0].data.id, 1, 'first visible item');
+    });
+
+    QUnit.test('New mode. One viewport should be preloaded on far scroll', function(assert) {
+        // act
+        this.dataController.setViewportPosition(1000);
+        const visibleRows = this.getVisibleRows();
+        const dataSourceAdapter = this.dataController.dataSource();
+        const loadedItems = dataSourceAdapter.items();
+
+        // assert
+        assert.deepEqual(dataSourceAdapter.pageIndex(), 2, 'page index after scrolling');
+        assert.strictEqual(dataSourceAdapter.loadPageCount(), 2, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 40, 'loaded items count');
+        assert.deepEqual(loadedItems[0].id, 41, 'first loaded item');
+        assert.equal(visibleRows.length, 15, 'visible items count');
+        assert.deepEqual(visibleRows[0].data.id, 51, 'first visible item');
+    });
+
+    QUnit.test('New mode. One viewport should be preloaded before viewport on scroll back', function(assert) {
+        // act
+        this.dataController.setViewportPosition(1000);
+        this.dataController.setViewportPosition(999);
+        const visibleRows = this.getVisibleRows();
+        const dataSourceAdapter = this.dataController.dataSource();
+        const loadedItems = dataSourceAdapter.items();
+
+        // assert
+        assert.deepEqual(dataSourceAdapter.pageIndex(), 1, 'page index after scrolling');
+        assert.strictEqual(dataSourceAdapter.loadPageCount(), 3, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 60, 'loaded items count');
+        assert.deepEqual(loadedItems[0].id, 21, 'first loaded item');
+        assert.equal(visibleRows.length, 16, 'visible items count');
+        assert.deepEqual(visibleRows[0].data.id, 50, 'first visible item');
+    });
+
+    QUnit.test('New mode. Data should be preloaded before viewport on scroll back if preloadedRowCount is defined', function(assert) {
+        this.options.scrolling.preloadedRowCount = 50;
+        // act
+        this.dataController.setViewportPosition(1000);
+        this.dataController.setViewportPosition(999);
+        const visibleRows = this.getVisibleRows();
+        const dataSourceAdapter = this.dataController.dataSource();
+        const loadedItems = dataSourceAdapter.items();
+
+        // assert
+        assert.deepEqual(dataSourceAdapter.pageIndex(), 0, 'page index after scrolling');
+        assert.strictEqual(dataSourceAdapter.loadPageCount(), 4, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 80, 'loaded items count');
+        assert.deepEqual(loadedItems[0].id, 1, 'first loaded item');
+        assert.equal(visibleRows.length, 16, 'visible items count');
+        assert.deepEqual(visibleRows[0].data.id, 50, 'first visible item');
+    });
+
+    QUnit.test('New mode. Rows should not be regenerated on scroll (T1046265)', function(assert) {
+        let calculateCellValueCallCount = 0;
+        this.applyOptions({
+            columns: [{
+                name: 'id',
+                calculateCellValue: function(data) {
+                    calculateCellValueCallCount++;
+                    return data.id;
+                }
+            }]
+        });
+        this.dataController.setViewportPosition(1);
+
+        assert.strictEqual(calculateCellValueCallCount, 100, 'rows are generated');
+
+        calculateCellValueCallCount = 0;
+
+        // act
+        this.dataController.setViewportPosition(2);
+
+        // assert
+        assert.strictEqual(calculateCellValueCallCount, 0, 'rows are not regenerated');
+    });
+
+    QUnit.test('New mode. selectAll after scrolling should select all items (T1044995)', function(assert) {
+        // act
+        this.dataController.setViewportPosition(10);
+        this.selectAll();
+
+        // assert
+        assert.deepEqual(this.getSelectedRowKeys().length, 100, 'all items are selected');
+    });
+
+    QUnit.test('New mode. loadAll after scrolling should return all items (T1045649)', function(assert) {
+        // act
+        this.dataController.setViewportPosition(10);
+        let loadedItems;
+        this.dataController.loadAll().done(items => {
+            loadedItems = items;
+        });
+
+        // assert
+        assert.deepEqual(loadedItems.length, 100, 'all items are selected');
+    });
+
+    QUnit.test('New mode. Load page params should not be changed if the viewport position is not changed after scrolling back (T1052705)', function(assert) {
+        // act
+        this.option('scrolling.prerenderedRowCount', 5);
+        this.dataController.setViewportPosition(1000);
+        let loadPageParams = this.dataController.getLoadPageParams();
+
+        // assert
+        assert.deepEqual(loadPageParams, { pageIndex: 2, loadPageCount: 3, skipForCurrentPage: 10 }, 'params after scrolling down');
+
+        // act
+        this.dataController.setViewportPosition(800);
+        loadPageParams = this.dataController.getLoadPageParams();
+
+        // assert
+        assert.deepEqual(loadPageParams, { pageIndex: 1, loadPageCount: 2, skipForCurrentPage: 15 }, 'params after scrolling up');
+
+        // act
+        this.dataController.setViewportPosition(800);
+        loadPageParams = this.dataController.getLoadPageParams();
+
+        // assert
+        assert.deepEqual(loadPageParams, { pageIndex: 1, loadPageCount: 2, skipForCurrentPage: 15 }, 'params are not changed');
+    });
 });
 
 QUnit.module('Infinite scrolling', {
@@ -5331,7 +5912,8 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
 
         this.options = {
             scrolling: { mode: 'infinite' },
-            grouping: { autoExpandAll: true }
+            grouping: { autoExpandAll: true },
+            paging: {}
         };
         setupModule.apply(this);
 
@@ -5463,13 +6045,13 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
         assert.ok(dataController.isLoaded());
     });
 
-    QUnit.test('New mode. rowRenderingMode should be considered as \'virtual\' when newMode is enabled', function(assert) {
+    QUnit.test('New mode. rowRenderingMode should be considered as \'virtual\' when legacyMode is disabled', function(assert) {
         // arrange
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
         this.dataController.init();
@@ -5492,9 +6074,9 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
         };
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -5518,15 +6100,15 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
         const loadedItems = this.dataController.dataSource().items();
 
         // assert
-        assert.deepEqual(this.dataController.getLoadPageParams(), { pageIndex: 2, loadPageCount: 3, skipForCurrentPage: 0 }, 'load page params after scrolling');
+        assert.deepEqual(this.dataController.getLoadPageParams(), { pageIndex: 2, loadPageCount: 4, skipForCurrentPage: 5 }, 'load page params after scrolling');
         assert.deepEqual(this.dataController.pageIndex(), 2, 'page index after scrolling');
-        assert.strictEqual(this.dataController.dataSource().loadPageCount(), 3, 'load page count after scrolling');
-        assert.equal(loadedItems.length, 30, 'loaded items count');
+        assert.strictEqual(this.dataController.dataSource().loadPageCount(), 4, 'load page count after scrolling');
+        assert.equal(loadedItems.length, 40, 'loaded items count');
         assert.deepEqual(loadedItems[0], { id: 21, name: 'Name 21' }, 'first loaded item');
-        assert.deepEqual(loadedItems[29], { id: 50, name: 'Name 50' }, 'last loaded item');
-        assert.equal(visibleItems.length, 25, 'visible items count');
-        assert.deepEqual(visibleItems[0].data, { id: 21, name: 'Name 21' }, 'first visible item');
-        assert.deepEqual(visibleItems[24].data, { id: 45, name: 'Name 45' }, 'last visible item');
+        assert.deepEqual(loadedItems[39], { id: 60, name: 'Name 60' }, 'last loaded item');
+        assert.equal(visibleItems.length, 16, 'visible items count');
+        assert.deepEqual(visibleItems[0].data, { id: 26, name: 'Name 26' }, 'first visible item');
+        assert.deepEqual(visibleItems[15].data, { id: 41, name: 'Name 41' }, 'last visible item');
     });
 
     QUnit.test('New mode. View port items should be rendered partially on scroll', function(assert) {
@@ -5545,9 +6127,9 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
 
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -5567,7 +6149,7 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
         let renderedItemIds = this.dataController.items().map(i => i.data.id);
 
         // assert
-        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 'initially rendered item IDs');
+        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 'initially rendered item IDs');
 
         // act
         this.dataController.setViewportPosition(100);
@@ -5580,10 +6162,10 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
         // assert
         assert.equal(changedSpy.callCount, 1, 'changed called');
         assert.ok(change.repaintChangesOnly, 'repaint changes only');
-        assert.strictEqual(change.items.length, 5, 'items count');
-        assert.deepEqual(changedItemIds, [21, 22, 23, 24, 25], 'change item IDs');
-        assert.deepEqual(change.changeTypes, ['insert', 'insert', 'insert', 'insert', 'insert'], 'change types');
-        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], 'finally rendered item IDs');
+        assert.strictEqual(change.items.length, 11, 'items count');
+        assert.deepEqual(changedItemIds, [1, 2, 3, 4, 5, 16, 17, 18, 19, 20, 21], 'change item IDs');
+        assert.deepEqual(change.changeTypes, ['remove', 'remove', 'remove', 'remove', 'remove', 'insert', 'insert', 'insert', 'insert', 'insert', 'insert'], 'change types');
+        assert.deepEqual(renderedItemIds, [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21], 'finally rendered item IDs');
     });
 
     QUnit.test('New mode. View port items should not be changed on small scroll', function(assert) {
@@ -5602,9 +6184,9 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
 
         this.applyOptions({
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 rowPageSize: 5,
-                minGap: 1
+                prerenderedRowCount: 1
             }
         });
 
@@ -5618,29 +6200,24 @@ QUnit.module('Infinite scrolling (ScrollingDataSource)', {
         this.dataController.setViewportPosition(50);
         this.clock.tick();
         this.dataController.setViewportPosition(0);
+        this.dataController.setViewportPosition(1);
         this.clock.tick();
         this.dataController.changed.add(changedSpy);
 
         let renderedItemIds = this.dataController.items().map(i => i.data.id);
 
         // assert
-        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 'initially rendered item IDs');
+        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], 'initially rendered item IDs');
 
         // act
-        this.dataController.setViewportPosition(20);
+        this.dataController.setViewportPosition(10);
         this.clock.tick();
 
         renderedItemIds = this.dataController.items().map(i => i.data.id);
-        const change = changedSpy.args[0][0];
-        const changedItemIds = change.items.map(i => i.data.id);
 
         // assert
-        assert.equal(changedSpy.callCount, 1, 'changed called');
-        assert.ok(change.repaintChangesOnly, 'repaint changes only');
-        assert.strictEqual(change.items.length, 0, 'items count');
-        assert.deepEqual(changedItemIds, [], 'change item IDs');
-        assert.deepEqual(change.changeTypes, [], 'change types');
-        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 'finally rendered item IDs');
+        assert.equal(changedSpy.callCount, 0, 'changed is not called');
+        assert.deepEqual(renderedItemIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], 'finally rendered item IDs');
     });
 });
 
@@ -8198,7 +8775,10 @@ QUnit.module('Grouping', { beforeEach: setupModule, afterEach: teardownModule },
     });
 });
 
-QUnit.module('Editing', { beforeEach: setupModule, afterEach: teardownModule }, () => {
+QUnit.module('Editing', { beforeEach: function() {
+    setupModule.apply(this, arguments);
+    this._views.rowsView = { ...rowsViewMock };
+}, afterEach: teardownModule }, () => {
 
     QUnit.test('Inserting Row', function(assert) {
         const array = [
@@ -8299,7 +8879,6 @@ QUnit.module('Editing', { beforeEach: setupModule, afterEach: teardownModule }, 
 
         this.dataController.setDataSource(dataSource);
         dataSource.load();
-
         this.expandAll();
 
         // act
@@ -8331,7 +8910,6 @@ QUnit.module('Editing', { beforeEach: setupModule, afterEach: teardownModule }, 
 
         this.dataController.setDataSource(dataSource);
         dataSource.load();
-
         this.editingController.addRow();
         // act
         this.editingController.addRow();
@@ -8977,7 +9555,7 @@ QUnit.module('Summary', {
         }], 'totalFooter items');
         assert.deepEqual(this.dataController.items()[0].rowType, 'group', 'first row type');
         // T328430
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [[{ summaryType: 'count', value: 1 }], []], 'group summaryCells');
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[], [{ summaryType: 'count', value: 1 }]], 'group summaryCells');
     });
 
     // T615903
@@ -9157,6 +9735,41 @@ QUnit.module('Summary', {
         }], 'footerItems');
     });
 
+    QUnit.test('CustomStore load summary on filter change if summary is single remote operation (T1071599)', function(assert) {
+        this.options = {
+            dataSource: {
+                load: function(options) {
+                    return $.Deferred().resolve([
+                        { name: 'Alex', age: 19 },
+                        { name: 'Dan', age: 25 }
+                    ], {
+                        summary: [3]
+                    });
+                },
+                pageSize: 2
+            },
+            summary: {
+                totalItems: [{
+                    column: 'age',
+                    summaryType: 'sum'
+                }]
+            },
+            remoteOperations: {
+                summary: true
+            }
+        };
+
+        // act
+        this.setupDataGridModules();
+        this.clock.tick();
+        this.filter(['age', '>', 20]);
+        this.clock.tick();
+
+        // assert
+        assert.deepEqual(this.getVisibleRows().length, 1, 'rows are filtered');
+        assert.deepEqual(this.getTotalSummaryValue('age'), 3, 'summary value');
+    });
+
     // T306309
     QUnit.test('CustomStore load options when remote summary enabled and summary is not returned', function(assert) {
         let storeLoadOptions;
@@ -9265,12 +9878,12 @@ QUnit.module('Summary', {
             items: [{ name: 'Alex', age: 19 }],
             aggregates: [19]
         });
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [[{
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[], [{
             column: 'age',
             columnCaption: 'Age',
             summaryType: 'max',
             value: 19
-        }], []]);
+        }]]);
         assert.deepEqual(this.dataController.items()[1].data, { name: 'Alex', age: 19 });
         assert.deepEqual(this.dataController.footerItems(), [{
             rowType: 'totalFooter', summaryCells: [[], [{
@@ -9520,12 +10133,12 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.equal(this.dataController.totalCount(), 2, 'totalCount');
         assert.equal(this.dataController.pageCount(), 1, 'pageCount');
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [[{
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[], [{
             column: 'age',
             columnCaption: 'Age',
             summaryType: 'count',
             value: 1
-        }], []], 'summary cells');
+        }]], 'summary cells');
         assert.deepEqual(this.dataController.footerItems(), [{
             rowType: 'totalFooter', summaryCells: [[], [{
                 value: 3,
@@ -9585,12 +10198,12 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.equal(this.dataController.totalCount(), 2, 'totalCount');
         assert.equal(this.dataController.pageCount(), 1, 'pageCount');
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [[{
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[], [{
             column: 'age',
             columnCaption: 'Age',
             summaryType: 'count',
             value: 1
-        }], []], 'summary cells');
+        }]], 'summary cells');
         assert.deepEqual(this.dataController.footerItems(), [{
             rowType: 'totalFooter', summaryCells: [[], [{
                 value: 3,
@@ -10483,18 +11096,18 @@ QUnit.module('Summary', {
         // assert
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 2);
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [[{
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[], [{
             value: 15,
             column: 'age',
             columnCaption: 'Age',
             summaryType: 'min'
-        }], []]);
-        assert.deepEqual(this.dataController.items()[1].summaryCells, [[{
+        }]]);
+        assert.deepEqual(this.dataController.items()[1].summaryCells, [[], [{
             value: 25,
             columnCaption: 'Age',
             column: 'age',
             summaryType: 'min'
-        }], []]);
+        }]]);
     });
 
     QUnit.test('Group footer is hidden when group summary is defined a for one a grouped column', function(assert) {
@@ -10603,11 +11216,11 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 3);
         assert.deepEqual(this.dataController.items()[0].data.key, 'Dan');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 1);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 1);
         assert.deepEqual(this.dataController.items()[1].data.key, 'Alex');
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][0].value, 2);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][0].value, 2);
         assert.deepEqual(this.dataController.items()[2].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[2].summaryCells[0][0].value, 3);
+        assert.deepEqual(this.dataController.items()[2].summaryCells[1][0].value, 3);
     });
 
     // T526028
@@ -10643,11 +11256,11 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 3);
         assert.deepEqual(this.dataController.items()[0].data.key, 'Dan');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 1);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 1);
         assert.deepEqual(this.dataController.items()[1].data.key, 'Alex');
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][0].value, 2);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][0].value, 2);
         assert.deepEqual(this.dataController.items()[2].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[2].summaryCells[0][0].value, 3);
+        assert.deepEqual(this.dataController.items()[2].summaryCells[1][0].value, 3);
     });
 
     QUnit.test('group sorting by summary when change grouping', function(assert) {
@@ -10684,11 +11297,11 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 3);
         assert.deepEqual(this.dataController.items()[0].data.key, 'Dan');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 1);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 1);
         assert.deepEqual(this.dataController.items()[1].data.key, 'Alex');
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][0].value, 2);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][0].value, 2);
         assert.deepEqual(this.dataController.items()[2].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[2].summaryCells[0][0].value, 3);
+        assert.deepEqual(this.dataController.items()[2].summaryCells[1][0].value, 3);
     });
 
     QUnit.test('Changing sortByGroupSummaryInfo', function(assert) {
@@ -10724,11 +11337,11 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 3);
         assert.deepEqual(this.dataController.items()[0].data.key, 'Dan');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 1);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 1);
         assert.deepEqual(this.dataController.items()[1].data.key, 'Alex');
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][0].value, 2);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][0].value, 2);
         assert.deepEqual(this.dataController.items()[2].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[2].summaryCells[0][0].value, 3);
+        assert.deepEqual(this.dataController.items()[2].summaryCells[1][0].value, 3);
     });
 
     QUnit.test('group sorting by summary when several columns grouped', function(assert) {
@@ -10774,9 +11387,9 @@ QUnit.module('Summary', {
         // assert
         assert.ok(!this.dataController.isLoading());
         assert.deepEqual(this.dataController.items()[0].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 3);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 3);
         assert.deepEqual(this.dataController.items()[1].data.key, 20);
-        assert.deepEqual(this.dataController.items()[1].summaryCells[1][1].value, 20);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[2][1].value, 20);
     });
 
     QUnit.test('group sorting by first summary', function(assert) {
@@ -10811,11 +11424,11 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 3);
         assert.deepEqual(this.dataController.items()[0].data.key, 'Dan');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 1);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 1);
         assert.deepEqual(this.dataController.items()[1].data.key, 'Alex');
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][0].value, 2);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][0].value, 2);
         assert.deepEqual(this.dataController.items()[2].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[2].summaryCells[0][0].value, 3);
+        assert.deepEqual(this.dataController.items()[2].summaryCells[1][0].value, 3);
     });
 
     // T678072
@@ -10917,11 +11530,11 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 3);
         assert.deepEqual(this.dataController.items()[0].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 3);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 3);
         assert.deepEqual(this.dataController.items()[1].data.key, 'Alex');
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][0].value, 2);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][0].value, 2);
         assert.deepEqual(this.dataController.items()[2].data.key, 'Dan');
-        assert.deepEqual(this.dataController.items()[2].summaryCells[0][0].value, 1);
+        assert.deepEqual(this.dataController.items()[2].summaryCells[1][0].value, 1);
     });
 
     QUnit.test('group sorting by several summaries', function(assert) {
@@ -10962,13 +11575,13 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 3);
         assert.deepEqual(this.dataController.items()[0].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 2);
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][1].value, 19);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 2);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][1].value, 19);
         assert.deepEqual(this.dataController.items()[1].data.key, 'Alex');
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][0].value, 2);
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][1].value, 25);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][0].value, 2);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][1].value, 25);
         assert.deepEqual(this.dataController.items()[2].data.key, 'Dan');
-        assert.deepEqual(this.dataController.items()[2].summaryCells[0][0].value, 1);
+        assert.deepEqual(this.dataController.items()[2].summaryCells[1][0].value, 1);
     });
 
     QUnit.test('group sorting groupColumn fo grouped column only', function(assert) {
@@ -11011,13 +11624,13 @@ QUnit.module('Summary', {
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 3);
         assert.deepEqual(this.dataController.items()[0].data.key, 'Alex');
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][0].value, 2);
-        assert.deepEqual(this.dataController.items()[0].summaryCells[0][1].value, 25);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][0].value, 2);
+        assert.deepEqual(this.dataController.items()[0].summaryCells[1][1].value, 25);
         assert.deepEqual(this.dataController.items()[1].data.key, 'Sam');
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][0].value, 2);
-        assert.deepEqual(this.dataController.items()[1].summaryCells[0][1].value, 19);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][0].value, 2);
+        assert.deepEqual(this.dataController.items()[1].summaryCells[1][1].value, 19);
         assert.deepEqual(this.dataController.items()[2].data.key, 'Dan');
-        assert.deepEqual(this.dataController.items()[2].summaryCells[0][0].value, 1);
+        assert.deepEqual(this.dataController.items()[2].summaryCells[1][0].value, 1);
     });
 
     QUnit.test('group custom summary item', function(assert) {
@@ -11070,16 +11683,16 @@ QUnit.module('Summary', {
         // assert
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items().length, 2);
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [[{
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[], [{
             value: 2,
             name: 'CountFromAge18',
             summaryType: 'custom'
-        }], []]);
-        assert.deepEqual(this.dataController.items()[1].summaryCells, [[{
+        }]]);
+        assert.deepEqual(this.dataController.items()[1].summaryCells, [[], [{
             value: 1,
             name: 'CountFromAge18',
             summaryType: 'custom'
-        }], []]);
+        }]]);
 
         // T278115
         assert.strictEqual(startCount, 2, 'start count');
@@ -11125,15 +11738,15 @@ QUnit.module('Summary', {
 
         // assert
         assert.strictEqual(this.dataController.items().length, 5);
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [[{
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[], [{
             value: 3,
             name: 'CountForFirstGroup',
             summaryType: 'custom'
-        }], [], []], 'summary value is calculated for first group');
-        assert.deepEqual(this.dataController.items()[1].summaryCells, [[], [{
+        }], []], 'summary value is calculated for first group');
+        assert.deepEqual(this.dataController.items()[1].summaryCells, [[], [], [{
             name: 'CountForFirstGroup',
             summaryType: 'custom'
-        }], []], 'summary value is not calculated for second group');
+        }]], 'summary value is not calculated for second group');
     });
 
     QUnit.test('group summary item alignByColumn', function(assert) {
@@ -11206,13 +11819,13 @@ QUnit.module('Summary', {
         // assert
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items()[0].rowType, 'group');
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [
-            [$.extend({ value: 2 }, this.options.summary.groupItems[0])], [],
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[],
+            [$.extend({ value: 2 }, this.options.summary.groupItems[0])],
             [$.extend({ value: 15 }, this.options.summary.groupItems[1])]
         ]);
         assert.strictEqual(this.dataController.items()[3].rowType, 'group');
-        assert.deepEqual(this.dataController.items()[3].summaryCells, [
-            [$.extend({ value: 1 }, this.options.summary.groupItems[0])], [],
+        assert.deepEqual(this.dataController.items()[3].summaryCells, [[],
+            [$.extend({ value: 1 }, this.options.summary.groupItems[0])],
             [$.extend({ value: 25 }, this.options.summary.groupItems[1])]
         ]);
     });
@@ -11247,17 +11860,17 @@ QUnit.module('Summary', {
         // assert
         assert.ok(!this.dataController.isLoading());
         assert.strictEqual(this.dataController.items()[0].rowType, 'group');
-        assert.deepEqual(this.dataController.items()[0].summaryCells, [[
+        assert.deepEqual(this.dataController.items()[0].summaryCells, [[], [
             $.extend({ value: 59, columnCaption: 'Age' }, this.options.summary.groupItems[0])
-        ], [], []]);
+        ], []]);
         assert.strictEqual(this.dataController.items()[1].rowType, 'group');
-        assert.deepEqual(this.dataController.items()[1].summaryCells, [[], [
+        assert.deepEqual(this.dataController.items()[1].summaryCells, [[], [], [
             $.extend({ value: 34, columnCaption: 'Age' }, this.options.summary.groupItems[0])
-        ], []]);
+        ]]);
         assert.strictEqual(this.dataController.items()[4].rowType, 'group');
-        assert.deepEqual(this.dataController.items()[4].summaryCells, [[], [
+        assert.deepEqual(this.dataController.items()[4].summaryCells, [[], [], [
             $.extend({ value: 25, columnCaption: 'Age' }, this.options.summary.groupItems[0])
-        ], []]);
+        ]]);
     });
 
     QUnit.test('group summary item with showInGroupFooter when no autoExpandAll', function(assert) {
@@ -11553,6 +12166,8 @@ QUnit.module('Summary with Editing', {
 
         this.setupDataGridModules = function(options) {
             setupDataGridModules(this, ['data', 'columns', 'filterRow', 'grouping', 'summary', 'editing', 'editingRowBased', 'editingCellBased'], options);
+
+            this._views.rowsView = { ...rowsViewMock };
         };
 
         this.getTotalValues = function() {
@@ -11619,7 +12234,7 @@ QUnit.module('Summary with Editing', {
 
     // T697805
     QUnit.test('add row if data is grouped', function(assert) {
-    // act
+        // act
         this.setupDataGridModules();
         this.clock.tick();
         this.getDataSource().group('id');
@@ -12396,6 +13011,8 @@ QUnit.module('Partial update', {
         const that = this;
         that.setupModules = function() {
             setupModule.call(that);
+
+            this._views.rowsView = { ...rowsViewMock };
 
             that.array = [
                 { name: 'Alex', age: 30 },
@@ -13599,7 +14216,7 @@ QUnit.module('Refresh changesOnly', {
         const items = this.dataController.items();
         assert.deepEqual(items[0].values, [1, 'Alex']);
         assert.strictEqual(changedArgs.changeType, 'refresh');
-        assert.strictEqual(changedArgs.repaintChangesOnly, undefined, 'full repaint');
+        assert.strictEqual(changedArgs.repaintChangesOnly, false, 'full repaint');
     });
 
     QUnit.test('update one cell when summary values are changed', function(assert) {

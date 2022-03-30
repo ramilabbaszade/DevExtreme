@@ -10,6 +10,13 @@ const CLASS = {
   resizableHandleTop: 'dx-resizable-handle-top',
   stateFocused: 'dx-state-focused',
   allDay: 'dx-scheduler-all-day-appointment',
+  reduced: {
+    icon: 'dx-scheduler-appointment-reduced-icon',
+    appointment: 'dx-scheduler-appointment-reduced',
+    head: 'dx-scheduler-appointment-head',
+    body: 'dx-scheduler-appointment-body',
+    tail: 'dx-scheduler-appointment-tail',
+  },
 };
 
 export default class Appointment {
@@ -24,6 +31,16 @@ export default class Appointment {
   isFocused: Promise<boolean>;
 
   isAllDay: Promise<boolean>;
+
+  isReduced: Promise<boolean>;
+
+  isReducedHead: Promise<boolean>;
+
+  isReducedBody: Promise<boolean>;
+
+  isReducedTail: Promise<boolean>;
+
+  reducedIcon: Selector;
 
   constructor(scheduler: Selector, index = 0, title?: string) {
     const element = scheduler.find(`.${CLASS.appointment}`);
@@ -49,6 +66,13 @@ export default class Appointment {
 
     this.isFocused = this.element.hasClass(CLASS.stateFocused);
     this.isAllDay = this.element.hasClass(CLASS.allDay);
+
+    this.reducedIcon = this.element.find(`.${CLASS.reduced.icon}`);
+
+    this.isReduced = this.element.hasClass(CLASS.reduced.appointment);
+    this.isReducedHead = this.element.hasClass(CLASS.reduced.head);
+    this.isReducedBody = this.element.hasClass(CLASS.reduced.body);
+    this.isReducedTail = this.element.hasClass(CLASS.reduced.tail);
   }
 
   getColor(): Promise<string> {

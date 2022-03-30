@@ -1,8 +1,15 @@
 import { CSSAttributes } from '@devextreme-generator/declarations';
 import { addToStyles } from '../workspaces/utils';
-import { AppointmentViewModel } from './types';
+import { AppointmentGeometry, AppointmentViewModel } from './types';
+import messageLocalization from '../../../../localization/message';
+import dateLocalization from '../../../../localization/date';
 
-export const getAppointmentStyles = (item: AppointmentViewModel): CSSAttributes => {
+const EditorLabelLocalizationConst = 'dxScheduler-editorLabelEndDate';
+
+export const getAppointmentStyles = (
+  viewModel: AppointmentViewModel,
+): CSSAttributes | undefined => {
+  const defaultSize = 50;
   const {
     geometry: {
       width,
@@ -10,60 +17,56 @@ export const getAppointmentStyles = (item: AppointmentViewModel): CSSAttributes 
       top,
       left,
     },
-    info: {
-      resourceColor,
-    },
-  } = item;
+  } = viewModel;
 
-  let result = addToStyles([{
+  return addToStyles([{
     attr: 'height',
-    value: height || 50,
+    value: `${height || defaultSize}px`,
   }, {
     attr: 'width',
-    value: width || 50,
+    value: `${width || defaultSize}px`,
   }, {
     attr: 'top',
-    value: top,
+    value: `${top}px`,
   }, {
     attr: 'left',
-    value: left,
+    value: `${left}px`,
   }]);
+};
 
-  if (resourceColor) {
-    result = addToStyles([{
-      attr: 'backgroundColor',
-      value: resourceColor,
-    }], result);
+export const getAppointmentKey = (geometry: AppointmentGeometry): string => {
+  const {
+    left,
+    top,
+    width,
+    height,
+  } = geometry;
+
+  return `${left}-${top}-${width}-${height}`;
+};
+
+export const getReducedIconTooltipText = (endDate?: Date | string): string => {
+  const tooltipLabel = messageLocalization.format(EditorLabelLocalizationConst);
+
+  if (!endDate) {
+    return tooltipLabel;
   }
 
-  return result;
+  const date = new Date(endDate);
+  const monthAndDay = dateLocalization.format(date, 'monthAndDay');
+  const year = dateLocalization.format(date, 'year');
+
+  return `${tooltipLabel}: ${monthAndDay}, ${year}`;
 };
 
-export const getAppointmentKey = (item: AppointmentViewModel): string => {
-  const {
-    geometry: {
-      width,
-      height,
-      top,
-      left,
-      leftVirtualWidth,
-      topVirtualHeight,
-    },
-    info: {
-      appointment: {
-        startDate,
-        endDate,
-      },
-      sourceAppointment: {
-        groupIndex,
-      },
-    },
-  } = item;
-
-  const startTime = startDate.getTime();
-  const endTime = endDate.getTime();
-  const leftOffset = left + leftVirtualWidth;
-  const topOffset = top + topVirtualHeight;
-
-  return `${groupIndex}-${startTime}-${endTime}_${leftOffset}-${topOffset}-${width}-${height}`;
-};
+export const mergeStylesWithColor = (
+  color: string | undefined,
+  styles: CSSAttributes | undefined,
+): CSSAttributes | undefined => (
+  !color
+    ? styles
+    : addToStyles([{
+      attr: 'backgroundColor',
+      value: color,
+    }], styles)
+);

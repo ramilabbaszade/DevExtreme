@@ -1,8 +1,20 @@
-import { DxPromise } from '../core/utils/deferred';
+import { DxPromise, DxExtendedPromise } from '../core/utils/deferred';
+import { DeepPartial } from '../core/index';
 import { FilterDescriptor, GroupDescriptor, LoadOptions } from './index';
 
-/** @namespace DevExpress.data */
-export interface StoreOptions<TKey = any, TValue = any> {
+export type Options<
+    TItem = any,
+    TKey = any,
+> = StoreOptions<TItem, TKey>;
+
+/**
+ * @namespace DevExpress.data
+ * @deprecated Use Options instead
+ */
+export interface StoreOptions<
+    TItem = any,
+    TKey = any,
+> {
     /**
      * @docid
      * @public
@@ -20,29 +32,28 @@ export interface StoreOptions<TKey = any, TValue = any> {
      * @action
      * @public
      */
-    onInserted?: ((values: TValue, key: TKey) => void);
+    onInserted?: ((values: TItem, key: TKey) => void);
     /**
      * @docid
      * @type_function_param1 values:object
      * @action
      * @public
      */
-    onInserting?: ((values: TValue) => void);
+    onInserting?: ((values: TItem) => void);
     /**
      * @docid
-     * @type_function_param1 result:Array<any>
      * @type_function_param2 loadOptions:LoadOptions
      * @action
      * @public
      */
-    onLoaded?: ((result: Array<TValue>, loadOptions: LoadOptions<TValue>) => void);
+    onLoaded?: ((result: Array<TItem>, loadOptions: LoadOptions<TItem>) => void);
     /**
      * @docid
      * @type_function_param1 loadOptions:LoadOptions
      * @action
      * @public
      */
-    onLoading?: ((loadOptions: LoadOptions<TValue>) => void);
+    onLoading?: ((loadOptions: LoadOptions<TItem>) => void);
     /**
      * @docid
      * @action
@@ -57,11 +68,10 @@ export interface StoreOptions<TKey = any, TValue = any> {
     onModifying?: Function;
     /**
      * @docid
-     * @type_function_param1 changes:Array<any>
      * @action
      * @public
      */
-    onPush?: ((changes: Array<TValue>) => void);
+    onPush?: ((changes: Array<TItem>) => void);
     /**
      * @docid
      * @type_function_param1 key:object|string|number
@@ -83,7 +93,7 @@ export interface StoreOptions<TKey = any, TValue = any> {
      * @action
      * @public
      */
-    onUpdated?: ((key: TKey, values: TValue) => void);
+    onUpdated?: ((key: TKey, values: TItem) => void);
     /**
      * @docid
      * @type_function_param1 key:object|string|number
@@ -91,7 +101,7 @@ export interface StoreOptions<TKey = any, TValue = any> {
      * @action
      * @public
      */
-    onUpdating?: ((key: TKey, values: TValue) => void);
+    onUpdating?: ((key: TKey, values: TItem) => void);
 }
 
 type EventName = 'loaded' | 'loading' | 'inserted' | 'inserting' | 'updated' | 'updating' | 'push' | 'removed' | 'removing' | 'modified' | 'modifying';
@@ -99,12 +109,13 @@ type EventName = 'loaded' | 'loading' | 'inserted' | 'inserting' | 'updated' | '
 /**
  * @docid
  * @hidden
- * @module data/abstract_store
- * @export default
  * @namespace DevExpress.data
  */
-export default class Store<TKey = any, TValue = any> {
-    constructor(options?: StoreOptions<TKey, TValue>)
+export default class Store<
+    TItem = any,
+    TKey = any,
+> {
+    constructor(options?: Options<TItem, TKey>)
     /**
      * @docid
      * @publicName byKey(key)
@@ -113,7 +124,7 @@ export default class Store<TKey = any, TValue = any> {
      * @return Promise<any>
      * @public
      */
-    byKey(key: TKey, extraOptions?: LoadOptions<TValue>): DxPromise<TValue>;
+    byKey(key: TKey, extraOptions?: LoadOptions<TItem>): DxPromise<TItem>;
     /**
      * @docid
      * @publicName insert(values)
@@ -121,11 +132,10 @@ export default class Store<TKey = any, TValue = any> {
      * @return Promise<any>
      * @public
      */
-    insert(values: TValue): DxPromise<TValue>;
+    insert(values: TItem): DxExtendedPromise<TItem>;
     /**
      * @docid
      * @publicName key()
-     * @return string|Array<string>
      * @public
      */
     key(): string | Array<string>;
@@ -136,14 +146,14 @@ export default class Store<TKey = any, TValue = any> {
      * @return any|string|number
      * @public
      */
-    keyOf(obj: TValue): TKey;
+    keyOf(obj: TItem): TKey;
     /**
      * @docid
      * @publicName load()
      * @return Promise<any>
      * @public
      */
-    load(): DxPromise<Array<TValue>>;
+    load(): DxExtendedPromise<Array<TItem>>;
     /**
      * @docid
      * @publicName load(options)
@@ -151,7 +161,7 @@ export default class Store<TKey = any, TValue = any> {
      * @return Promise<any>
      * @public
      */
-    load(options: LoadOptions<TValue>): DxPromise<Array<TValue>>;
+    load(options: LoadOptions<TItem>): DxExtendedPromise<Array<TItem>>;
     /**
      * @docid
      * @publicName off(eventName)
@@ -164,7 +174,6 @@ export default class Store<TKey = any, TValue = any> {
      * @docid
      * @publicName off(eventName, eventHandler)
      * @param1 eventName:string
-     * @param2 eventHandler:function
      * @return this
      * @public
      */
@@ -173,7 +182,6 @@ export default class Store<TKey = any, TValue = any> {
      * @docid
      * @publicName on(eventName, eventHandler)
      * @param1 eventName:string
-     * @param2 eventHandler:function
      * @return this
      * @public
      */
@@ -192,7 +200,7 @@ export default class Store<TKey = any, TValue = any> {
      * @param1 changes:Array<any>
      * @public
      */
-    push(changes: Array<{ type: 'insert' | 'update' | 'remove'; data?: TValue; key?: TKey; index?: number }>): void;
+    push(changes: Array<{ type: 'insert' | 'update' | 'remove'; data?: DeepPartial<TItem>; key?: TKey; index?: number }>): void;
     /**
      * @docid
      * @publicName remove(key)
@@ -204,13 +212,12 @@ export default class Store<TKey = any, TValue = any> {
     /**
      * @docid
      * @publicName totalCount(options)
-     * @param1 obj:object
      * @param1_field1 filter:object
      * @param1_field2 group:object
      * @return Promise<number>
      * @public
      */
-    totalCount(obj: { filter?: FilterDescriptor | Array<FilterDescriptor>; group?: GroupDescriptor<TValue> | Array<GroupDescriptor<TValue>> }): DxPromise<number>;
+    totalCount(obj: { filter?: FilterDescriptor | Array<FilterDescriptor>; group?: GroupDescriptor<TItem> | Array<GroupDescriptor<TItem>> }): DxPromise<number>;
     /**
      * @docid
      * @publicName update(key, values)
@@ -219,5 +226,5 @@ export default class Store<TKey = any, TValue = any> {
      * @return Promise<any>
      * @public
      */
-    update(key: TKey, values: TValue): DxPromise<TValue>;
+    update(key: TKey, values: DeepPartial<TItem>): DxExtendedPromise<TItem>;
 }

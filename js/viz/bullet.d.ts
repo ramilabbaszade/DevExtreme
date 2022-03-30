@@ -111,8 +111,6 @@ export interface dxBulletOptions extends BaseSparklineOptions<dxBullet> {
 /**
  * @docid
  * @inherits BaseSparkline
- * @module viz/bullet
- * @export default
  * @namespace DevExpress.viz
  * @public
  */
@@ -123,6 +121,3 @@ export type Properties = dxBulletOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxBulletOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxBulletOptions;

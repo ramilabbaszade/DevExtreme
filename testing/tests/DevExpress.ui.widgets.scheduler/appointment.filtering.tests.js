@@ -73,10 +73,8 @@ module('Integration: Appointment filtering', {
             const scheduler = createInstanceBase(options, clock);
 
             if(scrollingMode === 'virtual') {
-                const virtualScrollingDispatcher = scheduler.instance.getWorkSpace().virtualScrollingDispatcher;
-                if(virtualScrollingDispatcher) {
-                    virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
-                }
+                const workspace = scheduler.instance.getWorkSpace();
+                workspace.renderer.getRenderTimeout = () => -1;
             }
 
             return scheduler;
@@ -445,9 +443,9 @@ module('Integration: Appointment filtering', {
 
                 assert.equal($appointments.length, 4, 'There are four appointment');
                 assert.deepEqual(dataUtils.data($appointments.get(0), 'dxItemData'), tasks[1], 'The first appointment data is OK');
-                assert.deepEqual(dataUtils.data($appointments.get(1), 'dxItemData'), tasks[1], 'The second appointment dat is OK');
+                assert.deepEqual(dataUtils.data($appointments.get(1), 'dxItemData'), tasks[1], 'The second appointment data is OK');
                 assert.deepEqual(dataUtils.data($appointments.get(2), 'dxItemData'), tasks[3], 'The first appointment data is OK');
-                assert.deepEqual(dataUtils.data($appointments.get(3), 'dxItemData'), tasks[3], 'The second appointment dat is OK');
+                assert.deepEqual(dataUtils.data($appointments.get(3), 'dxItemData'), tasks[3], 'The second appointment data is OK');
             });
 
             test('Tasks should be filtered by resources if groups are changed', function(assert) {

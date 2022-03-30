@@ -9,11 +9,11 @@ import {
 import {
   DateHeaderData,
   DateTimeCellTemplateProps,
-} from '../../types.d';
+} from '../../types';
 import { isHorizontalGroupingApplied } from '../../utils';
 import { GroupPanel, GroupPanelProps } from '../group_panel/group_panel';
 import { DateHeaderLayout, DateHeaderLayoutProps } from './date_header/layout';
-import HeaderPanel from '../../../../../component_wrapper/scheduler_header_panel';
+import { HeaderPanel } from '../../../../../component_wrapper/scheduler/header_panel';
 
 export const viewFunction = ({
   isHorizontalGrouping,
@@ -78,7 +78,10 @@ export class HeaderPanelLayoutProps extends GroupPanelProps {
 @Component({
   defaultOptionRules: null,
   view: viewFunction,
-  jQuery: { register: true, component: HeaderPanel },
+  jQuery: {
+    register: true,
+    component: HeaderPanel,
+  },
 })
 export class HeaderPanelLayout extends JSXComponent<HeaderPanelLayoutProps, 'dateHeaderData'>() {
   get isHorizontalGrouping(): boolean {

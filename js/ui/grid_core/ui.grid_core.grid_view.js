@@ -1,3 +1,4 @@
+import { getOuterWidth, getInnerWidth, getWidth, getHeight, setHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import modules from './ui.grid_core.modules';
 import { deferRender, deferUpdate } from '../../core/utils/common';
@@ -10,6 +11,7 @@ import messageLocalization from '../../localization/message';
 import { when, Deferred } from '../../core/utils/deferred';
 import domAdapter from '../../core/dom_adapter';
 import * as accessibility from '../shared/accessibility';
+import browser from '../../core/utils/browser';
 
 const BORDERS_CLASS = 'borders';
 const TABLE_FIXED_CLASS = 'table-fixed';
@@ -56,47 +58,54 @@ const restoreFocus = function(focusedElement, selectionRange) {
 
 const ResizingController = modules.ViewController.inherit({
     _initPostRenderHandlers: function() {
-        const that = this;
-        const dataController = that._dataController;
+        const dataController = this._dataController;
 
-        if(!that._refreshSizesHandler) {
-            that._refreshSizesHandler = function(e) {
-                dataController.changed.remove(that._refreshSizesHandler);
+        if(!this._refreshSizesHandler) {
+            this._refreshSizesHandler = (e) => {
+                dataController.changed.remove(this._refreshSizesHandler);
 
-                let resizeDeferred;
-                const changeType = e && e.changeType;
-                const isDelayed = e && e.isDelayed;
-                const items = dataController.items();
-
-                if(!e || changeType === 'refresh' || changeType === 'prepend' || changeType === 'append') {
-                    if(!isDelayed) {
-                        resizeDeferred = that.resize();
-                    }
-                } else if(changeType === 'update') {
-                    if(e.changeTypes?.length === 0) {
-                        return;
-                    }
-                    if((items.length > 1 || e.changeTypes[0] !== 'insert') &&
-                        !(items.length === 0 && e.changeTypes[0] === 'remove') && !e.needUpdateDimensions) {
-                        deferUpdate(() => deferRender(() => deferUpdate(() => {
-                            that._setScrollerSpacing(that._hasHeight);
-                            that._rowsView.resize();
-                        })));
-                    } else {
-                        resizeDeferred = that.resize();
-                    }
-                }
-
-                if(changeType && changeType !== 'updateSelection' && changeType !== 'updateFocusedRow' && !isDelayed) {
-                    when(resizeDeferred).done(function() {
-                        that._setAriaRowColCount();
-                        that.fireContentReadyAction();
-                    });
-                }
+                const templateDeferreds = e && e.templateDeferreds || [];
+                when.apply(this, templateDeferreds).done(() => {
+                    this._refreshSizes(e);
+                });
             };
             // TODO remove resubscribing
-            that._dataController.changed.add(function() {
-                that._dataController.changed.add(that._refreshSizesHandler);
+            dataController.changed.add(() => {
+                dataController.changed.add(this._refreshSizesHandler);
+            });
+        }
+    },
+
+    _refreshSizes: function(e) {
+        let resizeDeferred;
+        const that = this;
+        const changeType = e && e.changeType;
+        const isDelayed = e && e.isDelayed;
+        const items = that._dataController.items();
+
+        if(!e || changeType === 'refresh' || changeType === 'prepend' || changeType === 'append') {
+            if(!isDelayed) {
+                resizeDeferred = that.resize();
+            }
+        } else if(changeType === 'update') {
+            if(e.changeTypes?.length === 0) {
+                return;
+            }
+            if((items.length > 1 || e.changeTypes[0] !== 'insert') &&
+                !(items.length === 0 && e.changeTypes[0] === 'remove') && !e.needUpdateDimensions) {
+                deferUpdate(() => deferRender(() => deferUpdate(() => {
+                    that._setScrollerSpacing(that._hasHeight);
+                    that._rowsView.resize();
+                })));
+            } else {
+                resizeDeferred = that.resize();
+            }
+        }
+
+        if(changeType && changeType !== 'updateSelection' && changeType !== 'updateFocusedRow' && changeType !== 'pageIndex' && !isDelayed) {
+            when(resizeDeferred).done(function() {
+                that._setAriaRowColCount();
+                that.fireContentReadyAction();
             });
         }
     },
@@ -174,8 +183,21 @@ const ResizingController = modules.ViewController.inherit({
         this._toggleBestFitModeForView(this._columnHeadersView, 'dx-header', isBestFit);
         this._toggleBestFitModeForView(this._footerView, 'dx-footer', isBestFit);
 
+        this._toggleContentMinHeight(isBestFit); // T1047239
+
         if(this._needStretch()) {
             $rowsTable.get(0).style.width = isBestFit ? 'auto' : '';
+        }
+    },
+
+    _toggleContentMinHeight: function(isBestFit) {
+        if(this.option('wordWrapEnabled')) {
+            const scrollable = this._rowsView.getScrollable();
+            const $contentElement = this._rowsView._findContentElement();
+
+            if(scrollable?.option('useNative') === false) {
+                $contentElement.css({ minHeight: isBestFit ? gridCoreUtils.getContentHeightLimit(browser) : '' });
+            }
         }
     },
 
@@ -361,7 +383,7 @@ const ResizingController = modules.ViewController.inherit({
                     isColumnWidthsCorrected = true;
                     if(hasWidth === false && !hasPercentWidth) {
                         const borderWidth = that.option('showBorders') ?
-                            Math.ceil($rowsViewElement.outerWidth() - $rowsViewElement.innerWidth())
+                            Math.ceil(getOuterWidth($rowsViewElement) - getInnerWidth($rowsViewElement))
                             : 0;
 
                         that._maxWidth = totalWidth + scrollbarWidth + borderWidth;
@@ -464,7 +486,7 @@ const ResizingController = modules.ViewController.inherit({
         const $rootElement = $(rootElement);
         const importantMarginClass = that.addWidgetPrefix(IMPORTANT_MARGIN_CLASS);
 
-        if(that._hasHeight === undefined && $rootElement && $rootElement.is(':visible') && $rootElement.width()) {
+        if(that._hasHeight === undefined && $rootElement && $rootElement.is(':visible') && getWidth($rootElement)) {
             $groupElement = $rootElement.children('.' + that.getWidgetContainerClass());
             if($groupElement.length) {
                 $groupElement.detach();
@@ -472,9 +494,9 @@ const ResizingController = modules.ViewController.inherit({
 
             that._hasHeight = !!getContainerHeight($rootElement);
 
-            width = $rootElement.width();
+            width = getWidth($rootElement);
             $rootElement.addClass(importantMarginClass);
-            that._hasWidth = $rootElement.width() === width;
+            that._hasWidth = getWidth($rootElement) === width;
             $rootElement.removeClass(importantMarginClass);
 
             if($groupElement.length) {
@@ -536,8 +558,8 @@ const ResizingController = modules.ViewController.inherit({
         const $rootElement = this.component.$element();
 
         if(checkSize && (
-            this._lastWidth === $rootElement.width() &&
-            this._lastHeight === $rootElement.height() &&
+            this._lastWidth === getWidth($rootElement) &&
+            this._lastHeight === getHeight($rootElement) &&
             this._devicePixelRatio === getWindow().devicePixelRatio ||
             !$rootElement.is(':visible')
         )) {
@@ -574,7 +596,7 @@ const ResizingController = modules.ViewController.inherit({
         const rowsView = that._rowsView;
         const $rootElement = that.component.$element();
         const groupElement = $rootElement.children().get(0);
-        const rootElementHeight = $rootElement && ($rootElement.get(0).clientHeight || $rootElement.height());
+        const rootElementHeight = $rootElement && ($rootElement.get(0).clientHeight || getHeight($rootElement));
         const maxHeight = parseInt($rootElement.css('maxHeight'));
         const maxHeightHappened = maxHeight && rootElementHeight >= maxHeight;
         const height = that.option('height') || $rootElement.get(0).style.height;
@@ -586,8 +608,10 @@ const ResizingController = modules.ViewController.inherit({
         const hasHeight = that._hasHeight || maxHeightHappened;
 
         if(height && (that._hasHeight ^ height !== 'auto')) {
-            $testDiv = $('<div>').height(height).appendTo($rootElement);
-            that._hasHeight = !!$testDiv.height();
+            $testDiv = $('<div>');
+            setHeight($testDiv, height);
+            $testDiv.appendTo($rootElement);
+            that._hasHeight = !!getHeight($testDiv);
             $testDiv.remove();
         }
 
@@ -619,8 +643,8 @@ const ResizingController = modules.ViewController.inherit({
     },
 
     _updateLastSizes: function($rootElement) {
-        this._lastWidth = $rootElement.width();
-        this._lastHeight = $rootElement.height();
+        this._lastWidth = getWidth($rootElement);
+        this._lastHeight = getHeight($rootElement);
         this._devicePixelRatio = getWindow().devicePixelRatio;
     },
 

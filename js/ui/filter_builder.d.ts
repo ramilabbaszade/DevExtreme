@@ -1,3 +1,4 @@
+import DataSource, { DataSourceLike } from '../data/data_source';
 import {
     UserDefinedElement,
     DxElement,
@@ -6,12 +7,6 @@ import {
 import {
     template,
 } from '../core/templates/template';
-
-import Store from '../data/abstract_store';
-
-import {
-    DataSourceOptions,
-} from '../data/data_source';
 
 import {
     Cancelable,
@@ -80,7 +75,7 @@ export type ValueChangedEvent = EventInfo<dxFilterBuilder> & {
 /** @public */
 export type CustomOperationEditorTemplate = {
     readonly value?: string | number | Date;
-    readonly field: dxFilterBuilderField;
+    readonly field: Field;
     readonly setValue: Function;
 };
 
@@ -88,7 +83,7 @@ export type CustomOperationEditorTemplate = {
 export type FieldEditorTemplate = {
     readonly value?: string | number | Date;
     readonly filterOperation?: string;
-    readonly field: dxFilterBuilderField;
+    readonly field: Field;
     readonly setValue: Function;
 };
 
@@ -107,14 +102,16 @@ export interface dxFilterBuilderOptions extends WidgetOptions<dxFilterBuilder> {
      * @docid
      * @default []
      * @public
+     * @type Array<dxFilterBuilderCustomOperation>
      */
-    customOperations?: Array<dxFilterBuilderCustomOperation>;
+    customOperations?: Array<CustomOperation>;
     /**
      * @docid
      * @default []
      * @public
+     * @type Array<dxFilterBuilderField>
      */
-    fields?: Array<dxFilterBuilderField>;
+    fields?: Array<Field>;
     /**
      * @docid
      * @public
@@ -296,8 +293,6 @@ export interface dxFilterBuilderOptions extends WidgetOptions<dxFilterBuilder> {
 /**
  * @docid
  * @inherits Widget
- * @module ui/filter_builder
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -312,19 +307,22 @@ export default class dxFilterBuilder extends Widget<dxFilterBuilderOptions> {
 }
 
 /**
- * @docid
- * @type object
+ * @public
+ */
+export type CustomOperation = dxFilterBuilderCustomOperation;
+
+/**
  * @namespace DevExpress.ui
+ * @deprecated Use the CustomOperation type instead
  */
 export interface dxFilterBuilderCustomOperation {
     /**
      * @docid
-     * @type_function_param1 filterValue:any
      * @type_function_param2 field:dxFilterBuilderField
      * @type_function_return Filter expression
      * @public
      */
-    calculateFilterExpression?: ((filterValue: any, field: dxFilterBuilderField) => string | Array<any> | Function);
+    calculateFilterExpression?: ((filterValue: any, field: Field) => string | Array<any> | Function);
     /**
      * @docid
      * @default undefined
@@ -333,14 +331,13 @@ export interface dxFilterBuilderCustomOperation {
     caption?: string;
     /**
      * @docid
-     * @type_function_param1 fieldInfo:object
+     * @type_function_param1_field1 value:string|number|Date:optional
+     * @type_function_param1_field2 valueText:string:optional
+     * @type_function_param1_field3 field:dxFilterBuilderField:optional
      * @type_function_param1_field1 value:string|number|date
-     * @type_function_param1_field2 valueText:string
-     * @type_function_param1_field3 field:dxFilterBuilderField
-     * @type_function_return string
      * @public
      */
-    customizeText?: ((fieldInfo: { value?: string | number | Date; valueText?: string; field?: dxFilterBuilderField }) => string);
+    customizeText?: ((fieldInfo: { value?: string | number | Date; valueText?: string; field?: Field }) => string);
     /**
      * @docid
      * @type Array<Enums.FilterBuilderFieldDataType>
@@ -354,7 +351,6 @@ export interface dxFilterBuilderCustomOperation {
      * @type_function_param1_field1 value:string|number|date
      * @type_function_param1_field2 field:dxFilterBuilderField
      * @type_function_param1_field3 setValue:function
-     * @type_function_param2 container:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -379,16 +375,20 @@ export interface dxFilterBuilderCustomOperation {
     name?: string;
 }
 
+export type FilterLookupDataSource<T> = Exclude<DataSourceLike<T>, string | DataSource>;
+
 /**
- * @@docid
- * @type object
+ * @public
+ */
+export type Field = dxFilterBuilderField;
+
+/**
  * @namespace DevExpress.ui
+ * @deprecated Use the Field type instead
  */
 export interface dxFilterBuilderField {
     /**
      * @docid
-     * @type_function_param1 filterValue:any
-     * @type_function_param2 selectedFilterOperation:string
      * @type_function_return Filter expression
      * @public
      */
@@ -401,10 +401,7 @@ export interface dxFilterBuilderField {
     caption?: string;
     /**
      * @docid
-     * @type_function_param1 fieldInfo:object
      * @type_function_param1_field1 value:string|number|date
-     * @type_function_param1_field2 valueText:string
-     * @type_function_return string
      * @public
      */
     customizeText?: ((fieldInfo: { value?: string | number | Date; valueText?: string }) => string);
@@ -433,7 +430,6 @@ export interface dxFilterBuilderField {
      * @type_function_param1_field2 filterOperation:string
      * @type_function_param1_field3 field:dxFilterBuilderField
      * @type_function_param1_field4 setValue:function
-     * @type_function_param2 container:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -471,20 +467,19 @@ export interface dxFilterBuilderField {
       /**
        * @docid
        * @default undefined
+       * @type Array<any> | Store | DataSourceOptions
        */
-      dataSource?: Array<any> | Store | DataSourceOptions;
+      dataSource?: FilterLookupDataSource<any>;
       /**
        * @docid
        * @default undefined
        * @type_function_param1 data:object
-       * @type_function_return string
        */
       displayExpr?: string | ((data: any) => string);
       /**
        * @docid
        * @default undefined
        * @type_function_param1 data:object
-       * @type_function_return string|number|boolean
        */
       valueExpr?: string | ((data: any) => string | number | boolean);
     };
@@ -507,6 +502,3 @@ export type Properties = dxFilterBuilderOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxFilterBuilderOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxFilterBuilderOptions;

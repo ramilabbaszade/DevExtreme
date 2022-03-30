@@ -44,7 +44,7 @@ export default SelectionStrategy.inherit({
             const item = items[i];
             const key = keyOf(item);
             if(isDeselect) {
-                keyIndex = this.removeSelectedItem(key, keyIndicesToRemoveMap);
+                keyIndex = this.removeSelectedItem(key, keyIndicesToRemoveMap, item?.disabled);
                 if(keyIndicesToRemoveMap && keyIndex >= 0) {
                     keyIndicesToRemoveMap[keyIndex] = true;
                 }
@@ -329,7 +329,11 @@ export default SelectionStrategy.inherit({
         }
     },
 
-    removeSelectedItem: function(key, keyIndicesToRemoveMap) {
+    removeSelectedItem: function(key, keyIndicesToRemoveMap, isDisabled) {
+        if(!this.options.ignoreDisabledItems && isDisabled) {
+            return;
+        }
+
         const keyHash = this._getKeyHash(key);
         const isBatchDeselect = !!keyIndicesToRemoveMap;
         const keyIndex = this._indexOfSelectedItemKey(keyHash, keyIndicesToRemoveMap);
@@ -390,7 +394,8 @@ export default SelectionStrategy.inherit({
     _isItemSelectionInProgress: function(key, checkPending) {
         const shouldCheckPending = checkPending && this._lastRequestData && this._requestInProgress();
         if(shouldCheckPending) {
-            return this._lastRequestData.addedItems?.indexOf(key) !== -1;
+            const addedItems = this._lastRequestData.addedItems ?? [];
+            return addedItems.includes(key);
         } else {
             return false;
         }

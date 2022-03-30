@@ -1,8 +1,6 @@
 /**
  * @docid ui.themes
  * @namespace DevExpress.ui
- * @module ui/themes
- * @export default
  * @public
  */
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
@@ -11,14 +9,12 @@ export default class themes {
      * @docid ui.themes.current
      * @publicName current()
      * @static
-     * @return string
      * @public
      */
     static current(): string;
     /**
      * @docid ui.themes.current
      * @publicName current(themeName)
-     * @param1 themeName:string
      * @static
      * @public
      */
@@ -26,7 +22,6 @@ export default class themes {
     /**
      * @docid ui.themes.ready
      * @publicName ready(callback)
-     * @param1 callback:function
      * @static
      * @public
      */
@@ -34,7 +29,6 @@ export default class themes {
     /**
      * @docid ui.themes.initialized
      * @publicName initialized(callback)
-     * @param1 callback:function
      * @static
      * @public
      */

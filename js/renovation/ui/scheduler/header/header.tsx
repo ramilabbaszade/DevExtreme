@@ -4,6 +4,7 @@ import {
   JSXComponent,
   OneWay,
   Event,
+  InternalState,
 } from '@devextreme-generator/declarations';
 
 import devices from '../../../../core/devices';
@@ -25,23 +26,42 @@ import type { DateNavigatorTextInfo } from '../../../../ui/scheduler';
 import {
   ItemOptions, Direction, ItemView,
 } from './types';
-import { ViewType } from '../types.d';
+import { ViewType } from '../types';
 
 import { SchedulerProps, ViewProps } from '../props';
 import { SchedulerToolbarItem } from './props';
 import { ToolbarItem } from '../../toolbar/toolbar_props';
+import { SchedulerCalendar } from './calendar';
 
 const { trimTime } = dateUtils;
 
-export const viewFunction = (viewModel: SchedulerToolbar): JSX.Element => (
-  <div
-    className="dx-scheduler-header"
-  >
-    <Toolbar
-      items={viewModel.items}
-    />
-  </div>
-);
+export const viewFunction = (viewModel: SchedulerToolbar): JSX.Element => {
+  const {
+    currentDate, min, max, firstDayOfWeek,
+  } = viewModel.props;
+  const {
+    changeCalendarDate, calendarVisible, changeCalendarVisible, items,
+  } = viewModel;
+
+  return (
+    <div
+      className="dx-scheduler-header"
+    >
+      <SchedulerCalendar
+        currentDate={currentDate}
+        onCurrentDateUpdate={changeCalendarDate}
+        min={min}
+        max={max}
+        firstDayOfWeek={firstDayOfWeek}
+        visible={calendarVisible}
+        onVisibleUpdate={changeCalendarVisible}
+      />
+      <Toolbar
+        items={items}
+      />
+    </div>
+  );
+};
 
 @ComponentBindings()
 export class SchedulerToolbarBaseProps {
@@ -66,23 +86,26 @@ export class SchedulerToolbarBaseProps {
   @OneWay() useShortDateFormat = !devices.real().generic || devices.isSimulator();
 
   @OneWay() customizationFunction?: (caption: DateNavigatorTextInfo) => string;
+
+  @OneWay() viewType: ViewType = 'day';
 }
 
 export type SchedulerToolbarProps = SchedulerToolbarBaseProps
+// eslint-disable-next-line @typescript-eslint/no-type-alias
 & Pick<SchedulerProps, 'currentView' | 'min' | 'max' | 'useDropDownViewSwitcher'>;
 
 @Component({ view: viewFunction })
-export default class SchedulerToolbar extends JSXComponent<SchedulerToolbarProps, 'items' | 'views' | 'onCurrentViewUpdate' | 'currentDate' | 'onCurrentDateUpdate' | 'startViewDate'>() {
-  cssClass = 'dx-scheduler-header';
+export class SchedulerToolbar extends JSXComponent<SchedulerToolbarProps, 'items' | 'views' | 'onCurrentViewUpdate' | 'currentDate' | 'onCurrentDateUpdate' | 'startViewDate'>() {
+  @InternalState() calendarVisible = false;
 
   get step(): string {
-    return getStep(this.props.currentView) as string;
+    return getStep(this.props.viewType) as string;
   }
 
   get displayedDate(): Date {
     const startViewDate = new Date(this.props.startViewDate);
 
-    if (isMonthView(this.props.currentView)) {
+    if (isMonthView(this.props.viewType)) {
       return nextWeek(startViewDate);
     }
 
@@ -95,7 +118,7 @@ export default class SchedulerToolbar extends JSXComponent<SchedulerToolbarProps
       intervalCount: this.props.intervalCount,
       firstDayOfWeek: this.props.firstDayOfWeek,
       agendaDuration: this.props.agendaDuration,
-      date: this.displayedDate,
+      date: trimTime(this.displayedDate),
     };
 
     return getCaption(
@@ -164,9 +187,9 @@ export default class SchedulerToolbar extends JSXComponent<SchedulerToolbarProps
 
     const min = trimTime(new Date(this.props.min));
 
-    const { startDate } = this.caption;
+    const { endDate } = this.caption;
 
-    const previousDate = this.getNextDate(-1, startDate);
+    const previousDate = this.getNextDate(-1, endDate);
     return previousDate < min;
   }
 
@@ -177,15 +200,23 @@ export default class SchedulerToolbar extends JSXComponent<SchedulerToolbarProps
 
     const max = new Date(new Date(this.props.max).setHours(23, 59, 59));
 
-    const { endDate } = this.caption;
+    const { startDate } = this.caption;
 
-    const nextDate = this.getNextDate(1, endDate);
+    const nextDate = this.getNextDate(1, startDate);
     return nextDate > max;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  changeCalendarDate(date: Date): void {
+    this.calendarVisible = false;
+    this.setCurrentDate(date);
+  }
+
+  changeCalendarVisible(visible: boolean): void {
+    this.calendarVisible = visible;
+  }
+
   showCalendar(): void {
-    // TODO
+    this.changeCalendarVisible(true);
   }
 
   get items(): ToolbarItem[] {

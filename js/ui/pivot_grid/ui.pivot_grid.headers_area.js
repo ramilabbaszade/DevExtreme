@@ -1,8 +1,10 @@
+import { setWidth, setHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { isDefined } from '../../core/utils/type';
 import { inArray } from '../../core/utils/array';
 import { each } from '../../core/utils/iterator';
 import { AreaItem } from './ui.pivot_grid.area_item';
+import Scrollable from '../scroll_view/ui.scrollable';
 
 const PIVOTGRID_AREA_CLASS = 'dx-pivotgrid-area';
 const PIVOTGRID_AREA_COLUMN_CLASS = 'dx-pivotgrid-horizontal-headers';
@@ -16,6 +18,7 @@ const PIVOTGRID_LAST_CELL_CLASS = 'dx-last-cell';
 const PIVOTGRID_VERTICAL_SCROLL_CLASS = 'dx-vertical-scroll';
 const PIVOTGRID_EXPAND_BORDER = 'dx-expand-border';
 
+const isRenovatedScrollable = !!Scrollable.IS_RENOVATED_WIDGET;
 
 function getCellPath(tableElement, cell) {
     if(cell) {
@@ -114,8 +117,15 @@ export const HorizontalHeadersArea = AreaItem.inherit({
             showScrollbar: 'never',
             bounceEnabled: false,
             direction: 'horizontal',
+            rtlEnabled: isRenovatedScrollable ? this.component.option('rtlEnabled') : false,
             updateManually: true
         });
+    },
+
+    updateScrollableOptions: function({ rtlEnabled }) {
+        const scrollable = this._getScrollable();
+
+        isRenovatedScrollable && scrollable.option({ rtlEnabled });
     },
 
     processScrollBarSpacing: function(scrollBarWidth) {
@@ -132,7 +142,7 @@ export const HorizontalHeadersArea = AreaItem.inherit({
 
         this._groupElement.toggleClass(PIVOTGRID_VERTICAL_SCROLL_CLASS, scrollBarWidth > 0);
 
-        this._groupElement.css('float', groupAlignment).width(this.getGroupHeight());
+        setWidth(this._groupElement.css('float', groupAlignment), this.getGroupHeight());
         this._scrollBarWidth = scrollBarWidth;
     },
 
@@ -226,11 +236,10 @@ export const VerticalHeadersArea = HorizontalHeadersArea.inherit({
         }
 
         if(scrollBarWidth) {
-            this._groupElement.after(
-                $('<div>')
-                    .width('100%')
-                    .height(scrollBarWidth - 1)
-            );
+            const $div = $('<div>');
+            setWidth($div, '100%');
+            setHeight($div, scrollBarWidth - 1);
+            this._groupElement.after($div);
         }
 
         this._scrollBarWidth = scrollBarWidth;

@@ -12,11 +12,7 @@ import {
     template,
 } from '../../core/templates/template';
 
-import DataSource, {
-    DataSourceOptions,
-} from '../../data/data_source';
-
-import Store from '../../data/abstract_store';
+import DataSource, { DataSourceLike } from '../../data/data_source';
 
 import {
     EventInfo,
@@ -106,11 +102,11 @@ export interface BaseChartOptions<TComponent> extends BaseWidgetOptions<TCompone
     customizePoint?: ((pointInfo: any) => dxChartSeriesTypesCommonSeriesPoint);
     /**
      * @docid BaseChartOptions.dataSource
-     * @type Array<any>|Store|DataSource|DataSourceOptions|string
      * @notUsedInTheme
      * @public
+     * @type Store|DataSource|DataSourceOptions|string|Array<any>
      */
-    dataSource?: Array<any> | Store | DataSource | DataSourceOptions | string;
+    dataSource?: DataSourceLike<any>;
     /**
      * @docid
      * @inherits BaseLegend
@@ -133,6 +129,7 @@ export interface BaseChartOptions<TComponent> extends BaseWidgetOptions<TCompone
     /**
      * @docid
      * @default null
+     * @type function
      * @type_function_param1 e:object
      * @type_function_param1_field1 component:this
      * @type_function_param1_field2 element:DxElement
@@ -143,7 +140,7 @@ export interface BaseChartOptions<TComponent> extends BaseWidgetOptions<TCompone
      * @action
      * @public
      */
-    onPointClick?: ((e: NativeEventInfo<TComponent> & PointInteractionInfo) => void) | string;
+    onPointClick?: ((e: NativeEventInfo<TComponent, MouseEvent | PointerEvent> & PointInteractionInfo) => void) | string;
     /**
      * @docid
      * @type_function_param1 e:object
@@ -253,16 +250,12 @@ export interface BaseChartAdaptiveLayout {
 export interface BaseChartLegend extends BaseLegend {
     /**
      * @docid BaseChartOptions.legend.customizeItems
-     * @type_function_param1 items:Array<BaseChartLegendItem>
-     * @type_function_return Array<BaseChartLegendItem>
      * @public
      */
     customizeItems?: ((items: Array<BaseChartLegendItem>) => Array<BaseChartLegendItem>);
     /**
      * @docid BaseChartOptions.legend.markerTemplate
      * @default undefined
-     * @type_function_param1 legendItem:BaseChartLegendItem
-     * @type_function_param2 element:SVGGElement
      * @type_function_return string|SVGElement|jQuery
      * @public
      */
@@ -272,7 +265,6 @@ export interface BaseChartLegend extends BaseLegend {
 export interface BaseChartTooltip extends BaseWidgetTooltip {
     /**
      * @docid BaseChartOptions.tooltip.argumentFormat
-     * @type Format
      * @default undefined
      * @public
      */
@@ -280,7 +272,6 @@ export interface BaseChartTooltip extends BaseWidgetTooltip {
     /**
      * @docid BaseChartOptions.tooltip.contentTemplate
      * @type_function_param1 pointInfo:object
-     * @type_function_param2 element:DxElement
      * @type_function_return string|Element|jQuery
      * @default undefined
      * @public
@@ -324,7 +315,6 @@ export class BaseChart<TProperties> extends BaseWidget<TProperties> {
     /**
      * @docid
      * @publicName getAllSeries()
-     * @return Array<baseSeriesObject>
      * @public
      */
     getAllSeries(): Array<baseSeriesObject>;
@@ -332,16 +322,12 @@ export class BaseChart<TProperties> extends BaseWidget<TProperties> {
     /**
      * @docid
      * @publicName getSeriesByName(seriesName)
-     * @param1 seriesName:any
-     * @return chartSeriesObject
      * @public
      */
     getSeriesByName(seriesName: any): chartSeriesObject;
     /**
      * @docid
      * @publicName getSeriesByPos(seriesIndex)
-     * @param1 seriesIndex:number
-     * @return chartSeriesObject
      * @public
      */
     getSeriesByPos(seriesIndex: number): chartSeriesObject;

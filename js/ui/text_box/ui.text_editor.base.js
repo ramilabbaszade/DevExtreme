@@ -17,6 +17,9 @@ import config from '../../core/config';
 import errors from '../widget/ui.errors';
 import { Deferred } from '../../core/utils/deferred';
 import LoadIndicator from '../load_indicator';
+import { TextEditorLabel } from './ui.text_editor.label';
+import { getWidth } from '../../core/utils/size';
+import resizeObserverSingleton from '../../core/resize_observer';
 
 const TEXTEDITOR_CLASS = 'dx-texteditor';
 const TEXTEDITOR_INPUT_CONTAINER_CLASS = 'dx-texteditor-input-container';
@@ -54,6 +57,8 @@ const CONTROL_KEYS = [
     'downArrow',
 ];
 
+let TextEditorLabelCreator = TextEditorLabel;
+
 function checkButtonsOptionType(buttons) {
     if(isDefined(buttons) && !Array.isArray(buttons)) {
         throw errors.Error('E1053');
@@ -70,6 +75,7 @@ const TextEditorBase = Editor.inherit({
 
         this._$beforeButtonsContainer = null;
         this._$afterButtonsContainer = null;
+        this._labelContainerElement = null;
 
         this.callBase.apply(this, arguments);
     },
@@ -95,8 +101,6 @@ const TextEditorBase = Editor.inherit({
             onFocusOut: null,
 
             onKeyDown: null,
-
-            onKeyPress: null,
 
             onKeyUp: null,
 
@@ -127,7 +131,13 @@ const TextEditorBase = Editor.inherit({
 
             stylingMode: config().editorStylingMode || 'outlined',
 
-            showValidationMark: true
+            showValidationMark: true,
+
+            label: '',
+
+            labelMode: 'static',
+
+            labelMark: ''
         });
     },
 
@@ -140,18 +150,11 @@ const TextEditorBase = Editor.inherit({
                     return isMaterial(themeName);
                 },
                 options: {
-                    stylingMode: config().editorStylingMode || 'filled'
+                    stylingMode: config().editorStylingMode || 'filled',
+                    labelMode: 'floating'
                 }
             }
         ]);
-    },
-
-    _setDeprecatedOptions: function() {
-        this.callBase();
-
-        extend(this._deprecatedOptions, {
-            'onKeyPress': { since: '20.1', message: 'This event is removed from the web standards and will be deprecated in modern browsers soon.' }
-        });
     },
 
     _getDefaultButtons: function() {
@@ -201,12 +204,13 @@ const TextEditorBase = Editor.inherit({
         this.callBase();
 
         this._renderValue();
+
+        this._renderLabel();
     },
 
     _render: function() {
         this.callBase();
 
-        this._renderPlaceholder();
         this._refreshValueChangeEvent();
         this._renderEvents();
 
@@ -287,6 +291,7 @@ const TextEditorBase = Editor.inherit({
     _clean() {
         this._buttonCollection.clean();
         this._disposePendingIndicator();
+        this._unobserveLabelContainerResize();
         this._$beforeButtonsContainer = null;
         this._$afterButtonsContainer = null;
         this._$textEditorContainer = null;
@@ -439,6 +444,63 @@ const TextEditorBase = Editor.inherit({
         this._input().prop('spellcheck', this.option('spellcheck'));
     },
 
+    _unobserveLabelContainerResize: function() {
+        if(this._labelContainerElement) {
+            resizeObserverSingleton.unobserve(this._labelContainerElement);
+
+            this._labelContainerElement = null;
+        }
+    },
+
+    _getLabelContainer: function() {
+        return this._input();
+    },
+
+    _getLabelContainerWidth: function() {
+        return getWidth(this._getLabelContainer());
+    },
+
+    _getLabelBeforeWidth: function() {
+        const buttonsBeforeWidth = this._$beforeButtonsContainer && getWidth(this._$beforeButtonsContainer);
+
+        return buttonsBeforeWidth ?? 0;
+    },
+
+    _updateLabelWidth: function() {
+        this._label.updateBeforeWidth(this._getLabelBeforeWidth());
+        this._label.updateMaxWidth(this._getLabelContainerWidth());
+    },
+
+    _setLabelContainerAria: function() {
+        this.setAria('labelledby', this._label.getId(), this._getLabelContainer());
+    },
+
+    _renderLabel: function() {
+        this._unobserveLabelContainerResize();
+
+        this._labelContainerElement = $(this._getLabelContainer()).get(0);
+
+        const { label, labelMode, labelMark } = this.option();
+
+        const labelConfig = {
+            $editor: this.$element(),
+            text: label,
+            mark: labelMark,
+            mode: labelMode,
+            containsButtonsBefore: !!this._$beforeButtonsContainer,
+            containerWidth: this._getLabelContainerWidth(),
+            beforeWidth: this._getLabelBeforeWidth()
+        };
+
+        this._label = new TextEditorLabelCreator(labelConfig);
+
+        this._setLabelContainerAria();
+
+        if(this._labelContainerElement) { // NOTE: element can be not in DOM yet in React and Vue
+            resizeObserverSingleton.observe(this._labelContainerElement, this._updateLabelWidth.bind(this));
+        }
+    },
+
     _renderPlaceholder: function() {
         this._renderPlaceholderMarkup();
         this._attachPlaceholderEvents();
@@ -575,14 +637,16 @@ const TextEditorBase = Editor.inherit({
             return true;
         }
 
-        let result = this._isNestedTarget(event.relatedTarget);
+        let shouldPrevent = this._isNestedTarget(event.relatedTarget);
 
         if(event.type === 'focusin') {
-            result = result && this._isNestedTarget(event.target) && !this._isInput(event.target);
+            shouldPrevent = shouldPrevent && this._isNestedTarget(event.target) && !this._isInput(event.target);
+        } else if(!shouldPrevent) {
+            this._toggleFocusClass(false, this.$element());
         }
 
-        result && event.preventDefault();
-        return result;
+        shouldPrevent && event.preventDefault();
+        return shouldPrevent;
     },
 
     _isNestedTarget: function(target) {
@@ -705,6 +769,21 @@ const TextEditorBase = Editor.inherit({
             case 'placeholder':
                 this._renderPlaceholder();
                 break;
+            case 'label':
+                this._label.updateText(value);
+                this._setLabelContainerAria();
+                break;
+            case 'labelMark':
+                this._label.updateMark(value);
+                break;
+            case 'labelMode':
+                this._label.updateMode(value);
+                this._setLabelContainerAria();
+                break;
+            case 'width':
+                this.callBase(args);
+                this._label.updateMaxWidth(this._getLabelContainerWidth());
+                break;
             case 'readOnly':
             case 'disabled':
                 this._updateButtons();
@@ -724,6 +803,7 @@ const TextEditorBase = Editor.inherit({
                 break;
             case 'stylingMode':
                 this._renderStylingMode();
+                this._updateLabelWidth();
                 break;
             case 'buttons':
                 if(fullName === name) {
@@ -732,6 +812,8 @@ const TextEditorBase = Editor.inherit({
                 this._cleanButtonContainers();
                 this._renderButtonContainers();
                 this._updateButtonsStyling(this.option('stylingMode'));
+                this._updateLabelWidth();
+                this._label.updateContainsButtonsBefore(!!this._$beforeButtonsContainer);
                 break;
             case 'visible':
                 this.callBase(args);
@@ -803,5 +885,15 @@ const TextEditorBase = Editor.inherit({
         return result;
     }
 });
+
+
+///#DEBUG
+TextEditorBase.mockTextEditorLabel = (mock) => {
+    TextEditorLabelCreator = mock;
+};
+TextEditorBase.restoreTextEditorLabel = (mock) => {
+    TextEditorLabelCreator = TextEditorLabel;
+};
+///#ENDDEBUG
 
 export default TextEditorBase;

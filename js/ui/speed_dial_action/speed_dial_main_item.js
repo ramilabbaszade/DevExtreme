@@ -1,3 +1,4 @@
+import { getHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import config from '../../core/config';
 import { extend } from '../../core/utils/extend';
@@ -17,7 +18,47 @@ const INVISIBLE_STATE_CLASS = 'dx-state-invisible';
 let speedDialMainItem = null;
 
 const modifyActionOptions = (action) => {
-    return extend({}, action._options.silent(), {
+    const {
+        icon,
+        onClick,
+        label,
+        visible,
+        index,
+        onContentReady,
+        activeStateEnabled,
+        hoverStateEnabled,
+        animation,
+        id,
+        actions,
+        actionComponent,
+        actionVisible,
+        zIndex,
+        position,
+        hint,
+        parentPosition,
+        direction
+    } = action.option();
+
+    return extend({}, {
+        icon,
+        onClick,
+        label,
+        visible,
+        index,
+        onContentReady,
+        activeStateEnabled,
+        hoverStateEnabled,
+        animation,
+        id,
+        actions,
+        actionComponent,
+        actionVisible,
+        zIndex,
+        position,
+        hint,
+        parentPosition,
+        direction
+    }, {
         onInitialized: null,
         onDisposing: null
     });
@@ -47,7 +88,7 @@ class SpeedDialMainItem extends SpeedDialItem {
             childIndent: 40,
             childOffset: 9,
             callOverlayRenderShading: true,
-            closeOnOutsideClick: true
+            hideOnOutsideClick: true
         };
 
         return extend(
@@ -110,9 +151,14 @@ class SpeedDialMainItem extends SpeedDialItem {
     _getCurrentOptions(actions) {
         const visibleActions = speedDialMainItem._getVisibleActions(actions);
 
+        const defaultOptions = this._getDefaultOptions();
+
+        delete defaultOptions.elementAttr;
+        delete defaultOptions.closeOnOutsideClick;
+
         return visibleActions.length === 1 ?
-            extend(visibleActions[0]._options.silent(), { position: this._getPosition() }) :
-            extend(this._getDefaultOptions(), { visible: visibleActions.length !== 0 });
+            extend(modifyActionOptions(visibleActions[0]), { position: this._getPosition() }) :
+            extend(defaultOptions, { visible: visibleActions.length !== 0 });
     }
 
     _clickHandler() {
@@ -195,14 +241,14 @@ class SpeedDialMainItem extends SpeedDialItem {
         const directionIndex = 1;
 
         if(direction === 'auto') {
-            const contentHeight = this.$content().height();
+            const contentHeight = getHeight(this.$content());
             const actionsHeight = this.initialOption('indent') + this.initialOption('childIndent') * actions.length - contentHeight;
             const offsetTop = this.$content().offset().top;
 
             if(actionsHeight < offsetTop) {
                 return -directionIndex;
             } else {
-                const offsetBottom = this._getContainer().height() - contentHeight - offsetTop;
+                const offsetBottom = getHeight(this._positionController._$wrapperCoveredElement) - contentHeight - offsetTop;
 
                 return offsetTop >= offsetBottom ? -directionIndex : directionIndex;
             }

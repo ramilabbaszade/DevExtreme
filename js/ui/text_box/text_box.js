@@ -6,6 +6,7 @@ import { extend } from '../../core/utils/extend';
 import registerComponent from '../../core/component_registrator';
 import TextEditor from './ui.text_editor';
 import { normalizeKeyName } from '../../events/utils/index';
+import { getOuterWidth, getWidth } from '../../core/utils/size';
 
 // STYLE textBox
 
@@ -94,10 +95,34 @@ const TextBox = TextEditor.inherit({
         this._$searchIcon = $searchIcon;
     },
 
+    _getLabelContainerWidth: function() {
+        if(this._$searchIcon) {
+            const $inputContainer = this._input().parent();
+
+            return getWidth($inputContainer) - this._getLabelBeforeWidth();
+        }
+
+        return this.callBase();
+    },
+
+    _getLabelBeforeWidth: function() {
+        let labelBeforeWidth = this.callBase();
+
+        if(this._$searchIcon) {
+            labelBeforeWidth += getOuterWidth(this._$searchIcon);
+        }
+
+        return labelBeforeWidth;
+    },
+
     _optionChanged: function(args) {
         switch(args.name) {
             case 'maxLength':
                 this._toggleMaxLengthProp();
+                break;
+            case 'mode':
+                this.callBase(args);
+                this._updateLabelWidth();
                 break;
             case 'mask':
                 this.callBase(args);

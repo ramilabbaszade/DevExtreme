@@ -2,7 +2,6 @@ import animationFrame from 'animation/frame';
 import { getTranslateValues } from 'renovation/ui/scroll_view/utils/get_translate_values';
 import 'generic_light.css!';
 import devices from 'core/devices';
-import browser from 'core/utils/browser';
 import domUtils from 'core/utils/dom';
 import styleUtils from 'core/utils/style';
 import support from 'core/utils/support';
@@ -13,6 +12,7 @@ import Scrollable from 'ui/scroll_view/ui.scrollable';
 import pointerMock from '../../../helpers/pointerMock.js';
 import {
     calculateInertiaDistance,
+    RESIZE_WAIT_TIMEOUT,
     SCROLLABLE_CLASS,
     SCROLLABLE_CONTAINER_CLASS,
     SCROLLABLE_CONTENT_CLASS,
@@ -57,7 +57,7 @@ const getScrollOffset = function($scrollable) {
     };
 };
 
-const isRenovation = !!Scrollable.IS_RENOVATED_WIDGET;
+const isRenovatedScrollable = !!Scrollable.IS_RENOVATED_WIDGET;
 
 QUnit.module('markup', moduleConfig);
 
@@ -101,6 +101,7 @@ QUnit.test('horizontal moving scrollable moves content', function(assert) {
 
 
 QUnit.test('horizontal inertia calc distance', function(assert) {
+    const done = assert.async();
     assert.expect(1);
 
     const contentWidth = 9000;
@@ -117,6 +118,7 @@ QUnit.test('horizontal inertia calc distance', function(assert) {
         onEnd: function() {
             const location = getScrollOffset($scrollable);
             assert.equal(Math.round(location.left), Math.round(distance), 'distance was calculated correctly');
+            done();
         }
     });
 
@@ -127,6 +129,8 @@ QUnit.test('horizontal inertia calc distance', function(assert) {
         .wait(moveDuration)
         .move(moveDistance, 0)
         .up();
+
+    this.clock.tick();
 });
 
 QUnit.test('reset unused position after change direction', function(assert) {
@@ -332,11 +336,7 @@ QUnit.module('Hoverable interaction',
                             assert.strictEqual($scrollBar.hasClass(SCROLLBAR_HOVERABLE_CLASS), isScrollbarHoverable, `scrollbar hasn't ${SCROLLBAR_HOVERABLE_CLASS}`);
                             assert.strictEqual($scrollable.hasClass(SCROLLABLE_DISABLED_CLASS), disabled ? true : false, 'scrollable-disabled-class');
 
-                            if(browser.msie && parseInt(browser.version) >= 12 && !onInitialize) {
-                                assert.ok(true, 'Skip assert for Edge. The pointer-event property processed with a timeout');
-                            } else {
-                                assert.strictEqual($scrollBar.css('pointer-events'), disabled ? 'none' : 'auto', 'pointer-events');
-                            }
+                            assert.strictEqual($scrollBar.css('pointer-events'), disabled ? 'none' : 'auto', 'pointer-events');
                         });
                     });
                 });
@@ -401,6 +401,8 @@ QUnit.test('initViewport disables panning for non-native scrolling', function(as
 
 QUnit.test('dxpointermove is prevented when scrolling is disabled (Q574378)', function(assert) {
     const $scrollable = $('#scrollable');
+
+    $scrollable.find('.content1').height(50);
 
     $scrollable
         .height('auto')
@@ -511,7 +513,7 @@ QUnit.test('B250273 - dxList: showScrollbar option does not work on device.', fu
 });
 
 QUnit.test('simulated scrollable should stop animators on disposing', function(assert) {
-    if(isRenovation) {
+    if(isRenovatedScrollable) {
         assert.ok(true);
         return;
     }
@@ -583,6 +585,48 @@ QUnit.test('disabled scrollable nested in another scrollable causes outer compon
         .wheel(0, -1);
 
     assert.equal(onScrollHandler.callCount, 1, 'scroll action fired for external dxScrollable');
+});
+
+QUnit.module('scrollByContent', moduleConfig);
+
+QUnit.test('should not reset current scroll position after change scrollByContent option', function(assert) {
+    const $scrollable = $('#scrollable');
+    const scrollable = $scrollable.dxScrollable({
+        height: 50,
+        useNative: false,
+        inertiaEnabled: false,
+        direction: 'both',
+        scrollByContent: true,
+        bounceEnabled: false
+    }).dxScrollable('instance');
+
+    const pointer = pointerMock($(scrollable.content()));
+    pointer
+        .start()
+        .down()
+        .move(-20, -10);
+
+    assert.deepEqual(scrollable.scrollOffset(), { top: 10, left: 20 }, 'scrollable.scrollOffset()');
+
+    scrollable.option('scrollByContent', false);
+
+    assert.deepEqual(scrollable.scrollOffset(), { top: 10, left: 20 }, 'scrollable.scrollOffset()');
+
+    pointer
+        .start()
+        .down()
+        .move(-10, -10);
+
+    scrollable.option('scrollByContent', true);
+
+    assert.deepEqual(scrollable.scrollOffset(), { top: 10, left: 20 }, 'scrollable.scrollOffset()');
+
+    pointer
+        .start()
+        .down()
+        .move(-10, -10);
+
+    assert.deepEqual(scrollable.scrollOffset(), { top: 20, left: 30 }, 'scrollable.scrollOffset()');
 });
 
 QUnit.module('default value nativeScrollable', {
@@ -781,6 +825,7 @@ QUnit.module('visibility events integration', {
 });
 
 QUnit.test('scroll should save position on dxhiding and restore on dxshown', function(assert) {
+    const done = assert.async();
     const $scrollable = $('#scrollable');
 
     const scrollable = $scrollable.dxScrollable({
@@ -789,17 +834,20 @@ QUnit.test('scroll should save position on dxhiding and restore on dxshown', fun
     }).dxScrollable('instance');
 
     scrollable.scrollTo({ left: 10, top: 20 });
-
     triggerHidingEvent($scrollable);
-
     $scrollable.hide();
 
-    scrollable.scrollTo({ left: 0, top: 0 });
+    setTimeout(() => {
+        scrollable.scrollTo({ left: 0, top: 0 });
 
-    $scrollable.show();
-    triggerShownEvent($scrollable);
+        $scrollable.show();
+        setTimeout(() => {
+            triggerShownEvent($scrollable);
 
-    assert.deepEqual(scrollable.scrollOffset(), { left: 10, top: 20 }, 'scroll position restored after dxshown');
+            assert.deepEqual(scrollable.scrollOffset(), { left: 10, top: 20 }, 'scroll position restored after dxshown');
+            done();
+        }, RESIZE_WAIT_TIMEOUT);
+    }, RESIZE_WAIT_TIMEOUT);
 });
 
 QUnit.test('scroll should restore on second dxshown', function(assert) {
@@ -820,26 +868,6 @@ QUnit.test('scroll should restore on second dxshown', function(assert) {
 
     assert.deepEqual(scrollable.scrollOffset(), { left: 1, top: 1 }, 'scroll position was not changed');
 });
-
-QUnit.test('scroll should save position on dxhiding when scroll is hidden', function(assert) {
-    const $scrollable = $('#scrollable');
-
-    const scrollable = $scrollable.dxScrollable({
-        useNative: false,
-    }).dxScrollable('instance');
-
-    scrollable.scrollTo({ left: 0, top: 20 });
-    triggerHidingEvent($scrollable);
-    $scrollable.hide();
-
-    scrollable.scrollTo({ left: 0, top: 0 });
-
-    $scrollable.show();
-    triggerShownEvent($scrollable);
-
-    assert.deepEqual(scrollable.scrollOffset(), { left: 0, top: 20 }, 'scroll position restored after dxshown');
-});
-
 
 if(styleUtils.styleProp('touchAction')) {
     QUnit.module('nested scrolling in IE/Edge');

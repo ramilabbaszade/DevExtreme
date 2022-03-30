@@ -441,6 +441,12 @@ describe('option', () => {
     expect($('#component').dxOptionsTestWidget('option').text).toBe('default text');
   });
 
+  it('should patch options without freezing', () => {
+    $('#component').dxOptionsTestWidget({});
+    expect(Object.isFrozen($('#component')
+      .dxOptionsTestWidget('instance')._patchOptionValues({ objectProp: undefined }).objectProp)).toBe(false);
+  });
+
   it('should copy default props of component (not by reference)', () => {
     document.body.innerHTML = `
       <div id="components">
@@ -641,6 +647,20 @@ describe('option', () => {
       originalEvent: defaultEvent, keyName: KEY.space, which: KEY.space,
     });
   });
+
+  it('updates props if it is called on onInitialized handler (T1057680)', () => {
+    const $component = $('#component');
+    const options = {
+      text: 'new text',
+    };
+    $component.dxTestWidget({
+      onInitialized: (e) => {
+        e.component.option(options);
+      },
+    });
+
+    expect($component.dxTestWidget('getLastPassedProps')).toMatchObject(options);
+  });
 });
 
 describe('templates and slots', () => {
@@ -676,6 +696,27 @@ describe('templates and slots', () => {
     expect($template.text()).toBe('template text');
   });
 
+  it('should render custom template when component has attibute with template name', () => {
+    $('#component').attr('template', 'test');
+    $('#component').dxTemplatedTestWidget({
+      template: 'test',
+      integrationOptions: {
+        templates: {
+          test: {
+            render: () => $('<span>')
+              .addClass('dx-template-wrapper')
+              .text('template text')[0],
+          },
+        },
+      },
+    });
+
+    $('#component').removeAttr('template');
+
+    const $template = $('#component').find('.dx-template-wrapper');
+    expect($template.text()).toBe('template text');
+  });
+
   it('should unsubscribe from all events for nested jquery components when disposing parent component', () => {
     $('#component').dxTemplatedTestWidget({
       template(_: never, element: Element) {
@@ -687,6 +728,17 @@ describe('templates and slots', () => {
     $('#components').empty();
 
     expect(fakeEventSingleton.handlerCount).toBe(0);
+  });
+
+  it('template can be rendered without data passed', () => {
+    const templateMarkup = '<span>Template content</span>';
+    $('#component').dxTemplatedTestWidget({
+      templateWithoutData() {
+        return templateMarkup;
+      },
+    });
+
+    expect($('#component').children()[0].innerHTML).toBe(templateMarkup);
   });
 
   it('pass anonymous template content as children', () => {
@@ -913,6 +965,24 @@ describe('templates and slots', () => {
       template: null,
     });
     expect($('#component').children('.templates-root').length).toBe(0);
+  });
+
+  it('should not rerender the same template', () => {
+    const render = jest.fn();
+    const template = {
+      render,
+    };
+
+    const instance = $('#component').dxTemplatedTestWidget({
+      template,
+    }).dxTemplatedTestWidget('instance');
+
+    expect(render).toBeCalledTimes(1);
+
+    const widgetTemplate = instance.option('template');
+    instance.option('template', widgetTemplate);
+
+    expect(render).toBeCalledTimes(1);
   });
 
   it('should not re-render template if new data shadow equal', () => {

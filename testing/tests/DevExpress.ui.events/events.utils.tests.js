@@ -72,10 +72,12 @@ const additionalProps = [
     'pageY',
 
     'offsetX',
-    'offsetY'
+    'offsetY',
+    'isTrusted'
 ];
 
 const eventOwnProps = ['originalEvent', 'type', 'currentTarget', 'timeStamp'];
+const noJQueryEventOwnProps = ['isTrusted'];
 
 testStart(() => {
     const markup = `
@@ -101,6 +103,11 @@ QUnit.module('event utils', () => {
                     $.each(eventOwnProps, function(_, propName) {
                         assert.ok(Object.prototype.hasOwnProperty.call(e, propName), 'property \'' + this + '\' is own property');
                     });
+                    if(QUnit.urlParams['nojquery']) {
+                        $.each(noJQueryEventOwnProps, function(_, propName) {
+                            assert.ok(Object.prototype.hasOwnProperty.call(e, propName), 'property \'' + this + '\' is own property (no jquery)');
+                        });
+                    }
                 }
             });
         });
@@ -231,41 +238,6 @@ QUnit.module('event utils', () => {
     });
 
     [
-        {
-            testData: { key: 'Up' },
-            expected: 'upArrow',
-            comment: 'IE11 API'
-        },
-        {
-            testData: { key: 'Left' },
-            expected: 'leftArrow',
-            comment: 'IE11 API'
-        },
-        {
-            testData: { key: 'Right' },
-            expected: 'rightArrow',
-            comment: 'IE11 API'
-        },
-        {
-            testData: { key: 'Down' },
-            expected: 'downArrow',
-            comment: 'IE11 API'
-        },
-        {
-            testData: { key: 'Del' },
-            expected: 'del',
-            comment: 'IE11 API'
-        },
-        {
-            testData: { key: 'Subtract' },
-            expected: 'minus',
-            comment: 'IE11 API'
-        },
-        {
-            testData: { key: 'Esc' },
-            expected: 'escape',
-            comment: 'IE11 API'
-        },
         {
             testData: { key: 'Backspace' },
             expected: 'backspace',
@@ -491,6 +463,16 @@ QUnit.module('event utils', () => {
             testData: { which: 18 },
             expected: 'alt',
             comment: '\'which\' attribute used where \'key\' attribute unsupported'
+        },
+        {
+            testData: { key: 'â', which: 65 },
+            expected: 'A',
+            comment: '\'which\' attribute used where \'key\' attribute value is unknown (non-invariant locale)'
+        },
+        {
+            testData: { key: 'ƒ', which: 70 },
+            expected: 'F',
+            comment: '\'which\' attribute used where \'key\' attribute value is unknown (non-invariant locale)'
         }
     ].forEach(({ testData, expected, comment }) => {
         test(`normalizeKeyName(${testData.key || testData.which || 'undefined'}) method should normalize key name based on "key" or "which" field`, function(assert) {

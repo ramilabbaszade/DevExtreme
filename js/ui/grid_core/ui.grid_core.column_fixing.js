@@ -1,3 +1,4 @@
+import { getOuterWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import { name as wheelEventName } from '../../events/core/wheel';
@@ -89,35 +90,65 @@ const baseFixedColumns = {
         }
     },
 
+    _partialUpdateFixedTable(fixedColumns) {
+        const fixedTableElement = this._fixedTableElement;
+        const transparentColumnIndex = getTransparentColumnIndex(fixedColumns);
+        const transparentColumn = fixedColumns[transparentColumnIndex];
+        const columnIndexOffset = this._columnsController.getColumnIndexOffset();
+        const $rows = this._getRowElementsCore(fixedTableElement);
+        const $colgroup = fixedTableElement.children('colgroup');
+
+        $colgroup.replaceWith(this._createColGroup(fixedColumns));
+
+        for(let i = 0; i < $rows.length; i++) {
+            const cellElements = $rows[i].childNodes;
+            let colIndex = columnIndexOffset + 1;
+            for(let j = 0; j < cellElements.length; j++) {
+                cellElements[j].setAttribute('aria-colindex', colIndex);
+
+                if(j === transparentColumnIndex) {
+                    cellElements[j].setAttribute('colspan', transparentColumn.colspan);
+                    colIndex += transparentColumn.colspan;
+                } else {
+                    colIndex++;
+                }
+            }
+        }
+    },
+
     _renderTable: function(options) {
-        const that = this;
         let $fixedTable;
-        const fixedColumns = that.getFixedColumns();
+        const fixedColumns = this.getFixedColumns();
 
-        that._isFixedColumns = !!fixedColumns.length;
-        const $table = that.callBase(options);
+        this._isFixedColumns = !!fixedColumns.length;
+        const $table = this.callBase(options);
 
-        if(that._isFixedColumns) {
-            that._isFixedTableRendering = true;
 
-            const change = options && options.change;
-            // cells = options.cells,
-            const columnIndices = change && change.columnIndices;
+        if(this._isFixedColumns) {
+            const change = options?.change;
 
-            that._correctColumnIndicesForFixedColumns(fixedColumns, change);
+            this._isFixedTableRendering = true;
 
-            $fixedTable = that._createTable(fixedColumns);
-            that._renderRows($fixedTable, extend({}, options, { columns: fixedColumns }));
-            that._updateContent($fixedTable, change);
+            if(change?.virtualColumnsScrolling && this.option('scrolling.legacyMode') !== true) {
+                this._partialUpdateFixedTable(fixedColumns);
+            } else {
+                const columnIndices = change?.columnIndices;
 
-            if(columnIndices) {
-                change.columnIndices = columnIndices;
+                this._correctColumnIndicesForFixedColumns(fixedColumns, change);
+
+                $fixedTable = this._createTable(fixedColumns);
+                this._renderRows($fixedTable, extend({}, options, { columns: fixedColumns }));
+                this._updateContent($fixedTable, change);
+
+                if(columnIndices) {
+                    change.columnIndices = columnIndices;
+                }
             }
 
-            that._isFixedTableRendering = false;
+            this._isFixedTableRendering = false;
         } else {
-            that._fixedTableElement && that._fixedTableElement.parent().remove();
-            that._fixedTableElement = null;
+            this._fixedTableElement && this._fixedTableElement.parent().remove();
+            this._fixedTableElement = null;
         }
 
         return $table;
@@ -348,7 +379,7 @@ const baseFixedColumns = {
 
             offset = {
                 left: positionTransparentColumn.left,
-                right: this.element().outerWidth(true) - ($transparentColumn.outerWidth(true) + positionTransparentColumn.left)
+                right: getOuterWidth(this.element(), true) - (getOuterWidth($transparentColumn, true) + positionTransparentColumn.left)
             };
         }
 
@@ -635,6 +666,11 @@ const RowsViewFixedColumnsExtender = extend({}, baseFixedColumns, {
         this.callBase();
 
         const scrollable = this.getScrollable();
+
+        if(scrollable?._disposed) {
+            return;
+        }
+
         const scrollTop = scrollable && scrollable.scrollOffset().top;
 
         this._updateFixedTablePosition(scrollTop);
@@ -811,18 +847,17 @@ const RowsViewFixedColumnsExtender = extend({}, baseFixedColumns, {
 
     _getElasticScrollTop: function(e) {
         let elasticScrollTop = 0;
-        const scrollbarWidth = this.getScrollbarWidth(true);
 
         if(e.scrollOffset.top < 0) {
             elasticScrollTop = -e.scrollOffset.top;
         } else if(e.reachedBottom) {
-            const scrollableContent = this._findContentElement();
+            const $scrollableContent = $(this._findContentElement());
             const $scrollableContainer = $(e.component.container());
-            const maxScrollTop = Math.max(scrollableContent.height() + scrollbarWidth - $scrollableContainer.height(), 0);
+            const maxScrollTop = Math.max($scrollableContent.get(0).clientHeight - $scrollableContainer.get(0).clientHeight, 0);
             elasticScrollTop = maxScrollTop - e.scrollOffset.top;
         }
 
-        return elasticScrollTop;
+        return Math.floor(elasticScrollTop);
     },
 
     _applyElasticScrolling: function(e) {

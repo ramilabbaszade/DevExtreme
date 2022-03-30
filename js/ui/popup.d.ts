@@ -55,13 +55,13 @@ export type InitializedEvent = InitializedEventInfo<dxPopup>;
 export type ShownEvent = EventInfo<dxPopup>;
 
 /** @public */
-export type ResizeEvent = NativeEventInfo<dxPopup> & ResizeInfo;
+export type ResizeEvent = NativeEventInfo<dxPopup, MouseEvent | TouchEvent> & ResizeInfo;
 
 /** @public */
-export type ResizeStartEvent = NativeEventInfo<dxPopup> & ResizeInfo;
+export type ResizeStartEvent = NativeEventInfo<dxPopup, MouseEvent | TouchEvent> & ResizeInfo;
 
 /** @public */
-export type ResizeEndEvent = NativeEventInfo<dxPopup> & ResizeInfo;
+export type ResizeEndEvent = NativeEventInfo<dxPopup, MouseEvent | TouchEvent> & ResizeInfo;
 
 /** @public */
 export type OptionChangedEvent = EventInfo<dxPopup> & ChangedOptionInfo;
@@ -92,11 +92,23 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
     container?: string | UserDefinedElement;
     /**
      * @docid
+     * @default undefined
+     * @public
+     */
+    dragAndResizeArea?: string | UserDefinedElement;
+    /**
+     * @docid
      * @default false
      * @default true &for(desktop)
      * @public
      */
     dragEnabled?: boolean;
+     /**
+     * @docid
+     * @default false
+     * @public
+     */
+     dragOutsideBoundary?: boolean;
     /**
      * @docid
      * @default true &for(desktop)
@@ -111,7 +123,6 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
     fullScreen?: boolean;
     /**
      * @docid
-     * @type_function_return number|string
      * @fires dxPopupOptions.onResize
      * @public
      */
@@ -123,6 +134,9 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
      * @type_function_param1_field1 component:this
      * @type_function_param1_field2 element:DxElement
      * @type_function_param1_field3 model:any
+     * @type_function_param1_field4 event:event
+     * @type_function_param1_field5 width:number
+     * @type_function_param1_field6 height:number
      * @action
      * @public
      */
@@ -134,6 +148,9 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
      * @type_function_param1_field1 component:this
      * @type_function_param1_field2 element:DxElement
      * @type_function_param1_field3 model:any
+     * @type_function_param1_field4 event:event
+     * @type_function_param1_field5 width:number
+     * @type_function_param1_field6 height:number
      * @action
      * @public
      */
@@ -145,6 +162,9 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
      * @type_function_param1_field1 component:this
      * @type_function_param1_field2 element:DxElement
      * @type_function_param1_field3 model:any
+     * @type_function_param1_field4 event:event
+     * @type_function_param1_field5 width:number
+     * @type_function_param1_field6 height:number
      * @action
      * @public
      */
@@ -160,7 +180,7 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
      * @action
      * @public
      */
-    onTitleRendered?: ((e: TitleRenderedEvent) => void);
+    onTitleRendered?: ((e: EventInfo<TComponent> & TitleRenderedInfo) => void);
     /**
      * @docid
      * @type Enums.PositionAlignment|PositionConfig|function
@@ -173,6 +193,12 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
      * @public
      */
     resizeEnabled?: boolean;
+    /**
+     * @docid
+     * @default true
+     * @public
+     */
+    restorePosition?: boolean;
     /**
      * @docid
      * @default false
@@ -196,7 +222,6 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
     /**
      * @docid
      * @default "title"
-     * @type_function_param1 titleElement:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -209,7 +234,6 @@ export interface dxPopupOptions<TComponent> extends dxOverlayOptions<TComponent>
     toolbarItems?: Array<ToolbarItem>;
     /**
      * @docid
-     * @type_function_return number|string
      * @fires dxPopupOptions.onResize
      * @public
      */
@@ -299,8 +323,6 @@ export interface dxPopupToolbarItem {
  * @docid
  * @inherits dxOverlay
  * @hasTranscludedContent
- * @module ui/popup
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -313,6 +335,3 @@ export type Properties = dxPopupOptions<PopupInstance>;
 
 /** @deprecated use Properties instead */
 export type Options = Properties;
-
-/** @deprecated use Properties instead */
-export type IOptions = Properties;

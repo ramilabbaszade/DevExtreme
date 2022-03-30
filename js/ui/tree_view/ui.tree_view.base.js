@@ -1,3 +1,4 @@
+import { getHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import domAdapter from '../../core/dom_adapter';
 import eventsEngine from '../../events/core/events_engine';
@@ -21,7 +22,7 @@ import { fromPromise, Deferred, when } from '../../core/utils/deferred';
 import errors from '../widget/ui.errors';
 import { nativeScrolling } from '../../core/utils/support';
 import { getRelativeOffset } from '../../renovation/ui/scroll_view/utils/get_relative_offset';
-import { DIRECTION_HORIZONTAL, DIRECTION_VERTICAL } from '../../renovation/ui/scroll_view/common/consts';
+import { SCROLLABLE_CONTENT_CLASS, DIRECTION_HORIZONTAL, DIRECTION_VERTICAL } from '../../renovation/ui/scroll_view/common/consts';
 
 const WIDGET_CLASS = 'dx-treeview';
 
@@ -984,7 +985,7 @@ const TreeViewBase = HierarchicalCollectionWidget.inherit({
 
         // NOTE: The height of node container is should be used when the container is shown (T606878)
         $nodeContainer.addClass(OPENED_NODE_CONTAINER_CLASS);
-        const nodeHeight = $nodeContainer.height();
+        const nodeHeight = getHeight($nodeContainer);
 
         fx.stop($nodeContainer, true);
         fx.animate($nodeContainer, {
@@ -1668,7 +1669,7 @@ const TreeViewBase = HierarchicalCollectionWidget.inherit({
         const { scrollDirection, rtlEnabled } = this.option();
 
         const targetLocation = { top: 0, left: 0 };
-        const relativeOffset = getRelativeOffset($(scrollable.content()).get(0), targetElement);
+        const relativeOffset = getRelativeOffset(SCROLLABLE_CONTENT_CLASS, targetElement);
 
         if(scrollDirection !== DIRECTION_VERTICAL) {
             const containerElement = $(scrollable.container()).get(0);

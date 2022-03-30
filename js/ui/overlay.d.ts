@@ -38,22 +38,23 @@ export interface dxOverlayOptions<TComponent> extends WidgetOptions<TComponent> 
     animation?: dxOverlayAnimation;
     /**
      * @docid
+     * @deprecated dxOverlayOptions.hideOnOutsideClick
      * @default false
      * @type_function_param1 event:event
      * @type_function_return Boolean
      * @public
      */
-    closeOnOutsideClick?: boolean | ((event: DxEvent) => boolean);
+    closeOnOutsideClick?: boolean | ((event: DxEvent<MouseEvent | PointerEvent | TouchEvent>) => boolean);
     /**
      * @docid
      * @default "content"
-     * @type_function_param1 contentElement:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
     contentTemplate?: template | ((contentElement: DxElement) => string | UserDefinedElement);
     /**
      * @docid
+     * @deprecated
      * @default false
      * @public
      */
@@ -66,61 +67,53 @@ export interface dxOverlayOptions<TComponent> extends WidgetOptions<TComponent> 
     deferRendering?: boolean;
     /**
      * @docid
-     * @default undefined
-     * @public
-     */
-    dragAndResizeArea?: string | UserDefinedElement;
-    /**
-     * @docid
-     * @default false
-     * @public
-     */
-    dragEnabled?: boolean;
-    /**
-     * @docid
-     * @default false
-     * @public
-     */
-     dragOutsideBoundary?: boolean;
-    /**
-     * @docid
-     * @deprecated
+     * @deprecated dxOverlayOptions.wrapperAttr
      * @default {}
      * @public
      */
     elementAttr?: any;
     /**
      * @docid
-     * @default function() { return $(window).height() * 0.8 }
-     * @type_function_return number|string
+     * @default false
+     * @type boolean | function
+     * @type_function_param1 event:event
+     * @type_function_return Boolean
+     * @public
+     */
+    hideOnOutsideClick?: boolean | ((event: DxEvent<MouseEvent | PointerEvent | TouchEvent>) => boolean);
+    /**
+     * @docid
+     * @default false
+     * @public
+     */
+    hideOnParentScroll?: boolean;
+    /**
+     * @docid
+     * @default '80vh'
      * @public
      */
     height?: number | string | (() => number | string);
     /**
      * @docid
      * @default null
-     * @type_function_return number|string
      * @public
      */
     maxHeight?: number | string | (() => number | string);
     /**
      * @docid
      * @default null
-     * @type_function_return number|string
      * @public
      */
     maxWidth?: number | string | (() => number | string);
     /**
      * @docid
      * @default null
-     * @type_function_return number|string
      * @public
      */
     minHeight?: number | string | (() => number | string);
     /**
      * @docid
      * @default null
-     * @type_function_return number|string
      * @public
      */
     minWidth?: number | string | (() => number | string);
@@ -199,8 +192,7 @@ export interface dxOverlayOptions<TComponent> extends WidgetOptions<TComponent> 
     visible?: boolean;
     /**
      * @docid
-     * @default function() {return $(window).width() * 0.8 }
-     * @type_function_return number|string
+     * @default '80vw'
      * @public
      */
     width?: number | string | (() => number | string);
@@ -210,12 +202,6 @@ export interface dxOverlayOptions<TComponent> extends WidgetOptions<TComponent> 
      * @public
      */
     wrapperAttr?: any;
-    /**
-     * @docid
-     * @default false
-     * @public
-     */
-     hideOnParentScroll?: boolean;
 }
 /** @namespace DevExpress.ui */
 export interface dxOverlayAnimation {
@@ -235,7 +221,6 @@ export interface dxOverlayAnimation {
 /**
  * @docid
  * @inherits Widget
- * @module ui/overlay
  * @hidden
  * @namespace DevExpress.ui
  */
@@ -243,7 +228,6 @@ export default class dxOverlay<TProperties> extends Widget<TProperties> {
     /**
      * @docid
      * @publicName content()
-     * @return DxElement
      * @public
      */
     content(): DxElement;
@@ -270,7 +254,6 @@ export default class dxOverlay<TProperties> extends Widget<TProperties> {
     /**
      * @docid
      * @publicName toggle(showing)
-     * @param1 showing:boolean
      * @return Promise<boolean>
      * @public
      */
@@ -280,10 +263,7 @@ export default class dxOverlay<TProperties> extends Widget<TProperties> {
 /**
  * @docid ui.dxOverlay.baseZIndex
  * @publicName baseZIndex(zIndex)
- * @param1 zIndex:number
  * @namespace DevExpress.ui.dxOverlay
- * @module ui/overlay
- * @export baseZIndex
  * @static
  * @public
  */
@@ -294,4 +274,3 @@ interface OverlayInstance extends dxOverlay<Properties> { }
 type Properties = dxOverlayOptions<OverlayInstance>;
 
 export type Options = Properties;
-export type IOptions = Properties;

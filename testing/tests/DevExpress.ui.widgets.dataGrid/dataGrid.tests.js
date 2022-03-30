@@ -42,8 +42,10 @@ import $ from 'jquery';
 import Class from 'core/class';
 import { logger } from 'core/utils/console';
 import typeUtils from 'core/utils/type';
+import { deferUpdate } from 'core/utils/common';
 import devices from 'core/devices';
 import { version } from 'core/version';
+import errors from 'core/errors';
 import gridCore from 'ui/data_grid/ui.data_grid.core';
 import { DataSource } from 'data/data_source/data_source';
 import ArrayStore from 'data/array_store';
@@ -55,6 +57,7 @@ import ajaxMock from '../../helpers/ajaxMock.js';
 import DataGridWrapper from '../../helpers/wrappers/dataGridWrappers.js';
 import { checkDxFontIcon, DX_ICON_XLSX_FILE_CONTENT_CODE, DX_ICON_EXPORT_SELECTED_CONTENT_CODE } from '../../helpers/checkDxFontIconHelper.js';
 import { createDataGrid, baseModuleConfig } from '../../helpers/dataGridHelper.js';
+import { getOuterWidth } from 'core/utils/size';
 
 const DX_STATE_HOVER_CLASS = 'dx-state-hover';
 const CELL_UPDATED_CLASS = 'dx-datagrid-cell-updated-animation';
@@ -1336,7 +1339,7 @@ QUnit.module('Async render', baseModuleConfig, () => {
         this.clock.tick();
 
         assert.equal(buttonTemplateCallCount, 1, 'template is rendered asynchronously');
-        assert.equal($(dataGrid.getCellElement(0, 0)).text(), 'Test', 'template is applied');
+        assert.equal($(dataGrid.getCellElement(0, 0)).text(), 'Test\u00A0', 'template is applied');
     });
 
     QUnit.test('showEditorAlways column should render synchronously if renderAsync is true and column renderAsync is false', function(assert) {
@@ -1470,7 +1473,7 @@ QUnit.module('Assign options', baseModuleConfig, () => {
         assert.equal(rows.length, 2);
     });
 
-    // T260011
+    // T260011, T1045202
     QUnit.test('dataSource change to null', function(assert) {
         // arrange
         const dataGrid = createDataGrid({
@@ -1490,6 +1493,8 @@ QUnit.module('Assign options', baseModuleConfig, () => {
         // assert
         assert.ok(dataGrid.getController('data').isEmpty(), 'no data');
         assert.ok(!dataGrid.getController('data').dataSource(), 'no dataSource');
+        assert.strictEqual(dataGrid.getController('data')._cachedProcessedItems, null, 'cached processed items are cleared'); // T1045202
+        assert.strictEqual(dataGrid.getController('columns')._dataSource, null, 'no dataSource inside columnsController'); // T1045202
         assert.equal(dataGrid.getController('data').items().length, 0, 'items count');
         assert.equal(contentReadyCount, 1, 'contentReady call count');
         assert.equal($(dataGrid.$element()).find('.dx-data-row').length, 0, 'data row count');
@@ -1532,6 +1537,29 @@ QUnit.module('Assign options', baseModuleConfig, () => {
         assert.equal(columns[0].dataField, 'field2');
         assert.equal(columns[1].dataField, 'field1');
         assert.deepEqual(dataGrid.getController('data').items()[0].data, { field1: 3, field2: 4 });
+    });
+
+    QUnit.test('dataSource change should render content once if scrolling mode is virtual', function(assert) {
+        const dataChangedSpy = sinon.spy();
+        const dataGrid = createDataGrid({
+            height: 200,
+            dataSource: [],
+            keyExpr: 'id',
+            columns: ['id'],
+            scrolling: {
+                mode: 'virtual'
+            },
+        });
+
+        this.clock.tick(1000);
+        dataGrid.getController('data').changed.add(dataChangedSpy);
+
+        // act
+        dataGrid.option('dataSource', [{ id: 1 }]);
+        this.clock.tick(1000);
+
+        // assert
+        assert.equal(dataChangedSpy.callCount, 1, 'content is rendered once');
     });
 
     // T531189
@@ -2688,6 +2716,85 @@ QUnit.module('Assign options', baseModuleConfig, () => {
         const selectBoxDisabled = $selectBoxDisabled.dxSelectBox('instance');
         assert.equal(selectBoxDisabled.option('value'), 'item2', 'selectbox state saved');
     });
+
+    QUnit.test('Change toolbar.visible and toolbar.disabled options', function(assert) {
+        // arrange
+        const dataGrid = createDataGrid({
+            loadingTimeout: null,
+            dataSource: [{ field1: 1, field2: 2 }],
+            columnChooser: {
+                enabled: true
+            },
+            toolbar: {
+                visible: true
+            }
+        });
+
+        const $toolbar = dataGrid.$element().find('.dx-toolbar');
+
+        // assert
+        assert.notOk($toolbar.hasClass('dx-state-invisible'), 'toolbar is shown');
+        assert.notOk($toolbar.hasClass('dx-state-disabled'), 'toolbar is not disabled');
+
+        // act
+        dataGrid.option('toolbar.visible', false);
+
+        // assert
+        assert.ok($toolbar.hasClass('dx-state-invisible'), 'toolbar is hidden');
+
+        // act
+        dataGrid.option('toolbar.disabled', true);
+
+        // assert
+        assert.ok($toolbar.hasClass('dx-state-disabled'), 'toolbar is disabled');
+    });
+
+    // T1077905
+    QUnit.test('The grid should not freeze after changing a dataSource and columns options together when there are band columns', function(assert) {
+        // arrange
+        const dataGrid = createDataGrid({
+            dataSource: [{ field1: 'test1', field2: 'test2', field3: 'test3', field4: 'test4' }],
+            columns: ['field1', { caption: 'Band column 1', isBand: true }, { dataField: 'field2', ownerBand: 1 }, { dataField: 'field3', ownerBand: 1 }, 'field4']
+        });
+        this.clock.tick(100);
+
+        // act
+        dataGrid.option({
+            dataSource: [{ field1: 'test1', field2: 'test2', field3: 'test3', field4: 'test4' }],
+            columns: ['field1', { caption: 'Band column 1', isBand: true }, { dataField: 'field2', ownerBand: 1 }, { dataField: 'field3' }, 'field4']
+        });
+        this.clock.tick(100);
+
+        // assert
+        let columns = dataGrid.getVisibleColumns(0);
+
+        assert.strictEqual(columns[0].dataField, 'field1', 'dataField of the first column of the first level');
+        assert.strictEqual(columns[0].index, 0, 'index of the first column of the first level');
+        assert.strictEqual(columns[0].isBand, undefined, 'isBand of the first column of the first level');
+        assert.strictEqual(columns[0].ownerBand, undefined, 'ownerBand of the first column of the first level');
+
+        assert.strictEqual(columns[1].caption, 'Band column 1', 'caption of the second column of the first level');
+        assert.strictEqual(columns[1].index, 1, 'index of the second column of the first level');
+        assert.strictEqual(columns[1].isBand, true, 'isBand of the second column of the first level');
+        assert.strictEqual(columns[1].ownerBand, undefined, 'ownerBand of the second column of the first level');
+
+        assert.strictEqual(columns[2].dataField, 'field3', 'dataField of the third column of the first level');
+        assert.strictEqual(columns[2].index, 3, 'index of the third column of the first level');
+        assert.strictEqual(columns[2].isBand, undefined, 'isBand of the third column of the first level');
+        assert.strictEqual(columns[2].ownerBand, undefined, 'ownerBand of the third column of the first level');
+
+        assert.strictEqual(columns[3].dataField, 'field4', 'dataField of the fourth column of the first level');
+        assert.strictEqual(columns[3].index, 4, 'index of the fourth column of the first level');
+        assert.strictEqual(columns[3].isBand, undefined, 'isBand of the fourth column of the first level');
+        assert.strictEqual(columns[3].ownerBand, undefined, 'ownerBand of the fourth column of the first level');
+
+        columns = dataGrid.getVisibleColumns(1);
+
+        assert.strictEqual(columns[0].dataField, 'field2', 'dataField of the first column of the second level');
+        assert.strictEqual(columns[0].index, 2, 'index of the first column of the second level');
+        assert.strictEqual(columns[0].isBand, undefined, 'isBand of the first column of the second level');
+        assert.strictEqual(columns[0].ownerBand, 1, 'ownerBand of the first column of the second level');
+    });
 });
 
 QUnit.module('API methods', baseModuleConfig, () => {
@@ -3339,6 +3446,43 @@ QUnit.module('API methods', baseModuleConfig, () => {
         assert.strictEqual($(dataGrid.getCellElement(0, 1)).text(), 'test5', 'cell value is updated');
     });
 
+    QUnit.test('Refresh with changesOnly and summary in group row', function(assert) {
+        // arrange
+        const dataSource = new DataSource({
+            store: {
+                type: 'array',
+                key: 'id',
+                data: [
+                    { id: 1, fieldGroup: 'testGroup', field1: 'test1', field2: 2, field3: 'test3', field4: 'test4' },
+                ]
+            }
+        });
+        const dataGrid = createDataGrid({
+            loadingTimeout: null,
+            dataSource: dataSource,
+            columns: [
+                'id', 'field1', 'field2', 'field3', 'field4',
+                { dataField: 'fieldGroup', groupIndex: 0 },
+            ],
+            summary: {
+                groupItems: [
+                    { column: 'field2', alignByColumn: true, summaryType: 'sum' },
+                    { column: 'field4', alignByColumn: true, summaryType: 'sum' },
+                ]
+            }
+        });
+
+        dataSource.store().update(1, { field2: 3 });
+
+        // act
+        dataGrid.refresh(true);
+
+        // assert
+        // should be 5 cells without duplicates:
+        // expand, group cell, first summary, empty, second summary
+        assert.strictEqual(dataGrid.getVisibleRows()[0].cells.length, 5);
+    });
+
     QUnit.test('Refresh with highlighting and check oldValue', function(assert) {
         // arrange
         const dataSource = new DataSource({
@@ -3944,6 +4088,34 @@ QUnit.module('API methods', baseModuleConfig, () => {
         // assert
         assert.strictEqual(d.state(), 'resolved', 'row is navigated');
     });
+
+    // T1031120
+    QUnit.test('The repaint method of the grid should repaint the pager', function(assert) {
+        // arrange
+        const dataGrid = createDataGrid({
+            loadingTimeout: 30,
+            pager: {
+                visible: true,
+                showInfo: true
+            },
+            dataSource: {
+                pageSize: 2,
+                store: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }]
+            }
+        });
+
+        $(dataGrid.element()).find('.dx-datagrid-pager').removeClass('dx-pager');
+        this.clock.tick(100);
+
+        const pageIndexes = $(dataGrid.element()).find('.dx-datagrid-pager .dx-pages .dx-info').get(0);
+
+        // act
+        $(dataGrid.element()).find('.dx-datagrid-pager').addClass('dx-pager');
+        dataGrid.repaint();
+
+        // assert
+        assert.notStrictEqual($(dataGrid.element()).find('.dx-datagrid-pager .dx-pages .dx-info').get(0), pageIndexes, 'pager has repainted');
+    });
 });
 
 QUnit.module('templates', baseModuleConfig, () => {
@@ -4135,6 +4307,24 @@ QUnit.module('templates', baseModuleConfig, () => {
         assert.strictEqual($(dataGrid.$element()).find('[data-options]').length, 0, 'no elements with data-options attribute');
     });
 
+    // T312012
+    QUnit.test('Setting dataRowTemplate via dxTemplate', function(assert) {
+        // arrange, act
+        const dataGrid = createDataGrid({
+            loadingTimeout: null,
+            dataRowTemplate: 'testRow',
+            dataSource: [{ column1: 'test1', column2: 'test2' }],
+            columns: [{ dataField: 'column1' }, { dataField: 'column2' }]
+        });
+
+        // assert
+        const $rowElements = $($(dataGrid.$element()).find('.dx-datagrid-rowsview').find('table > tbody').find('tr.test'));
+        assert.strictEqual($rowElements.length, 1, 'row element count');
+        assert.strictEqual($rowElements.eq(0).text(), 'Row Content', 'row element content');
+        assert.strictEqual($(dataGrid.$element()).find('table').length, 2, 'table count');
+        assert.strictEqual($(dataGrid.$element()).find('[data-options]').length, 0, 'no elements with data-options attribute');
+    });
+
     // T952701
     QUnit.test('Add row when DataGrid is empty and rowTemplate is used', function(assert) {
         const dataGrid = createDataGrid({
@@ -4163,9 +4353,40 @@ QUnit.module('templates', baseModuleConfig, () => {
         // assert
         const $row = $(dataGrid.getRowElement(0));
         const $cells = $row.find('td');
-        assert.equal($cells.eq(0).outerWidth(), 900, 'first cell width');
-        assert.equal($cells.eq(1).outerWidth(), 100, 'second cell width');
-        assert.equal(dataGrid.$element().outerWidth(), 1000, 'dataGrid width');
+        assert.equal(getOuterWidth($cells.eq(0)), 900, 'first cell width');
+        assert.equal(getOuterWidth($cells.eq(1)), 100, 'second cell width');
+        assert.equal(getOuterWidth(dataGrid.$element()), 1000, 'dataGrid width');
+    });
+
+    // T952701
+    QUnit.test('Add row when DataGrid is empty and dataRowTemplate is used', function(assert) {
+        const dataGrid = createDataGrid({
+            width: 1000,
+            dataSource: [],
+            loadingTimeout: null,
+            columns: ['field1', {
+                dataField: 'field2',
+                width: 100
+            }],
+            dataRowTemplate: (container, options) => {
+                $(container).append(
+                    `<tr>
+                        <td>new</td>
+                        <td>new</td>
+                    </tr>`
+                );
+            }
+        });
+
+        // act
+        dataGrid.addRow();
+
+        // assert
+        const $row = $(dataGrid.getRowElement(0));
+        const $cells = $row.find('td');
+        assert.equal(getOuterWidth($cells.eq(0)), 900, 'first cell width');
+        assert.equal(getOuterWidth($cells.eq(1)), 100, 'second cell width');
+        assert.equal(getOuterWidth(dataGrid.$element()), 1000, 'dataGrid width');
     });
 
     // T952701
@@ -4207,20 +4428,205 @@ QUnit.module('templates', baseModuleConfig, () => {
         // assert
         const $row = $(dataGrid.getRowElement(0));
         const $cells = $row.find('td');
-        assert.equal($cells.eq(0).outerWidth(), 900, 'first cell width');
-        assert.equal($cells.eq(1).outerWidth(), 100, 'second cell width');
-        assert.equal(dataGrid.$element().outerWidth(), 1000, 'dataGrid width');
+        assert.equal(getOuterWidth($cells.eq(0)), 900, 'first cell width');
+        assert.equal(getOuterWidth($cells.eq(1)), 100, 'second cell width');
+        assert.equal(getOuterWidth(dataGrid.$element()), 1000, 'dataGrid width');
     });
 
     QUnit.test('rowElement argument of rowTemplate option is correct', function(assert) {
+        assert.expect(2);
+
         // arrange, act
-        createDataGrid({
+        $('#dataGrid').dxDataGrid({
             rowTemplate: function(rowElement) {
                 assert.equal(typeUtils.isRenderer(rowElement), !!config().useJQuery, 'rowElement is correct');
+                assert.ok($(rowElement).closest(document).length, 'rowElement is attached to DOM');
             },
             dataSource: [{ column1: 'test1', column2: 'test2' }],
             columns: [{ dataField: 'column1' }, { dataField: 'column2' }]
         });
+
+        this.clock.tick();
+    });
+
+    QUnit.test('rowElement argument of dataRowTemplate option is correct', function(assert) {
+        assert.expect(3);
+
+        // arrange, act
+        $('#dataGrid').dxDataGrid({
+            dataRowTemplate: function(rowElement) {
+                assert.equal(typeUtils.isRenderer(rowElement), !!config().useJQuery, 'rowElement is correct');
+                assert.equal($(rowElement)[0].tagName.toLowerCase(), 'tbody', 'rowElement tagName is tbody');
+                // T1054609
+                assert.ok($(rowElement).closest(document).length, 'rowElement is attached to DOM');
+            },
+            dataSource: [{ column1: 'test1', column2: 'test2' }],
+            columns: [{ dataField: 'column1' }, { dataField: 'column2' }]
+        });
+
+        this.clock.tick();
+    });
+
+    QUnit.test('deprecate warnings should not be fired for dataRowTemplate', function(assert) {
+        const log = sinon.spy(errors, 'log');
+
+        createDataGrid({
+            dataRowTemplate: function(rowElement) {
+                rowElement.append('<tr>');
+            },
+            dataSource: [{ id: 1 }],
+        });
+
+        this.clock.tick();
+
+        assert.strictEqual(log.callCount, 0, 'error.log is not called');
+
+        log.restore();
+    });
+
+    QUnit.test('deprecate warnings should be fired for rowTemplate', function(assert) {
+        const log = sinon.spy(errors, 'log');
+
+        createDataGrid({
+            rowTemplate: function(rowElement) {
+                rowElement.append('<tr>');
+            },
+            dataSource: [{ id: 1 }],
+        });
+
+        this.clock.tick();
+
+        assert.strictEqual(log.callCount, 1, 'error.log is called once');
+        assert.deepEqual(log.getCall(0).args, [
+            'W0001',
+            'dxDataGrid',
+            'rowTemplate',
+            '21.2',
+            'Use the "dataRowTemplate" option instead'
+        ], 'error.log args');
+
+        log.restore();
+    });
+
+    QUnit.test('deprecate warnings should be fired for onToolbarPreparing', function(assert) {
+        const log = sinon.spy(errors, 'log');
+
+        createDataGrid({
+            onToolbarPreparing: function() {},
+            dataSource: [{ id: 1 }],
+        });
+
+        this.clock.tick();
+
+        assert.strictEqual(log.callCount, 1, 'error.log is called once');
+        assert.deepEqual(log.getCall(0).args, [
+            'W0001',
+            'dxDataGrid',
+            'onToolbarPreparing',
+            '21.2',
+            'Use the "toolbar" option instead'
+        ], 'error.log args');
+
+        log.restore();
+    });
+
+    ['deferUpdate', 'setTimeout'].forEach(asyncMethod => {
+        QUnit.test(`freespace row should be rendered correctly on last page if async dataRowTemplate is defined with ${asyncMethod} in react (T1031218)`, function(assert) {
+            // arrange, act
+            const dataGrid = createDataGrid({
+                dataSource: [
+                    { id: 1, text: 'text 1' },
+                    { id: 2, text: 'text 2' },
+                    { id: 3, text: 'text 3' },
+                ],
+                paging: {
+                    pageSize: 2
+                },
+                columns: ['text'],
+                dataRowTemplate: 'rowTemplate',
+                templatesRenderAsynchronously: true,
+                integrationOptions: {
+                    templates: {
+                        rowTemplate: {
+                            render({ container, model, onRendered }) {
+                                const data = model.data;
+                                const markup = '<tr class="my-row">' +
+                                        '<td>' + data.text + '</td>' +
+                                        '</tr>';
+
+                                (asyncMethod === 'deferUpdate' ? deferUpdate : setTimeout)(function() {
+                                    container.append(markup);
+                                    onRendered();
+                                });
+
+                                return container;
+                            }
+                        }
+                    }
+                },
+            });
+
+            this.clock.tick();
+
+            // act
+            dataGrid.pageIndex(1);
+            this.clock.tick();
+
+            const $rows = $(dataGrid.element()).find('.dx-row');
+            assert.equal($rows.length, 4, 'row count');
+            assert.ok($rows.eq(0).hasClass('dx-header-row'), 'first row is header');
+            assert.ok($rows.eq(1).hasClass('dx-data-row'), 'second row is data');
+            assert.ok($rows.eq(1).find('.my-row').length, 'second row is rendered from template');
+            assert.ok($rows.eq(2).hasClass('dx-freespace-row'), 'third row is freespace');
+            assert.ok($rows.eq(2).height() > 10, 'freespace row has height');
+        });
+    });
+
+    QUnit.test('row should be updated on using push API if repaintChangesOnly is enabled and dataRowTemplate is defined in react (T859033)', function(assert) {
+        // arrange, act
+        const dataGrid = createDataGrid({
+            dataSource: [
+                { id: 1, text: 'text 1' },
+                { id: 2, text: 'text 2' },
+            ],
+            keyExpr: 'id',
+            repaintChangesOnly: true,
+            dataRowTemplate: 'rowTemplate',
+            templatesRenderAsynchronously: true,
+            integrationOptions: {
+                templates: {
+                    rowTemplate: {
+                        render({ container, model, onRendered }) {
+                            const data = model.data;
+                            const markup = '<tr>' +
+                                    '<td class="my-cell">' + data.text + '</td>' +
+                                    '</tr>';
+
+                            deferUpdate(function() {
+                                container.append(markup);
+                                onRendered();
+                            });
+                            return container;
+                        }
+                    }
+                }
+            },
+        });
+
+        this.clock.tick();
+
+        // act
+        dataGrid.getDataSource().store().push([{
+            type: 'update',
+            key: 1,
+            data: {
+                text: 'updated'
+            }
+        }]);
+        this.clock.tick();
+
+        const $firstRow = $(dataGrid.getRowElement(0));
+        assert.equal($firstRow.find('.my-cell').text(), 'updated', 'cell is updated');
     });
 
     // T120698

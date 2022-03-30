@@ -1,3 +1,4 @@
+import { getWidth } from '../../core/utils/size';
 import { animation } from './ui.drawer.animation';
 import DrawerStrategy from './ui.drawer.rendering.strategy';
 import $ from '../../core/renderer';
@@ -16,7 +17,8 @@ class OverlapStrategy extends DrawerStrategy {
 
         drawer._overlay = drawer._createComponent(drawer.content(), Overlay, {
             shading: false,
-            container: drawer.getOverlayTarget(),
+            container: drawer.content(),
+            visualContainer: drawer.getOverlayTarget(),
             position: this._getOverlayPosition(),
             width: opened ? 'auto' : minSize || 0,
             height: '100%',
@@ -35,8 +37,7 @@ class OverlapStrategy extends DrawerStrategy {
                 this._processOverlayZIndex(args.component.content());
             },
             visible: true,
-            propagateOutsideClick: true,
-            useResizeObserver: false
+            propagateOutsideClick: true
         });
     }
 
@@ -98,7 +99,7 @@ class OverlapStrategy extends DrawerStrategy {
             overlay.option('height', '100%');
             overlay.option('width', calcFromRealPanelSize ? drawer.getRealPanelWidth() : this._getPanelSize(drawer.option('opened')));
         } else {
-            overlay.option('width', overlay.option('container').width());
+            overlay.option('width', getWidth(drawer.getOverlayTarget()));
             overlay.option('height', calcFromRealPanelSize ? drawer.getRealPanelHeight() : this._getPanelSize(drawer.option('opened')));
         }
     }

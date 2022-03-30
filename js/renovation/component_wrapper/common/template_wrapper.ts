@@ -1,4 +1,4 @@
-import { InfernoComponent, InfernoEffect } from '@devextreme/vdom';
+import { InfernoComponent, InfernoEffect } from '@devextreme/runtime/inferno';
 // eslint-disable-next-line spellcheck/spell-checker
 import { findDOMfromVNode } from 'inferno';
 import { shallowEquals } from '../../utils/shallow_equals';
@@ -7,9 +7,8 @@ import $ from '../../../core/renderer';
 import domAdapter from '../../../core/dom_adapter';
 import { getPublicElement } from '../../../core/element';
 import { removeDifferentElements } from '../utils/utils';
-import Number from '../../../core/polyfills/number';
 import { FunctionTemplate } from '../../../core/templates/function_template';
-import { EffectReturn } from '../../utils/effect_return.d';
+import { EffectReturn } from '../../utils/effect_return';
 import { isDefined } from '../../../core/utils/type';
 
 export interface TemplateModel {
@@ -21,6 +20,7 @@ interface TemplateWrapperProps {
   template: FunctionTemplate;
   model?: TemplateModel;
   transclude?: boolean;
+  renovated?: boolean;
 }
 
 export class TemplateWrapper extends InfernoComponent<TemplateWrapperProps> {
@@ -40,15 +40,18 @@ export class TemplateWrapper extends InfernoComponent<TemplateWrapperProps> {
       data, index,
     } = this.props.model ?? { data: {} };
 
-    Object.keys(data).forEach((name) => {
-      if (data[name] && domAdapter.isNode(data[name])) {
-        data[name] = getPublicElement($(data[name] as Element));
-      }
-    });
+    if (data) {
+      Object.keys(data).forEach((name) => {
+        if (data[name] && domAdapter.isNode(data[name])) {
+          data[name] = getPublicElement($(data[name] as Element));
+        }
+      });
+    }
 
     const $result = $(this.props.template.render({
       container: getPublicElement($parent),
       transclude: this.props.transclude,
+      ...{ renovated: this.props.renovated },
       ...!this.props.transclude ? { model: data } : {},
       ...!this.props.transclude && Number.isFinite(index) ? { index } : {},
     }));

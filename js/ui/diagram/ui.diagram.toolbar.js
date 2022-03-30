@@ -1,3 +1,4 @@
+import { setWidth, getWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import Toolbar from '../toolbar';
 import ContextMenu from '../context_menu';
@@ -39,7 +40,7 @@ class DiagramToolbar extends DiagramPanel {
 
         const isServerSide = !hasWindow();
         if(!this.option('skipAdjustSize') && !isServerSide) {
-            this.$element().width('');
+            setWidth(this.$element(), '');
         }
 
         this._commands = this._getCommands();
@@ -52,7 +53,7 @@ class DiagramToolbar extends DiagramPanel {
 
         if(!this.option('skipAdjustSize') && !isServerSide) {
             const $toolbarContent = this.$element().find('.dx-toolbar-before');
-            this.$element().width($toolbarContent.width());
+            setWidth(this.$element(), getWidth($toolbarContent));
         }
     }
 
@@ -65,9 +66,9 @@ class DiagramToolbar extends DiagramPanel {
         return this.option('commands') || [];
     }
     _renderToolbar($toolbar) {
-        const beforeCommands = this._commands.filter(command => ['after', 'center'].indexOf(command.position) === -1);
-        const centerCommands = this._commands.filter(command => command.position === 'center');
-        const afterCommands = this._commands.filter(command => command.position === 'after');
+        const beforeCommands = this._commands.filter(command => ['after', 'center'].indexOf(command.location) === -1);
+        const centerCommands = this._commands.filter(command => command.location === 'center');
+        const afterCommands = this._commands.filter(command => command.location === 'after');
         const dataSource = []
             .concat(this._prepareToolbarItems(beforeCommands, 'before', this._executeCommand))
             .concat(this._prepareToolbarItems(centerCommands, 'center', this._executeCommand))
@@ -137,10 +138,7 @@ class DiagramToolbar extends DiagramPanel {
             options: {
                 dataSource: items,
                 displayExpr: displayExpr || 'text',
-                valueExpr: valueExpr || 'value',
-                dropDownOptions: {
-                    container: this.option('container')
-                }
+                valueExpr: valueExpr || 'value'
             }
         });
 
@@ -214,9 +212,6 @@ class DiagramToolbar extends DiagramPanel {
         }
         options = extend(true, options, {
             options: {
-                dropDownOptions: {
-                    container: this.option('container')
-                },
                 onOpened: () => {
                     if(this.option('isMobileView')) {
                         $('body').addClass(DIAGRAM_MOBILE_TOOLBAR_COLOR_BOX_OPENED_CLASS);
@@ -291,7 +286,7 @@ class DiagramToolbar extends DiagramPanel {
                 target: widget.$element(),
                 cssClass: DiagramMenuHelper.getContextMenuCssClass(),
                 showEvent: '',
-                closeOnOutsideClick: (e) => {
+                hideOnOutsideClick: (e) => {
                     return !isTouchMode && ($(e.target).closest(widget._contextMenu._dropDownButtonElement).length === 0);
                 },
                 focusStateEnabled: false,

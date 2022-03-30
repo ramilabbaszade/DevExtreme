@@ -125,6 +125,7 @@ const Editor = Widget.inherit({
 
         this.callBase();
         this._renderValidationState();
+        this.option('_onMarkupRendered')?.();
     },
 
     _raiseValueChangeAction: function(value, previousValue) {
@@ -242,7 +243,7 @@ const Editor = Widget.inherit({
                 validationErrors,
                 rtlEnabled,
                 target: this._getValidationMessageTarget(),
-                container: $element,
+                visualContainer: $element,
                 mode: validationMessageMode,
                 positionRequest: 'below',
                 offset: validationMessageOffset,

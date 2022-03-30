@@ -138,6 +138,15 @@ export const isDateAndTimeView = (
   viewType: ViewType,
 ): boolean => viewType !== VIEWS.TIMELINE_MONTH && viewType !== VIEWS.MONTH;
 
+export const isSupportMultiDayAppointments = (
+  viewType: ViewType,
+): boolean => [
+  VIEWS.TIMELINE_DAY,
+  VIEWS.TIMELINE_WEEK,
+  VIEWS.TIMELINE_WORK_WEEK,
+  VIEWS.TIMELINE_MONTH,
+].includes(viewType);
+
 export const getHorizontalGroupCount = (
   groups: Group[], groupOrientation: GroupOrientation,
 ): number => {
@@ -185,3 +194,21 @@ export const getDisplayedCellCount = (
 export const getDisplayedRowCount = (
   displayedRowCount: number | undefined, completeData: unknown[][],
 ): number => displayedRowCount ?? getTotalRowCountByCompleteData(completeData);
+
+export const getCellDuration = (
+  viewType: ViewType,
+  startDayHour: number,
+  endDayHour: number,
+  hoursInterval: number,
+): number => {
+  switch (viewType) {
+    case 'month':
+      return calculateDayDuration(startDayHour, endDayHour) * 3600000;
+
+    case 'timelineMonth':
+      return dateUtils.dateToMilliseconds('day');
+
+    default:
+      return 3600000 * hoursInterval;
+  }
+};

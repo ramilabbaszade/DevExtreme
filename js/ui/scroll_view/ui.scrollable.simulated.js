@@ -1,3 +1,4 @@
+import { getHeight, getWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import domAdapter from '../../core/dom_adapter';
 import eventsEngine from '../../events/core/events_engine';
@@ -312,7 +313,7 @@ export const Scroller = Class.inherit({
 
     _moveToMouseLocation: function(e) {
         const mouseLocation = e['page' + this._axis.toUpperCase()] - this._$element.offset()[this._prop];
-        const location = this._location + mouseLocation / this._containerToContentRatio() - this._$container.height() / 2;
+        const location = this._location + mouseLocation / this._containerToContentRatio() - getHeight(this._$container) / 2;
 
         this._scrollStep(-Math.round(location));
     },
@@ -415,8 +416,8 @@ export const Scroller = Class.inherit({
     },
 
     _updateBounds: function() {
-        this._maxOffset = Math.round(this._getMaxOffset());
-        this._minOffset = Math.round(this._getMinOffset());
+        this._maxOffset = this._getMaxOffset();
+        this._minOffset = this._getMinOffset();
     },
 
     _getMaxOffset: function() {
@@ -495,7 +496,7 @@ export const Scroller = Class.inherit({
     _validateEvent: function(e) {
         const $target = $(e.originalEvent.target);
 
-        return this._isThumb($target) || this._isScrollbar($target) || this._isContent($target);
+        return this._isThumb($target) || this._isScrollbar($target);
     },
 
     _isThumb: function($element) {
@@ -506,16 +507,12 @@ export const Scroller = Class.inherit({
         return this._scrollByThumb && $element && $element.is(this._$scrollbar);
     },
 
-    _isContent: function($element) {
-        return this._scrollByContent && !!$element.closest(this._$element).length;
-    },
-
     _reachedMin: function() {
-        return this._location <= this._minOffset;
+        return Math.round(this._location - this._minOffset) <= 0;
     },
 
     _reachedMax: function() {
-        return this._location >= this._maxOffset;
+        return Math.round(this._location - this._maxOffset) >= 0;
     },
 
     _cursorEnterHandler: function() {
@@ -591,7 +588,6 @@ export const SimulatedStrategy = Class.inherit({
             $container: this._$container,
             $wrapper: this._$wrapper,
             $element: this._$element,
-            scrollByContent: this.option('scrollByContent'),
             scrollByThumb: this.option('scrollByThumb'),
             scrollbarVisible: this.option('showScrollbar'),
             bounceEnabled: this.option('bounceEnabled'),
@@ -636,9 +632,15 @@ export const SimulatedStrategy = Class.inherit({
 
         this._prepareDirections();
         this._eachScroller(function(scroller, direction) {
-            const isValid = scroller._validateEvent(e);
+            const $target = $(e.originalEvent.target);
+
+            const isValid = scroller._validateEvent(e) || (this.option('scrollByContent') && this._isContent($target));
             this._validDirections[direction] = isValid;
         });
+    },
+
+    _isContent: function($element) {
+        return !!$element.closest(this._$element).length;
     },
 
     _prepareDirections: function(value) {
@@ -803,7 +805,8 @@ export const SimulatedStrategy = Class.inherit({
         const dimension = this._dimensionByProp(prop);
 
         const distance = {};
-        distance[prop] = page * -this._$container[dimension]();
+        const getter = dimension === 'width' ? getWidth : getHeight;
+        distance[prop] = page * -getter(this._$container);
         this.scrollBy(distance);
     },
 
@@ -828,7 +831,8 @@ export const SimulatedStrategy = Class.inherit({
         const dimension = this._dimensionByProp(prop);
 
         const distance = {};
-        distance[prop] = this._$content[dimension]() - this._$container[dimension]();
+        const getter = dimension === 'width' ? getWidth : getHeight;
+        distance[prop] = getter(this._$content) - getter(this._$container);
         this._component.scrollTo(distance);
     },
 

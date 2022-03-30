@@ -24,8 +24,7 @@
 }
 
 .dx-form {
-  > .dx-scrollable-wrapper,
-  > div > .dx-scrollable-wrapper {
+  > .dx-scrollable-wrapper {
     > .dx-scrollable-container {
       margin-left: -10px;
       padding-left: 10px;
@@ -112,10 +111,12 @@
   }
 }
 
-.dx-field-item-required-mark {
-  color: $form-field-required-color;
-}
-
+.dx-field-item-optional .dx-label > span::after,
 .dx-field-item-optional-mark {
   color: $form-field-mark-color;
+}
+
+.dx-field-item-required .dx-label > span::after,
+.dx-field-item-required-mark {
+  color: $form-field-required-color;
 }

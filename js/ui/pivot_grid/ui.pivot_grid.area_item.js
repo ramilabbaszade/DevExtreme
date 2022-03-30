@@ -1,3 +1,4 @@
+import { setWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import Class from '../../core/class';
 import { getPublicElement } from '../../core/element';
@@ -394,7 +395,7 @@ export const AreaItem = Class.inherit({
     },
 
     resetColumnsWidth: function() {
-        this._colgroupElement.find('col').width('auto');
+        setWidth(this._colgroupElement.find('col'), 'auto');
         this._tableElement.css({
             width: '',
             tableLayout: ''
@@ -458,11 +459,23 @@ export const AreaItem = Class.inherit({
             height: params.height
         });
 
-        this.groupElement().addClass('dx-virtual-mode');
+        const scrollable = this._getScrollable();
+
+        if(scrollable?.isRenovated()) {
+            this._getScrollable().option('classes', 'dx-virtual-mode');
+        } else {
+            this.groupElement().addClass('dx-virtual-mode');
+        }
     },
 
     disableVirtualMode: function() {
-        this.groupElement().removeClass('dx-virtual-mode');
+        const scrollable = this._getScrollable();
+
+        if(scrollable?.isRenovated()) {
+            this._getScrollable().option('classes', '');
+        } else {
+            this.groupElement().removeClass('dx-virtual-mode');
+        }
     },
 
     _renderVirtualContent: function() {

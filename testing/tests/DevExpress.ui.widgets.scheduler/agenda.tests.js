@@ -1,7 +1,7 @@
 import $ from 'jquery';
 import SchedulerAgenda from 'ui/scheduler/workspaces/ui.scheduler.agenda';
 import dateLocalization from 'localization/date';
-import { createFactoryInstances, getAppointmentDataProvider, getResourceManager } from 'ui/scheduler/instanceFactory';
+import { AppointmentDataProvider } from 'ui/scheduler/appointments/dataProvider/appointmentDataProvider';
 
 const DATE_TABLE_CELL_CLASS = 'dx-scheduler-date-table-cell';
 const HOVER_CLASS = 'dx-state-hover';
@@ -30,13 +30,6 @@ module('Agenda', {}, () => {
         }
 
         const resources = options && options.groups || [];
-        const key = createFactoryInstances({
-            getIsVirtualScrolling: () => false,
-            getDataAccessors: () => {},
-            resources,
-        });
-
-        const resourceManager = getResourceManager(key);
 
         const config = {
             onContentReady: e => {
@@ -50,15 +43,20 @@ module('Agenda', {}, () => {
                                 return { calculateRows: () => rows };
                             }
                         };
-                    } else if(functionName === 'getAppointmentDataProvider') {
-                        return getAppointmentDataProvider(key);
                     }
                 }
             },
-            resourceManager,
+            getAppointmentDataProvider: () => new AppointmentDataProvider({
+                getIsVirtualScrolling: () => false,
+                dataAccessors: {},
+                resources,
+            })
         };
 
-        const $element = $('#scheduler-agenda').dxSchedulerAgenda({ ...options, ...config });
+        const $element = $('#scheduler-agenda').dxSchedulerAgenda({
+            ...options,
+            ...config
+        });
         return $element.dxSchedulerAgenda('instance');
     };
 
@@ -195,5 +193,18 @@ module('Agenda', {}, () => {
         $element.trigger($.Event('dxpointerenter', { target: cells.eq(2).get(0), which: 1 }));
 
         assert.notOk(cells.eq(2).hasClass(HOVER_CLASS), 'onHover event does not work');
+    });
+
+    test('Should return correct DOM meta data', function(assert) {
+        const instance = createInstance();
+
+        assert.deepEqual(
+            instance.getDOMElementsMetaData(),
+            {
+                dateTableCellsMeta: [[{}]],
+                allDayPanelCellsMeta: [{}],
+            },
+            'Correct DOM meta data',
+        );
     });
 });

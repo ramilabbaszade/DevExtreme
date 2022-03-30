@@ -1,3 +1,4 @@
+import { getWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { extend } from '../../core/utils/extend';
 import { isFunction } from '../../core/utils/type';
@@ -163,12 +164,11 @@ export default class FileManagerNotificationControl extends Widget {
         if(!hasWindow()) {
             return false;
         }
-        return $(window).width() <= ADAPTIVE_STATE_SCREEN_WIDTH;
+        return getWidth(window) <= ADAPTIVE_STATE_SCREEN_WIDTH;
     }
 
     _dimensionChanged(dimension) {
-        const notificationManager = this._getNotificationManager();
-        if(!(dimension && dimension === 'height') && notificationManager.handleDimensionChanged()) {
+        if(!(dimension && dimension === 'height')) {
             this._checkAdaptiveState();
         }
     }
@@ -176,9 +176,12 @@ export default class FileManagerNotificationControl extends Widget {
     _checkAdaptiveState() {
         const oldState = this._isInAdaptiveState;
         this._isInAdaptiveState = this._isSmallScreen();
-        if(this._progressDrawer && oldState !== this._isInAdaptiveState) {
-            const options = this._getProgressDrawerAdaptiveOptions();
-            this._progressDrawer.option(options);
+        if(oldState !== this._isInAdaptiveState && this._progressDrawer) {
+            const notificationManager = this._getNotificationManager();
+            if(notificationManager.handleDimensionChanged()) {
+                const options = this._getProgressDrawerAdaptiveOptions();
+                this._progressDrawer.option(options);
+            }
         }
     }
 
@@ -187,13 +190,13 @@ export default class FileManagerNotificationControl extends Widget {
             return {
                 openedStateMode: 'overlap',
                 shading: true,
-                closeOnOutsideClick: true
+                hideOnOutsideClick: true
             };
         } else {
             return {
                 openedStateMode: 'shrink',
                 shading: false,
-                closeOnOutsideClick: false
+                hideOnOutsideClick: false
             };
         }
     }
@@ -268,19 +271,20 @@ export default class FileManagerNotificationControl extends Widget {
 
     _getNotificationPopup() {
         if(!this._notificationPopup) {
-            const $popup = $('<div>')
-                .addClass(FILE_MANAGER_NOTIFICATION_POPUP_CLASS)
-                .appendTo(this.$element());
+            const $popup = $('<div>').appendTo(this.$element());
 
             this._notificationPopup = this._createComponent($popup, Popup, {
                 container: this.$element(),
+                wrapperAttr: {
+                    class: FILE_MANAGER_NOTIFICATION_POPUP_CLASS
+                },
                 width: 'auto',
                 height: 'auto',
                 showTitle: false,
                 dragEnabled: false,
                 shading: false,
                 visible: false,
-                closeOnOutsideClick: true,
+                hideOnOutsideClick: true,
                 animation: { duration: 0 },
                 position: {
                     my: 'right top',

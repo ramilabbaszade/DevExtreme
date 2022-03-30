@@ -7,11 +7,12 @@ import keyboardMock from '../../../helpers/keyboardMock.js';
 import caretWorkaround from './caretWorkaround.js';
 import themes from 'ui/themes';
 import config from 'core/config';
-import { noop } from 'core/utils/common';
 import consoleUtils from 'core/utils/console';
 import { normalizeKeyName } from 'events/utils/index';
+import { getWidth } from 'core/utils/size';
 
-import 'ui/text_box/ui.text_editor';
+import TextEditor from 'ui/text_box/ui.text_editor';
+import { TextEditorLabel } from 'ui/text_box/ui.text_editor.label.js';
 
 const TEXTEDITOR_CLASS = 'dx-texteditor';
 const INPUT_CLASS = 'dx-texteditor-input';
@@ -21,11 +22,14 @@ const STATE_FOCUSED_CLASS = 'dx-state-focused';
 const EMPTY_INPUT_CLASS = 'dx-texteditor-empty';
 const CLEAR_BUTTON_SELECTOR = '.dx-clear-button-area';
 const PLACEHOLDER_CLASS = 'dx-placeholder';
+const LABEL_CLASS = 'dx-texteditor-label';
 const INVISIBLE_STATE_CLASS = 'dx-state-invisible';
+
+const BUTTONS_CONTAINER_CLASS = 'dx-texteditor-buttons-container';
 
 const EVENTS = [
     'FocusIn', 'FocusOut',
-    'KeyDown', 'KeyPress', 'KeyUp',
+    'KeyDown', 'KeyUp',
     'Change', 'Cut', 'Copy', 'Paste', 'Input'
 ];
 
@@ -343,6 +347,25 @@ QUnit.module('general', {}, () => {
         assert.strictEqual(blurStub.callCount, 0, 'FocusOut event has not been triggered');
     });
 
+    QUnit.testInActiveWindow('text editor should be focused out after focus is moved from custom button outside of editor (T1066348)', function(assert) {
+        const focusOutStub = sinon.stub();
+
+        const $textEditor = $('#texteditor').dxTextEditor({
+            onFocusOut: focusOutStub,
+            buttons: [{ name: 'test' }]
+        });
+        const textEditor = $textEditor.dxTextEditor('instance');
+        const actionButton = textEditor.getButton('test');
+
+        textEditor.focus();
+        actionButton.focus();
+
+        $(actionButton.$element()).trigger('focusout');
+
+        assert.notOk($textEditor.hasClass(STATE_FOCUSED_CLASS), 'input is not focused');
+        assert.strictEqual(focusOutStub.callCount, 1, 'focusout was triggered');
+    });
+
     QUnit.testInActiveWindow('input should be focused even after focus from inner button move (T963822)', function(assert) {
         const $textEditor = $('#texteditor').dxTextEditor({
             buttons: [{
@@ -462,6 +485,203 @@ QUnit.module('general', {}, () => {
         assert.ok($textEditor.hasClass('dx-editor-filled'));
 
         themes.isMaterial = realIsMaterial;
+    });
+});
+
+QUnit.module('label integration', {
+    beforeEach: function() {
+        this.$textEditor = $('#texteditor');
+        const initialOptions = { label: 'some' };
+        this.init = (options = {}) => {
+            this.textEditor = this.$textEditor
+                .dxTextEditor($.extend(initialOptions, options))
+                .dxTextEditor('instance');
+            this.$input = this.$textEditor.find(`.${INPUT_CLASS}`);
+        };
+
+        class TextEditorLabelMock extends TextEditorLabel {
+            updateMaxWidth = sinon.stub()
+            updateBeforeWidth = sinon.stub()
+            updateMode = sinon.stub()
+            updateText = sinon.stub()
+            updateMark = sinon.stub()
+            updateContainsButtonsBefore = sinon.stub()
+        }
+
+        this.TextEditorLabelMock = (args) => { this.labelArgs = args; return this.labelMock = new TextEditorLabelMock(args); };
+
+        TextEditor.mockTextEditorLabel(this.TextEditorLabelMock);
+    },
+    afterEach: function() {
+        Object.values(this.labelMock, (stub) => {
+            stub.reset();
+        });
+
+        TextEditor.restoreTextEditorLabel();
+    }
+}, () => {
+    QUnit.module('init', {
+        beforeEach: function() {
+            this.getProps = () => this.labelArgs;
+        }
+    }, () => {
+        QUnit.test('correct props are passed to TextEditorLabel', function(assert) {
+            const labelText = 'new label';
+            const labelMode = 'floating';
+            const labelMark = ':';
+
+            this.init({
+                label: labelText,
+                labelMode,
+                labelMark,
+                buttons: [{
+                    name: 'button',
+                    location: 'before'
+                }],
+            });
+
+            const {
+                $editor,
+                text, mode, mark,
+                containsButtonsBefore,
+            } = this.getProps();
+
+            assert.strictEqual($editor.get(0), this.$textEditor.get(0));
+            assert.strictEqual(text, labelText);
+            assert.strictEqual(mode, labelMode);
+            assert.strictEqual(mark, labelMark);
+            assert.strictEqual(containsButtonsBefore, true);
+        });
+
+        QUnit.test('editor should pass containerWidth equal to input width', function(assert) {
+            this.init();
+            const inputWidth = getWidth(this.$input);
+            const borderWidth = 2;
+
+            assert.strictEqual(this.getProps().containerWidth + borderWidth, inputWidth);
+        });
+
+        QUnit.test('editor should pass beforeWidth equal to before buttons container width', function(assert) {
+            this.init();
+            const beforeButtonsContainerWidth = getWidth($(`.${BUTTONS_CONTAINER_CLASS}`));
+
+            assert.strictEqual(this.getProps().beforeWidth, beforeButtonsContainerWidth);
+        });
+    });
+
+    QUnit.module('option change', {
+        beforeEach: function() {
+            this.init();
+        }
+    }, () => {
+        QUnit.test('width', function(assert) {
+            this.textEditor.option('width', 300);
+            const inputWidth = getWidth(this.$input);
+
+            const updateMaxWidthCall = this.labelMock.updateMaxWidth.getCall(0);
+            assert.strictEqual(updateMaxWidthCall.args[0], inputWidth);
+        });
+
+
+        QUnit.test('label', function(assert) {
+            const labelText = 'new text';
+            this.textEditor.option('label', labelText);
+
+            const updateTextCall = this.labelMock.updateText.getCall(0);
+            assert.strictEqual(updateTextCall.args[0], labelText);
+        });
+
+        QUnit.test('labelMark', function(assert) {
+            const newLabelMark = '*';
+            this.textEditor.option('labelMark', newLabelMark);
+
+            const updateMarkCall = this.labelMock.updateMark.getCall(0);
+            assert.strictEqual(updateMarkCall.args[0], newLabelMark);
+        });
+
+        QUnit.test('labelMode', function(assert) {
+            const newLabelMode = 'floating';
+            this.textEditor.option('labelMode', newLabelMode);
+
+            const updateModeCall = this.labelMock.updateMode.getCall(0);
+            assert.strictEqual(updateModeCall.args[0], newLabelMode);
+        });
+
+        QUnit.test('before buttons', function(assert) {
+            this.textEditor.option('buttons', [{
+                name: 'button',
+                location: 'before',
+            }]);
+            const updateMaxWidthCall = this.labelMock.updateMaxWidth.getCall(0);
+            const updateBeforeWidthCall = this.labelMock.updateBeforeWidth.getCall(0);
+            const updateContainsButtonsBeforeCall = this.labelMock.updateContainsButtonsBefore.getCall(0);
+
+            const newLabelMaxWidth = getWidth(this.$input);
+            const newLabelBeforeWidth = getWidth($(`.${BUTTONS_CONTAINER_CLASS}`));
+
+            assert.strictEqual(updateMaxWidthCall.args[0], newLabelMaxWidth);
+            assert.strictEqual(updateBeforeWidthCall.args[0], newLabelBeforeWidth);
+            assert.strictEqual(updateContainsButtonsBeforeCall.args[0], true);
+        });
+
+        QUnit.test('after buttons', function(assert) {
+            this.textEditor.option('buttons', [{
+                name: 'button',
+                location: 'after',
+            }]);
+            const updateBeforeWidthCall = this.labelMock.updateBeforeWidth.getCall(0);
+            const updateContainsButtonsBeforeCall = this.labelMock.updateContainsButtonsBefore.getCall(0);
+
+            assert.strictEqual(updateBeforeWidthCall.args[0], 0);
+            assert.strictEqual(updateContainsButtonsBeforeCall.args[0], false);
+        });
+
+        QUnit.test('stylingMode', function(assert) {
+            this.textEditor.option('stylingMode', 'underlined');
+
+            const updateMaxWidthCall = this.labelMock.updateMaxWidth.getCall(0);
+            const updateBeforeWidthCall = this.labelMock.updateBeforeWidth.getCall(0);
+
+            const newLabelMaxWidth = getWidth(this.$input);
+            const newLabelBeforeWidth = 0;
+
+            assert.strictEqual(updateMaxWidthCall.args[0], newLabelMaxWidth);
+            assert.strictEqual(updateBeforeWidthCall.args[0], newLabelBeforeWidth);
+        });
+    });
+});
+
+QUnit.module('check aria-labelledby attribute', {
+    beforeEach: function() {
+        this.$textEditor = $('#texteditor');
+        this.textEditor = this.$textEditor
+            .dxTextEditor({
+                label: 'some'
+            })
+            .dxTextEditor('instance');
+        this.$input = this.$textEditor.find(`.${INPUT_CLASS}`);
+        this.$label = this.$textEditor.find(`.${LABEL_CLASS}`);
+    }
+}, () => {
+    QUnit.test('if label is defined', function(assert) {
+        const inputAttr = this.$input.attr('aria-labelledby');
+        const labelId = this.$label.attr('id');
+
+        assert.strictEqual(labelId, inputAttr);
+    });
+
+    QUnit.test('if label is not defined', function(assert) {
+        this.textEditor.option('label', '');
+        const inputAttr = this.$input.attr('aria-labelledby');
+
+        assert.notOk(inputAttr);
+    });
+
+    QUnit.test('if label mode has value "hidden"', function(assert) {
+        this.textEditor.option('labelMode', 'hidden');
+        const inputAttr = this.$input.attr('aria-labelledby');
+
+        assert.notOk(inputAttr);
     });
 });
 
@@ -930,7 +1150,7 @@ QUnit.module('api', moduleConfig, () => {
     });
 
     QUnit.test('events work when relevant actions is not set', function(assert) {
-        assert.expect(12);
+        assert.expect(8);
         const textBox = this.instance;
         const keyboard = this.keyboard;
 
@@ -939,13 +1159,6 @@ QUnit.module('api', moduleConfig, () => {
             assert.equal($(e.element).get(0), textBox.$element().get(0), 'event has link on element');
             assert.equal(e.event.type, 'keydown', 'event has related Event');
             assert.ok(true, 'keyDown was fired');
-        });
-
-        textBox.on('keyPress', e => {
-            assert.equal(e.component, textBox, 'event has link on component');
-            assert.equal($(e.element).get(0), textBox.$element().get(0), 'event has link on element');
-            assert.equal(e.event.type, 'keypress', 'event has related Event');
-            assert.ok(true, 'keyPress was fired');
         });
 
         textBox.on('keyUp', e => {
@@ -959,14 +1172,12 @@ QUnit.module('api', moduleConfig, () => {
     });
 
     QUnit.test('events supports chains', function(assert) {
-        assert.expect(3);
+        assert.expect(2);
         const textBox = this.instance;
         const keyboard = this.keyboard;
 
         textBox.on('keyDown', e => {
             assert.ok(true, 'keyDown was fired');
-        }).on('keyPress', e => {
-            assert.ok(true, 'keyPress was fired');
         }).on('keyUp', e => {
             assert.ok(true, 'keyUp was fired');
         });
@@ -1001,23 +1212,6 @@ QUnit.module('deprecated options', {
         consoleUtils.logger.warn.restore();
     }
 }, () => {
-    QUnit.test('widget has no warnings if it is no user onKeyPress event subscriptions', function(assert) {
-        $('#texteditor').dxTextEditor({});
-        assert.strictEqual(consoleUtils.logger.warn.callCount, 0, 'Warning is not raised on init for widget without \'onKeyPress\' handler');
-    });
-
-    QUnit.test('user onKeyPress event subscriptions fires a deprecation warning', function(assert) {
-        const textBox = $('#texteditor').dxTextEditor({
-            onKeyPress: noop
-        }).dxTextEditor('instance');
-
-        assert.strictEqual(consoleUtils.logger.warn.callCount, 1, 'Warning is raised');
-        assert.strictEqual(consoleUtils.logger.warn.getCall(0).args[0].substring(0, 5), 'W0001', 'Warning is correct');
-
-        textBox.option('onKeyPress', null);
-        textBox.option('onKeyPress', noop);
-        assert.strictEqual(consoleUtils.logger.warn.callCount, 3, 'Warning is raised if set a new handler');
-    });
 });
 
 QUnit.module('regressions', moduleConfig, () => {
@@ -1026,7 +1220,7 @@ QUnit.module('regressions', moduleConfig, () => {
 
         const EVENTS = [
             'focusIn', 'focusOut',
-            'keyDown', 'keyPress', 'keyUp',
+            'keyDown', 'keyUp',
             'change'
         ];
 
@@ -1115,13 +1309,11 @@ QUnit.module('regressions', moduleConfig, () => {
         const enterKeyStub = sinon.stub();
         const keyUpStub = sinon.stub();
         const keyDownStub = sinon.stub();
-        const keyPressStub = sinon.stub();
 
         const $textEditor = $('#texteditor').dxTextEditor({
             onEnterKey: enterKeyStub,
             onKeyUp: keyUpStub,
-            onKeyDown: keyDownStub,
-            onKeyPress: keyPressStub
+            onKeyDown: keyDownStub
         });
 
         const $input = $textEditor.find('input');
@@ -1135,7 +1327,6 @@ QUnit.module('regressions', moduleConfig, () => {
             assert.ok(!enterKeyStub.called, 'enter key action should not be called');
             assert.ok(!keyUpStub.called, 'key up action should not be called');
             assert.ok(!keyDownStub.called, 'key down action should not be called');
-            assert.ok(!keyPressStub.called, 'key press action should not be called');
         } finally {
             instance._disposed = disposed;
         }

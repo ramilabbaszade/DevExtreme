@@ -1,3 +1,4 @@
+import { getOuterHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { getWindow } from '../../core/utils/window';
 import { VirtualScrollController, subscribeToExternalScrollers } from './ui.grid_core.virtual_scrolling_core';
@@ -20,7 +21,8 @@ const VIRTUAL_ROW_CLASS = 'dx-virtual-row';
 const SCROLLING_MODE_INFINITE = 'infinite';
 const SCROLLING_MODE_VIRTUAL = 'virtual';
 const LOAD_TIMEOUT = 300;
-const NEW_SCROLLING_MODE = 'scrolling.newMode';
+const LEGACY_SCROLLING_MODE = 'scrolling.legacyMode';
+const VISIBLE_PAGE_INDEX = 'paging.pageIndex';
 
 const isVirtualMode = function(that) {
     return that.option('scrolling.mode') === SCROLLING_MODE_VIRTUAL;
@@ -28,6 +30,10 @@ const isVirtualMode = function(that) {
 
 const isAppendMode = function(that) {
     return that.option('scrolling.mode') === SCROLLING_MODE_INFINITE;
+};
+
+const isVirtualPaging = function(that) {
+    return isVirtualMode(that) || isAppendMode(that);
 };
 
 const correctCount = function(items, count, fromEnd, isItemCountableFunc) {
@@ -134,7 +140,7 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
             };
         },
         _handleLoadingChanged: function(isLoading) {
-            if(this.option(NEW_SCROLLING_MODE)) {
+            if(this.option(LEGACY_SCROLLING_MODE) === false) {
                 this.callBase.apply(this, arguments);
                 return;
             }
@@ -151,7 +157,7 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
             }
         },
         _handleLoadError: function() {
-            if(!this.option(NEW_SCROLLING_MODE)) {
+            if(this.option(LEGACY_SCROLLING_MODE) !== false) {
                 this._isLoading = false;
                 this.loadingChanged.fire(false);
             }
@@ -159,7 +165,7 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
             this.callBase.apply(this, arguments);
         },
         _handleDataChanged: function(e) {
-            if(this.option(NEW_SCROLLING_MODE)) {
+            if(this.option(LEGACY_SCROLLING_MODE) === false) {
                 this._items = this._dataSource.items().slice();
                 this.callBase.apply(this, arguments);
                 return;
@@ -170,9 +176,14 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
             this._virtualScrollController.handleDataChanged(callBase, e);
         },
         _customizeRemoteOperations: function(options, operationTypes) {
-            const newMode = this.option(NEW_SCROLLING_MODE);
+            const newMode = this.option(LEGACY_SCROLLING_MODE) === false;
+            let renderAsync = this.option('scrolling.renderAsync');
 
-            if((isVirtualMode(this) || (isAppendMode(this) && newMode)) && !operationTypes.reload && (operationTypes.skip || newMode) && this._renderTime < this.option('scrolling.renderingThreshold')) {
+            if(!isDefined(renderAsync)) {
+                renderAsync = this._renderTime >= this.option('scrolling.renderingThreshold');
+            }
+
+            if((isVirtualMode(this) || (isAppendMode(this) && newMode)) && !operationTypes.reload && (operationTypes.skip || newMode) && !renderAsync) {
                 options.delay = undefined;
             }
 
@@ -182,19 +193,19 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
             return this._items;
         },
         itemsCount: function(isBase) {
-            if(isBase || this.option(NEW_SCROLLING_MODE)) {
+            if(isBase || this.option(LEGACY_SCROLLING_MODE) === false) {
                 return this.callBase();
             }
             return this._virtualScrollController.itemsCount();
         },
         load: function(loadOptions) {
-            if(this.option(NEW_SCROLLING_MODE) || loadOptions) {
+            if(this.option(LEGACY_SCROLLING_MODE) === false || loadOptions) {
                 return this.callBase(loadOptions);
             }
             return this._virtualScrollController.load();
         },
         isLoading: function() {
-            return this.option(NEW_SCROLLING_MODE) ? this._dataSource.isLoading() : this._isLoading;
+            return this.option(LEGACY_SCROLLING_MODE) === false ? this._dataSource.isLoading() : this._isLoading;
         },
         isLoaded: function() {
             return this._dataSource.isLoaded() && this._isLoaded;
@@ -208,7 +219,7 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
         _changeRowExpandCore: function() {
             const result = this.callBase.apply(this, arguments);
 
-            if(this.option(NEW_SCROLLING_MODE)) {
+            if(this.option(LEGACY_SCROLLING_MODE) === false) {
                 return result;
             }
 
@@ -221,7 +232,7 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
             this._dataSource.pageIndex(this.pageIndex());
             const virtualScrollController = this._virtualScrollController;
 
-            if(!this.option(NEW_SCROLLING_MODE) && virtualScrollController) {
+            if(this.option(LEGACY_SCROLLING_MODE) !== false && virtualScrollController) {
                 const d = new Deferred();
                 this.callBase.apply(this, arguments).done(function(r) {
                     const delayDeferred = virtualScrollController.getDelayDeferred();
@@ -237,7 +248,7 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
             }
         },
         refresh: function(options, operationTypes) {
-            if(!this.option(NEW_SCROLLING_MODE)) {
+            if(this.option(LEGACY_SCROLLING_MODE) !== false) {
                 const storeLoadOptions = options.storeLoadOptions;
                 const dataSource = this._dataSource;
 
@@ -266,6 +277,7 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
                     storeLoadOptions.skip += this._totalCountCorrection;
                 }
             }
+
             return this.callBase.apply(this, arguments);
         },
         dispose: function() {
@@ -280,10 +292,14 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
         },
         _handleDataLoading: function(options) {
             const loadPageCount = this.loadPageCount();
+            const pageSize = this.pageSize();
+            const newMode = this.option(LEGACY_SCROLLING_MODE) === false;
+            const storeLoadOptions = options.storeLoadOptions;
+            const takeIsDefined = isDefined(storeLoadOptions.take);
 
             options.loadPageCount = loadPageCount;
-            if(this.option(NEW_SCROLLING_MODE) && loadPageCount > 1) {
-                options.storeLoadOptions.take = loadPageCount * this.pageSize();
+            if(!options.isCustomLoading && newMode && takeIsDefined && loadPageCount > 1 && pageSize > 0) {
+                storeLoadOptions.take = loadPageCount * pageSize;
             }
             this.callBase.apply(this, arguments);
         },
@@ -294,10 +310,11 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
 
     [
         'beginPageIndex',
-        'endPageIndex'
+        'endPageIndex',
+        'pageIndex'
     ].forEach(function(name) {
         result[name] = function() {
-            if(this.option(NEW_SCROLLING_MODE)) {
+            if(this.option(LEGACY_SCROLLING_MODE) === false) {
                 const dataSource = this._dataSource;
                 return dataSource.pageIndex.apply(dataSource, arguments);
             }
@@ -314,7 +331,7 @@ const VirtualScrollingDataSourceAdapterExtender = (function() {
         'setContentItemSizes', 'setViewportPosition',
         'getViewportItemIndex', 'setViewportItemIndex', 'getItemIndexByPosition',
         'viewportSize', 'viewportItemSize', 'getItemSize', 'getItemSizes',
-        'pageIndex', 'loadIfNeed'
+        'loadIfNeed'
     ].forEach(function(name) {
         result[name] = function() {
             const virtualScrollController = this._virtualScrollController;
@@ -348,8 +365,8 @@ const VirtualScrollingRowsViewExtender = (function() {
 
             this.callBase();
 
-            dataController.pageChanged.add(() => {
-                this.scrollToPage(dataController.pageIndex());
+            dataController.pageChanged.add((pageIndex) => {
+                this.scrollToPage(pageIndex ?? dataController.pageIndex());
             });
 
             dataController.dataSourceChanged.add(() => {
@@ -416,7 +433,7 @@ const VirtualScrollingRowsViewExtender = (function() {
                 const itemCount = e.items ? e.items.length : 20;
                 const viewportSize = this._dataController.viewportSize() || 20;
 
-                if(gridCoreUtils.isVirtualRowRendering(this) && itemCount > 0) {
+                if(gridCoreUtils.isVirtualRowRendering(this) && itemCount > 0 && this.option(LEGACY_SCROLLING_MODE) !== false) {
                     dataSource._renderTime = (new Date() - startRenderTime) * viewportSize / itemCount;
                 } else {
                     dataSource._renderTime = (new Date() - startRenderTime);
@@ -508,7 +525,7 @@ const VirtualScrollingRowsViewExtender = (function() {
                     continue;
                 }
 
-                if(this.option(NEW_SCROLLING_MODE)) {
+                if(this.option(LEGACY_SCROLLING_MODE) === false) {
                     if(lastLoadIndex >= 0 && lastLoadIndex !== currentItem.loadIndex) {
                         correctedRowHeights.push(itemSize);
                         itemSize = 0;
@@ -620,20 +637,18 @@ const VirtualScrollingRowsViewExtender = (function() {
         },
 
         _handleScroll: function(e) {
-            const that = this;
+            const legacyScrollingMode = this.option(LEGACY_SCROLLING_MODE) === true;
+            const zeroTopPosition = e.scrollOffset.top === 0;
 
-            if(that._hasHeight && that._rowHeight) {
-                that._dataController.setViewportPosition(e.scrollOffset.top);
+            if((this._hasHeight || !legacyScrollingMode && zeroTopPosition) && this._rowHeight) {
+                this._dataController.setViewportPosition(e.scrollOffset.top);
             }
-            that.callBase.apply(that, arguments);
+            this.callBase.apply(this, arguments);
         },
 
         _needUpdateRowHeight: function(itemsCount) {
             return this.callBase.apply(this, arguments) || (itemsCount > 0 &&
-                (
-                    (isAppendMode(this) && !gridCoreUtils.isVirtualRowRendering(this))
-                    || (this.option(NEW_SCROLLING_MODE) && (isAppendMode(this) || isVirtualMode(this) || gridCoreUtils.isVirtualRowRendering(this)))
-                )
+                (isAppendMode(this) && !gridCoreUtils.isVirtualRowRendering(this))
             );
         },
 
@@ -644,13 +659,14 @@ const VirtualScrollingRowsViewExtender = (function() {
 
                 this._updateContentPosition();
 
-                const viewportHeight = this._hasHeight ? this.element().outerHeight() : $(getWindow()).outerHeight();
+                const viewportHeight = this._hasHeight ? getOuterHeight(this.element()) : getOuterHeight(getWindow());
                 const dataController = this._dataController;
-                dataController.viewportSize(Math.ceil(viewportHeight / this._rowHeight));
 
-                if(this.option(NEW_SCROLLING_MODE)) {
-                    // dataController.viewportHeight(viewportHeight);
+                if(this.option(LEGACY_SCROLLING_MODE) === false) {
+                    dataController.viewportHeight(viewportHeight);
                     dataController.updateViewport();
+                } else {
+                    dataController.viewportSize(Math.ceil(viewportHeight / this._rowHeight));
                 }
             }
         },
@@ -669,7 +685,7 @@ const VirtualScrollingRowsViewExtender = (function() {
             const dataController = this._dataController;
             const hasBottomLoadPanel = dataController.pageIndex() > 0 && dataController.isLoaded() && !!this._findBottomLoadPanel();
 
-            if(this.option(NEW_SCROLLING_MODE) && isLoading && dataController.isViewportChanging()) {
+            if(this.option(LEGACY_SCROLLING_MODE) === false && isLoading && dataController.isViewportChanging()) {
                 return;
             }
 
@@ -699,7 +715,9 @@ const VirtualScrollingRowsViewExtender = (function() {
                 });
             }
 
-            that.loadIfNeed();
+            if(this.option(LEGACY_SCROLLING_MODE) !== false) {
+                that.loadIfNeed();
+            }
         },
 
         loadIfNeed: function() {
@@ -719,6 +737,15 @@ const VirtualScrollingRowsViewExtender = (function() {
             }
         },
 
+        _restoreErrorRow: function() {
+            if(this.option(LEGACY_SCROLLING_MODE) === false) {
+                const errorHandling = this.getController('errorHandling');
+                errorHandling?.removeErrorRow();
+            }
+
+            this.callBase.apply(this, arguments);
+        },
+
         dispose: function() {
             clearTimeout(this._scrollTimeoutID);
             this.callBase();
@@ -736,12 +763,13 @@ export const virtualScrollingModule = {
                 renderingThreshold: 100,
                 removeInvisiblePages: true,
                 rowPageSize: 5,
+                prerenderedRowChunkSize: 1,
                 mode: 'standard',
                 preloadEnabled: false,
                 rowRenderingMode: 'standard',
                 loadTwoPagesOnStart: false,
-                newMode: true,
-                minGap: 1
+                legacyMode: false,
+                prerenderedRowCount: 1
             }
         };
     },
@@ -754,6 +782,15 @@ export const virtualScrollingModule = {
                         const baseResult = this.callBase.apply(this, arguments) || new Deferred().resolve().promise();
                         baseResult.done(this.initVirtualRows.bind(this));
                         return baseResult;
+                    },
+                    _loadDataSource: function() {
+                        if(this._rowsScrollController && isVirtualPaging(this)) {
+                            const { loadPageCount } = this.getLoadPageParams() ?? {};
+
+                            loadPageCount >= 1 && this._dataSource?.loadPageCount(loadPageCount);
+                        }
+
+                        return this.callBase.apply(this, arguments);
                     },
                     getRowPageSize: function() {
                         const rowPageSize = this.option('scrolling.rowPageSize');
@@ -773,14 +810,14 @@ export const virtualScrollingModule = {
                                 const scrollable = component.getScrollable && component.getScrollable();
                                 const isSortingOperation = this.dataSource().operationTypes().sorting;
 
-                                if(scrollable && !isSortingOperation) {
+                                if(scrollable && !isSortingOperation && rowIndex >= 0) {
                                     const rowElement = component.getRowElement(rowIndex);
                                     const $rowElement = rowElement && rowElement[0] && $(rowElement[0]);
                                     let top = $rowElement && $rowElement.position().top;
                                     const isChromeLatest = browser.chrome && browser.version >= 91;
                                     const allowedTopOffset = browser.mozilla || isChromeLatest ? 1 : 0; // T884308
                                     if(top > allowedTopOffset) {
-                                        top = Math.round(top + $rowElement.outerHeight() * (itemIndex % 1));
+                                        top = Math.round(top + getOuterHeight($rowElement) * (itemIndex % 1));
                                         scrollable.scrollTo({ y: top });
                                     }
                                 }
@@ -791,8 +828,9 @@ export const virtualScrollingModule = {
                         const virtualRowsRendering = gridCoreUtils.isVirtualRowRendering(this);
 
                         this._allItems = null;
+                        this._loadViewportParams = null;
 
-                        if(this.option('scrolling.mode') !== 'virtual' && virtualRowsRendering !== true || virtualRowsRendering === false || !this.option('scrolling.rowPageSize')) {
+                        if(this.option('scrolling.mode') !== 'virtual' && virtualRowsRendering !== true || virtualRowsRendering === false || this.option(LEGACY_SCROLLING_MODE) !== false && !this.option('scrolling.rowPageSize')) {
                             this._visibleItems = null;
                             this._rowsScrollController = null;
                             return;
@@ -800,26 +838,29 @@ export const virtualScrollingModule = {
 
                         const pageIndex = !isVirtualMode(this) && this.pageIndex() >= this.pageCount() ? this.pageCount() - 1 : this.pageIndex();
                         this._rowPageIndex = Math.ceil(pageIndex * this.pageSize() / this.getRowPageSize());
-                        this._visibleItems = this.option(NEW_SCROLLING_MODE) ? null : [];
-                        this._rowsScrollController = new VirtualScrollController(this.component, this._getRowsScrollDataOptions(), true);
+                        this._visibleItems = this.option(LEGACY_SCROLLING_MODE) === false ? null : [];
                         this._viewportChanging = false;
                         this._needUpdateViewportAfterLoading = false;
 
-                        this._rowsScrollController.positionChanged.add(() => {
-                            if(this.option(NEW_SCROLLING_MODE)) {
-                                this._viewportChanging = true;
-                                this.loadViewport();
-                                this._viewportChanging = false;
-                                return;
-                            }
-                            this._dataSource?.setViewportItemIndex(this._rowsScrollController.getViewportItemIndex());
-                        });
+                        if(!this._rowsScrollController) {
+                            this._rowsScrollController = new VirtualScrollController(this.component, this._getRowsScrollDataOptions(), true);
 
-                        if(this.option(NEW_SCROLLING_MODE)) {
+                            this._rowsScrollController.positionChanged.add(() => {
+                                if(this.option(LEGACY_SCROLLING_MODE) === false) {
+                                    this._viewportChanging = true;
+                                    this.loadViewport();
+                                    this._viewportChanging = false;
+                                    return;
+                                }
+                                this._dataSource?.setViewportItemIndex(this._rowsScrollController.getViewportItemIndex());
+                            });
+                        }
+
+                        if(this.option(LEGACY_SCROLLING_MODE) === false) {
                             this._updateLoadViewportParams();
                         }
 
-                        if(this.isLoaded() && !this.option(NEW_SCROLLING_MODE)) {
+                        if(this.isLoaded() && this.option(LEGACY_SCROLLING_MODE) !== false) {
                             this._rowsScrollController.load();
                         }
                     },
@@ -843,15 +884,14 @@ export const virtualScrollingModule = {
                                 return that._itemCount;
                             },
                             totalItemsCount: function() {
-                                if(isVirtualMode(that)) {
-                                    const insertRowCount = that.getController('editing')?.getInsertRowCount() ?? 0;
-                                    return that.totalItemsCount() + insertRowCount;
+                                if(isVirtualPaging(that)) {
+                                    return that.totalItemsCount();
                                 }
 
-                                return that.option(NEW_SCROLLING_MODE) ? that._itemCount : that._items.filter(isItemCountable).length;
+                                return that.option(LEGACY_SCROLLING_MODE) === false ? that._itemCount : that._items.filter(isItemCountable).length;
                             },
                             hasKnownLastPage: function() {
-                                return true;
+                                return that.option(LEGACY_SCROLLING_MODE) === false ? that.hasKnownLastPage() : true;
                             },
                             pageIndex: function(index) {
                                 if(index !== undefined) {
@@ -888,7 +928,7 @@ export const virtualScrollingModule = {
                             updateLoading: function() {
                             },
                             itemsCount: function() {
-                                return this.items().filter(isItemCountable).length;
+                                return this.items(true).length;
                             },
                             correctCount: function(items, count, fromEnd) {
                                 return correctCount(items, count, fromEnd, (item, isNextAfterLast, fromEnd) => {
@@ -904,33 +944,36 @@ export const virtualScrollingModule = {
                                 });
                             },
                             items: function(countableOnly) {
-                                const dataSource = that.dataSource();
-                                const virtualItemsCount = dataSource && dataSource.virtualItemsCount();
-                                const begin = virtualItemsCount ? virtualItemsCount.begin : 0;
-                                const rowPageSize = that.getRowPageSize();
-
-                                let skip = that._rowPageIndex * rowPageSize - begin;
-                                let take = rowPageSize;
-
                                 let result = that._items;
 
-                                if(skip < 0) {
-                                    return [];
-                                }
+                                if(that.option(LEGACY_SCROLLING_MODE)) {
+                                    const dataSource = that.dataSource();
+                                    const virtualItemsCount = dataSource?.virtualItemsCount();
+                                    const begin = virtualItemsCount ? virtualItemsCount.begin : 0;
+                                    const rowPageSize = that.getRowPageSize();
 
-                                if(skip) {
-                                    skip = this.correctCount(result, skip);
-                                    result = result.slice(skip);
-                                }
-                                if(take) {
-                                    take = this.correctCount(result, take);
-                                    result = result.slice(0, take);
+                                    let skip = that._rowPageIndex * rowPageSize - begin;
+                                    let take = rowPageSize;
+
+
+                                    if(skip < 0) {
+                                        return [];
+                                    }
+
+                                    if(skip) {
+                                        skip = this.correctCount(result, skip);
+                                        result = result.slice(skip);
+                                    }
+                                    if(take) {
+                                        take = this.correctCount(result, take);
+                                        result = result.slice(0, take);
+                                    }
                                 }
 
                                 return countableOnly ? result.filter(isItemCountable) : result;
                             },
                             viewportItems: function(items) {
-                                if(items && !that.option(NEW_SCROLLING_MODE)) {
+                                if(items && that.option(LEGACY_SCROLLING_MODE) !== false) {
                                     that._visibleItems = items;
                                 }
                                 return that._visibleItems;
@@ -940,7 +983,7 @@ export const virtualScrollingModule = {
                             changingDuration: function(e) {
                                 const dataSource = that.dataSource();
 
-                                if(dataSource.isLoading() && !that.option(NEW_SCROLLING_MODE)) {
+                                if(dataSource?.isLoading() && that.option(LEGACY_SCROLLING_MODE) !== false) {
                                     return LOAD_TIMEOUT;
                                 }
 
@@ -952,7 +995,10 @@ export const virtualScrollingModule = {
                         const delta = this.getRowIndexDelta();
 
                         this.callBase.apply(this, arguments);
-                        if(this.option(NEW_SCROLLING_MODE) && gridCoreUtils.isVirtualRowRendering(this)) {
+                        if(this.option(LEGACY_SCROLLING_MODE) === false && gridCoreUtils.isVirtualRowRendering(this)) {
+                            if(change.changeType === 'update' && change.rowIndices.length === 0 && change.cancelEmptyChanges) {
+                                change.cancel = true;
+                            }
                             return;
                         }
 
@@ -993,16 +1039,25 @@ export const virtualScrollingModule = {
                         }
                     },
                     _updateLoadViewportParams: function() {
-                        this._loadViewportParams = this._rowsScrollController.getViewportParams();
+                        const viewportParams = this._rowsScrollController.getViewportParams();
+                        const pageSize = this.pageSize();
+
+                        if(viewportParams && !isVirtualPaging(this) && pageSize > 0) {
+                            const pageOffset = this.pageIndex() * pageSize;
+                            viewportParams.skip += pageOffset;
+                        }
+                        this._loadViewportParams = viewportParams;
                     },
                     _processItems: function(items) {
                         const newItems = this.callBase.apply(this, arguments);
 
-                        if(this.option(NEW_SCROLLING_MODE)) {
+                        if(this.option(LEGACY_SCROLLING_MODE) === false) {
                             const dataSource = this._dataSource;
                             let currentIndex = dataSource?.lastLoadOptions().skip ?? 0;
                             let prevCountable;
                             let prevRowType;
+                            let isPrevRowNew;
+                            let wasCountableItem = false;
 
                             newItems.forEach(item => {
                                 const rowType = item.rowType;
@@ -1011,13 +1066,18 @@ export const virtualScrollingModule = {
                                 if(!item.isNewRow && isDefined(prevCountable)) {
                                     const isNextGroupItem = rowType === 'group' && (prevCountable || itemCountable || (prevRowType !== 'group' && currentIndex > 0));
                                     const isNextDataItem = rowType === 'data' && itemCountable && (prevCountable || prevRowType !== 'group');
-                                    if(isNextGroupItem || isNextDataItem) {
-                                        currentIndex++;
+                                    const isPrevNewRowFirst = isPrevRowNew && !wasCountableItem;
+                                    if((isNextGroupItem || isNextDataItem)) {
+                                        wasCountableItem = true;
+                                        if(!isPrevNewRowFirst) {
+                                            currentIndex++;
+                                        }
                                     }
                                 }
                                 item.loadIndex = currentIndex;
                                 prevCountable = itemCountable;
                                 prevRowType = rowType;
+                                isPrevRowNew = item.isNewRow;
                             });
                         }
 
@@ -1030,11 +1090,20 @@ export const virtualScrollingModule = {
 
                             let result = items;
                             this._allItems = items;
+
                             if(items.length) {
                                 const { skipForCurrentPage } = this.getLoadPageParams(true);
-                                const startLoadIndex = items[0].loadIndex + skipForCurrentPage;
+                                const skip = items[0].loadIndex + skipForCurrentPage;
+                                const take = this._loadViewportParams.take;
 
-                                result = items.filter(it => it.loadIndex >= startLoadIndex && it.loadIndex < startLoadIndex + this._loadViewportParams.take);
+                                result = items.filter(it => {
+                                    const isNewRowOnStart = it.isNewRow && it.loadIndex >= skip - 1;
+                                    const isNewRowInEmptyData = it.isNewRow && it.loadIndex === skip && take === 0;
+                                    const isLoadIndexGreaterStart = it.loadIndex >= skip || isNewRowOnStart;
+                                    const isLoadIndexLessEnd = it.loadIndex < skip + take || isNewRowInEmptyData;
+
+                                    return isLoadIndexGreaterStart && isLoadIndexLessEnd;
+                                });
                             }
 
                             return result;
@@ -1079,12 +1148,16 @@ export const virtualScrollingModule = {
                         return allItems ? (this._allItems || this._items) : (this._visibleItems || this._items);
                     },
                     getRowIndexDelta: function() {
-                        const visibleItems = this._visibleItems;
                         let delta = 0;
 
-                        if(visibleItems && visibleItems[0]) {
-                            delta = this._items.indexOf(visibleItems[0]);
+                        if(this.option(LEGACY_SCROLLING_MODE)) {
+                            const visibleItems = this._visibleItems;
+
+                            if(visibleItems && visibleItems[0]) {
+                                delta = this._items.indexOf(visibleItems[0]);
+                            }
                         }
+
 
                         return delta < 0 ? 0 : delta;
                     },
@@ -1092,20 +1165,24 @@ export const virtualScrollingModule = {
                         let offset = 0;
                         const dataSource = this.dataSource();
                         const rowsScrollController = this._rowsScrollController;
-                        const virtualMode = isVirtualMode(this);
-                        const appendMode = isAppendMode(this);
-                        const newMode = this.option(NEW_SCROLLING_MODE);
+                        const newMode = this.option(LEGACY_SCROLLING_MODE) === false;
+                        const virtualPaging = isVirtualPaging(this);
 
                         if(rowsScrollController && !byLoadedRows) {
                             if(newMode && isDefined(this._loadViewportParams)) {
                                 const { skipForCurrentPage, pageIndex } = this.getLoadPageParams(true);
-                                offset = pageIndex * this.pageSize() + skipForCurrentPage;
+                                const items = this.items(true);
+                                offset = virtualPaging ? pageIndex * this.pageSize() : 0;
+                                if(items.length) {
+                                    const firstLoadIndex = items[0].loadIndex;
+                                    offset += items.filter(item => item.loadIndex < firstLoadIndex + skipForCurrentPage).length;
+                                }
                             } else {
                                 offset = rowsScrollController.beginPageIndex() * rowsScrollController.pageSize();
                             }
-                        } else if((virtualMode || appendMode) && newMode && dataSource) {
+                        } else if(virtualPaging && newMode && dataSource) {
                             offset = dataSource.lastLoadOptions().skip ?? 0;
-                        } else if(virtualMode && dataSource) {
+                        } else if(isVirtualMode(this) && dataSource) {
                             offset = dataSource.beginPageIndex() * dataSource.pageSize();
                         }
 
@@ -1116,7 +1193,7 @@ export const virtualScrollingModule = {
                         const dataSource = this._dataSource;
                         const result = rowsScrollController?.viewportSize.apply(rowsScrollController, arguments);
 
-                        if(this.option(NEW_SCROLLING_MODE)) {
+                        if(this.option(LEGACY_SCROLLING_MODE) === false) {
                             return result;
                         }
 
@@ -1130,7 +1207,7 @@ export const virtualScrollingModule = {
                         const dataSource = this._dataSource;
                         const result = rowsScrollController?.viewportItemSize.apply(rowsScrollController, arguments);
 
-                        if(this.option(NEW_SCROLLING_MODE)) {
+                        if(this.option(LEGACY_SCROLLING_MODE) === false) {
                             return result;
                         }
 
@@ -1152,23 +1229,42 @@ export const virtualScrollingModule = {
                         const dataSource = this._dataSource;
                         const result = rowsScrollController?.setContentItemSizes(sizes);
 
-                        if(this.option(NEW_SCROLLING_MODE)) {
+                        if(this.option(LEGACY_SCROLLING_MODE) === false) {
                             return result;
                         }
 
                         return dataSource?.setContentItemSizes(sizes);
                     },
+                    getPreloadedRowCount: function() {
+                        const preloadCount = this.option('scrolling.preloadedRowCount');
+                        const preloadEnabled = this.option('scrolling.preloadEnabled');
+
+                        if(isDefined(preloadCount)) {
+                            return preloadCount;
+                        }
+
+                        const viewportSize = this.viewportSize();
+
+                        return preloadEnabled ? 2 * viewportSize : viewportSize;
+                    },
                     getLoadPageParams: function(byLoadedPage) {
+                        const pageSize = this.pageSize();
                         const viewportParams = this._loadViewportParams;
                         const lastLoadOptions = this._dataSource?.lastLoadOptions();
                         const loadedPageIndex = lastLoadOptions?.pageIndex || 0;
                         const loadedTake = lastLoadOptions?.take || 0;
 
-                        const takeCorrection = loadedTake ? loadedTake - this._itemCount : 0;
-                        const pageIndex = byLoadedPage ? loadedPageIndex : Math.floor(viewportParams.skip / this.pageSize());
-                        const skipForCurrentPage = viewportParams.skip - (pageIndex * this.pageSize());
-                        const take = byLoadedPage ? loadedTake : skipForCurrentPage + takeCorrection + viewportParams.take;
-                        const loadPageCount = Math.ceil(take / this.pageSize());
+                        const isScrollingBack = this._rowsScrollController.isScrollingBack();
+                        const topPreloadCount = isScrollingBack ? this.getPreloadedRowCount() : 0;
+                        const bottomPreloadCount = isScrollingBack ? 0 : this.getPreloadedRowCount();
+                        const totalCountCorrection = this._dataSource?.totalCountCorrection() || 0;
+                        const skipWithPreload = Math.max(0, viewportParams.skip - topPreloadCount);
+                        const pageIndex = byLoadedPage ? loadedPageIndex : Math.floor(pageSize ? skipWithPreload / pageSize : 0);
+                        const pageOffset = pageIndex * pageSize;
+                        const skipForCurrentPage = viewportParams.skip - pageOffset;
+                        const loadingTake = viewportParams.take + skipForCurrentPage + bottomPreloadCount - totalCountCorrection;
+                        const take = byLoadedPage ? loadedTake : loadingTake;
+                        const loadPageCount = Math.ceil(pageSize ? take / pageSize : 0);
 
                         return {
                             pageIndex,
@@ -1176,47 +1272,122 @@ export const virtualScrollingModule = {
                             skipForCurrentPage: Math.max(0, skipForCurrentPage)
                         };
                     },
-                    loadViewport: function(checkLoadedParamsOnly) {
-                        const isVirtualPaging = isVirtualMode(this) || isAppendMode(this);
-                        if(isVirtualPaging || gridCoreUtils.isVirtualRowRendering(this)) {
-                            this._updateLoadViewportParams();
-                            const loadedPageParams = this.getLoadPageParams(true);
-                            const { pageIndex, loadPageCount } = this.getLoadPageParams();
-                            const dataSourceAdapter = this._dataSource;
-                            const isLoading = this._isLoading;
-                            const loadedParamsChanged = !isLoading && (pageIndex !== loadedPageParams.pageIndex || loadPageCount !== loadedPageParams.loadPageCount);
+                    _updateVisiblePageIndex: function(currentPageIndex) {
+                        if(!this._rowsScrollController) {
+                            return;
+                        }
+                        if(isDefined(currentPageIndex)) {
+                            this._silentOption(VISIBLE_PAGE_INDEX, currentPageIndex);
+                            this.pageChanged.fire();
+                            return;
+                        }
 
-                            if(isVirtualPaging && isLoading) {
-                                this._needUpdateViewportAfterLoading = true;
-                            }
-                            if(isVirtualPaging && loadedParamsChanged) {
-                                dataSourceAdapter.pageIndex(pageIndex);
-                                dataSourceAdapter.loadPageCount(loadPageCount);
-                                this._repaintChangesOnly = true;
-                                this.load().always(() => {
-                                    this._repaintChangesOnly = undefined;
-                                }).done(() => {
-                                    if(this._needUpdateViewportAfterLoading) {
-                                        this._needUpdateViewportAfterLoading = false;
-                                        this.loadViewport(true);
-                                    }
-                                });
-                            } else if(!isLoading && !checkLoadedParamsOnly) {
+                        const viewPortItemIndex = this._rowsScrollController.getViewportItemIndex();
+                        const newPageIndex = Math.floor(viewPortItemIndex / this.pageSize());
+
+                        if(this.pageIndex() !== newPageIndex) {
+                            this._silentOption(VISIBLE_PAGE_INDEX, newPageIndex);
+                            this.updateItems({
+                                changeType: 'pageIndex'
+                            });
+                        }
+                    },
+                    _getChangedLoadParams: function() {
+                        const loadedPageParams = this.getLoadPageParams(true);
+                        const { pageIndex, loadPageCount } = this.getLoadPageParams();
+                        const pageIndexIsValid = this._pageIndexIsValid(pageIndex);
+                        let result = null;
+
+                        if(!this._isLoading && pageIndexIsValid && (pageIndex !== loadedPageParams.pageIndex || loadPageCount !== loadedPageParams.loadPageCount)) {
+                            result = {
+                                pageIndex,
+                                loadPageCount
+                            };
+                        }
+                        return result;
+                    },
+                    _pageIndexIsValid: function(pageIndex) {
+                        let result = true;
+
+                        if((isAppendMode(this) && this.hasKnownLastPage() || isVirtualMode(this))) {
+                            result = pageIndex * this.pageSize() < this.totalItemsCount();
+                        }
+
+                        return result;
+                    },
+                    _loadItems: function(checkLoading) {
+                        const virtualPaging = isVirtualPaging(this);
+                        const dataSourceAdapter = this._dataSource;
+                        const changedParams = this._getChangedLoadParams();
+                        const currentLoadPageCount = dataSourceAdapter?.loadPageCount() ?? 0;
+                        const lastRequiredItemCount = this.pageSize() * currentLoadPageCount;
+                        const currentPageIndex = dataSourceAdapter?.pageIndex() ?? 0;
+                        const pageIndexNotChanged = changedParams?.pageIndex === currentPageIndex;
+                        const allLoadedInAppendMode = isAppendMode(this) && this.totalItemsCount() < lastRequiredItemCount;
+                        let result = false;
+
+                        if(!dataSourceAdapter || (virtualPaging && checkLoading && (changedParams?.pageIndex > currentPageIndex || pageIndexNotChanged && allLoadedInAppendMode))) {
+                            return result;
+                        }
+
+                        if(virtualPaging && this._isLoading) {
+                            this._needUpdateViewportAfterLoading = true;
+                        }
+
+                        if(virtualPaging && changedParams) {
+                            result = true;
+                            dataSourceAdapter.pageIndex(changedParams.pageIndex);
+                            dataSourceAdapter.loadPageCount(changedParams.loadPageCount);
+                            this._repaintChangesOnly = true;
+                            this._needUpdateDimensions = true;
+                            const viewportChanging = this._viewportChanging;
+                            this.load().always(() => {
+                                this._repaintChangesOnly = undefined;
+                                this._needUpdateDimensions = undefined;
+                            }).done(() => {
+                                const isLastPage = this.pageCount() > 0 && this.pageIndex() === this.pageCount() - 1;
+                                (viewportChanging || isLastPage) && this._updateVisiblePageIndex();
+                                if(this._needUpdateViewportAfterLoading) {
+                                    this._needUpdateViewportAfterLoading = false;
+                                    this.loadViewport({ checkLoadedParamsOnly: true });
+                                }
+                            });
+                        }
+
+                        return result;
+                    },
+                    loadViewport: function(params) {
+                        const { checkLoadedParamsOnly, checkLoading } = params ?? {};
+                        const virtualPaging = isVirtualPaging(this);
+                        if(virtualPaging || gridCoreUtils.isVirtualRowRendering(this)) {
+                            this._updateLoadViewportParams();
+
+                            const loadingItemsStarted = this._loadItems(checkLoading);
+
+                            if(!loadingItemsStarted && !(this._isLoading && checkLoading) && !checkLoadedParamsOnly) {
                                 this.updateItems({
-                                    repaintChangesOnly: true
+                                    repaintChangesOnly: true,
+                                    needUpdateDimensions: true,
+                                    useProcessedItemsCache: true,
+                                    cancelEmptyChanges: true
                                 });
                             }
                         }
                     },
                     updateViewport: function() {
                         const viewportSize = this.viewportSize();
-                        const viewportIsNotFilled = viewportSize > this.items().length;
+                        const itemCount = this.items().length;
+                        const viewportIsNotFilled = viewportSize > itemCount;
                         const currentTake = this._loadViewportParams?.take ?? 0;
-                        const newTake = this._rowsScrollController?.getViewportParams().take;
-                        (viewportIsNotFilled || currentTake < newTake) && this.loadViewport();
+                        const rowsScrollController = this._rowsScrollController;
+                        const newTake = rowsScrollController?.getViewportParams().take;
+
+                        (viewportIsNotFilled || currentTake < newTake) && itemCount && this.loadViewport({
+                            checkLoading: true
+                        });
                     },
                     loadIfNeed: function() {
-                        if(this.option(NEW_SCROLLING_MODE)) {
+                        if(this.option(LEGACY_SCROLLING_MODE) === false) {
                             return;
                         }
 
@@ -1287,6 +1458,59 @@ export const virtualScrollingModule = {
 
                         const dataSource = this._dataSource;
                         return dataSource?.virtualItemsCount.apply(dataSource, arguments);
+                    },
+                    pageIndex: function(pageIndex) {
+                        const virtualPaging = isVirtualPaging(this);
+                        const rowsScrollController = this._rowsScrollController;
+                        if(this.option(LEGACY_SCROLLING_MODE) === false && virtualPaging && rowsScrollController) {
+                            if(pageIndex === undefined) {
+                                return this.option(VISIBLE_PAGE_INDEX) ?? 0;
+                            }
+                        }
+                        return this.callBase.apply(this, arguments);
+                    },
+                    _fireChanged: function(e) {
+                        this.callBase.apply(this, arguments);
+
+                        const { operationTypes } = e;
+                        if(this.option(LEGACY_SCROLLING_MODE) === false && isVirtualPaging(this) && operationTypes) {
+                            const { fullReload, pageIndex } = operationTypes;
+
+                            if(e.isDataChanged && !fullReload && pageIndex) {
+                                this._updateVisiblePageIndex(this._dataSource.pageIndex());
+                            }
+                        }
+                    },
+                    _getPagingOptionValue: function(optionName) {
+                        let result = this.callBase.apply(this, arguments);
+
+                        if(this.option(LEGACY_SCROLLING_MODE) === false && isVirtualPaging(this)) {
+                            result = this[optionName]();
+                        }
+
+                        return result;
+                    },
+                    isEmpty: function() {
+                        return this.option(LEGACY_SCROLLING_MODE) === false ? !this.items(true).length : this.callBase(this, arguments);
+                    },
+                    isLastPageLoaded: function() {
+                        let result = false;
+
+                        if(this.option(LEGACY_SCROLLING_MODE) === false && isVirtualPaging(this)) {
+                            const { pageIndex, loadPageCount } = this.getLoadPageParams(true);
+                            const pageCount = this.pageCount();
+
+                            result = pageIndex + loadPageCount >= pageCount;
+                        } else {
+                            result = this.callBase.apply(this, arguments);
+                        }
+
+                        return result;
+                    },
+                    reset: function() {
+                        this._itemCount = 0;
+                        this._allItems = null;
+                        this.callBase.apply(this, arguments);
                     }
                 };
 

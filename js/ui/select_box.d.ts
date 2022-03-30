@@ -38,7 +38,7 @@ export interface CustomItemCreatingInfo {
 }
 
 /** @public */
-export type ChangeEvent = NativeEventInfo<dxSelectBox>;
+export type ChangeEvent = NativeEventInfo<dxSelectBox, Event>;
 
 /** @public */
 export type ClosedEvent = EventInfo<dxSelectBox>;
@@ -47,42 +47,43 @@ export type ClosedEvent = EventInfo<dxSelectBox>;
 export type ContentReadyEvent = EventInfo<dxSelectBox>;
 
 /** @public */
-export type CopyEvent = NativeEventInfo<dxSelectBox>;
+export type CopyEvent = NativeEventInfo<dxSelectBox, ClipboardEvent>;
+
 /** @public */
 export type CustomItemCreatingEvent = EventInfo<dxSelectBox> & CustomItemCreatingInfo;
 
 /** @public */
-export type CutEvent = NativeEventInfo<dxSelectBox>;
+export type CutEvent = NativeEventInfo<dxSelectBox, ClipboardEvent>;
 
 /** @public */
 export type DisposingEvent = EventInfo<dxSelectBox>;
 
 /** @public */
-export type EnterKeyEvent = NativeEventInfo<dxSelectBox>;
+export type EnterKeyEvent = NativeEventInfo<dxSelectBox, KeyboardEvent>;
 
 /** @public */
-export type FocusInEvent = NativeEventInfo<dxSelectBox>;
+export type FocusInEvent = NativeEventInfo<dxSelectBox, FocusEvent>;
 
 /** @public */
-export type FocusOutEvent = NativeEventInfo<dxSelectBox>;
+export type FocusOutEvent = NativeEventInfo<dxSelectBox, FocusEvent>;
 
 /** @public */
 export type InitializedEvent = InitializedEventInfo<dxSelectBox>;
 
 /** @public */
-export type InputEvent = NativeEventInfo<dxSelectBox>;
+export type InputEvent = NativeEventInfo<dxSelectBox, UIEvent>;
 
 /** @public */
-export type ItemClickEvent = NativeEventInfo<dxSelectBox> & ItemInfo;
+export type ItemClickEvent = NativeEventInfo<dxSelectBox, KeyboardEvent | MouseEvent | PointerEvent> & ItemInfo;
 
 /** @public */
-export type KeyDownEvent = NativeEventInfo<dxSelectBox>;
+export type KeyDownEvent = NativeEventInfo<dxSelectBox, KeyboardEvent>;
 
 /** @public */
-export type KeyPressEvent = NativeEventInfo<dxSelectBox>;
+export type KeyPressEvent = NativeEventInfo<dxSelectBox, KeyboardEvent>;
 
 /** @public */
-export type KeyUpEvent = NativeEventInfo<dxSelectBox>;
+export type KeyUpEvent = NativeEventInfo<dxSelectBox, KeyboardEvent>;
 
 /** @public */
 export type OpenedEvent = EventInfo<dxSelectBox>;
@@ -91,13 +92,13 @@ export type OpenedEvent = EventInfo<dxSelectBox>;
 export type OptionChangedEvent = EventInfo<dxSelectBox> & ChangedOptionInfo;
 
 /** @public */
-export type PasteEvent = NativeEventInfo<dxSelectBox>;
+export type PasteEvent = NativeEventInfo<dxSelectBox, ClipboardEvent>;
 
 /** @public */
 export type SelectionChangedEvent = EventInfo<dxSelectBox> & SelectionChangedInfo;
 
 /** @public */
-export type ValueChangedEvent = NativeEventInfo<dxSelectBox> & ValueChangedInfo;
+export type ValueChangedEvent = NativeEventInfo<dxSelectBox, KeyboardEvent | MouseEvent | Event> & ValueChangedInfo;
 
 /** @public */
 export type DropDownButtonTemplateData = DropDownButtonTemplateDataModel;
@@ -117,7 +118,6 @@ export interface dxSelectBoxOptions<TComponent> extends dxDropDownListOptions<TC
      * @docid
      * @default null
      * @type_function_param1 selectedItem:object
-     * @type_function_param2 fieldElement:DxElement
      * @type_function_return string|Element|jQuery
      * @public
      */
@@ -139,7 +139,7 @@ export interface dxSelectBoxOptions<TComponent> extends dxDropDownListOptions<TC
      * @default function(e) { if(!e.customItem) { e.customItem = e.text; } }
      * @public
      */
-    onCustomItemCreating?: ((e: CustomItemCreatingEvent) => void);
+    onCustomItemCreating?: ((e: EventInfo<TComponent> & CustomItemCreatingInfo) => void);
     /**
      * @docid
      * @default true
@@ -180,8 +180,6 @@ export interface dxSelectBoxOptions<TComponent> extends dxDropDownListOptions<TC
  * @docid
  * @isEditor
  * @inherits dxDropDownList
- * @module ui/select_box
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -194,6 +192,3 @@ export type Properties = dxSelectBoxOptions<SelectBoxInstance>;
 
 /** @deprecated use Properties instead */
 export type Options = Properties;
-
-/** @deprecated use Properties instead */
-export type IOptions = Properties;

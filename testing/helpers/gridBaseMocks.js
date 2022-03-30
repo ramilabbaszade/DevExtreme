@@ -151,6 +151,9 @@ module.exports = function($, gridCore, columnResizingReordering, domUtils, commo
                 return options.viewportSize;
             },
 
+            viewportHeight: function() {
+            },
+
             viewportItemSize: function() {},
 
             setContentItemSizes: function() {},
@@ -242,12 +245,16 @@ module.exports = function($, gridCore, columnResizingReordering, domUtils, commo
             loadingChanged: $.Callbacks(),
             pageChanged: $.Callbacks(),
             dataSourceChanged: $.Callbacks(),
+            pushed: $.Callbacks(),
             fireError: function() { },
             getMaxRowIndex: function() {
                 this.items().length - 1;
             },
             loadViewport: commonUtils.noop,
-            updateViewport: commonUtils.noop
+            updateViewport: commonUtils.noop,
+            getScrollingTimeout: function() {
+                return this.option('scrolling.renderAsync') ? this.option('scrolling.timeout') : 0;
+            }
         };
     };
 

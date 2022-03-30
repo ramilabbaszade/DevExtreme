@@ -1,3 +1,4 @@
+import { setWidth } from '../../../core/utils/size';
 import $ from '../../../core/renderer';
 import SchedulerWorkSpace from './ui.scheduler.work_space';
 import registerComponent from '../../../core/component_registrator';
@@ -7,6 +8,7 @@ import { getBoundingRect } from '../../../core/utils/position';
 import { hasWindow } from '../../../core/utils/window';
 import { HEADER_CURRENT_TIME_CELL_CLASS } from '../classes';
 import { getToday } from '../../../renovation/ui/scheduler/view_model/to_test/views/utils/base';
+import timezoneUtils from '../utils.timeZone';
 
 const toMs = dateUtils.dateToMilliseconds;
 
@@ -42,7 +44,7 @@ class SchedulerWorkSpaceIndicator extends SchedulerWorkSpace {
         const today = this._getToday();
 
         // Subtracts 1 ms from the real endViewDate instead of 1 minute
-        const endViewDate = new Date(this.getEndViewDate().getTime() + this._getEndViewDateTimeDiff() - 1);
+        const endViewDate = new Date(this.getEndViewDate().getTime() + toMs('minute') - 1);
         const firstViewDate = new Date(this.getStartViewDate());
         firstViewDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
         endViewDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
@@ -74,7 +76,10 @@ class SchedulerWorkSpaceIndicator extends SchedulerWorkSpace {
         for(let i = 0; i < repeatCount; i++) {
             const $indicator = this._createIndicator($container);
 
-            $indicator.width(groupedByDate ? this.getCellWidth() * groupCount : this.getCellWidth());
+            setWidth(
+                $indicator,
+                groupedByDate ? this.getCellWidth() * groupCount : this.getCellWidth()
+            );
             this._groupedStrategy.shiftIndicator($indicator, height, rtlOffset, i);
         }
     }
@@ -144,7 +149,7 @@ class SchedulerWorkSpaceIndicator extends SchedulerWorkSpace {
     }
 
     getIndicationHeight() {
-        const today = this._getToday();
+        const today = timezoneUtils.getDateWithoutTimezoneChange(this._getToday());
         const cellHeight = this.getCellHeight();
         const date = new Date(this.getStartViewDate());
 

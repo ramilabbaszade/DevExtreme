@@ -53,7 +53,7 @@ export type ShowingEvent = Cancelable & EventInfo<dxPopover>;
 export type ShownEvent = EventInfo<dxPopover>;
 
 /** @public */
-export type TitleRenderedEvent = EventInfo<dxPopup> & TitleRenderedInfo;
+export type TitleRenderedEvent = EventInfo<dxPopover> & TitleRenderedInfo;
 
 /**
  * @deprecated use Properties instead
@@ -69,16 +69,16 @@ export interface dxPopoverOptions<TComponent> extends dxPopupOptions<TComponent>
     animation?: dxPopoverAnimation;
     /**
      * @docid
+     * @deprecated dxPopoverOptions.hideOnOutsideClick
      * @type_function_param1 event:event
      * @type_function_return Boolean
      * @default true
      * @public
      */
-    closeOnOutsideClick?: boolean | ((event: DxEvent) => boolean);
+    closeOnOutsideClick?: boolean | ((event: DxEvent<MouseEvent | PointerEvent | TouchEvent>) => boolean);
     /**
      * @docid
      * @default "auto"
-     * @type_function_return number|string
      * @public
      */
     height?: number | string | (() => number | string);
@@ -99,6 +99,21 @@ export interface dxPopoverOptions<TComponent> extends dxPopupOptions<TComponent>
        */
       name?: string;
     } | string;
+    /**
+     * @docid
+     * @type boolean | function
+     * @type_function_param1 event:event
+     * @type_function_return Boolean
+     * @default true
+     * @public
+     */
+    hideOnOutsideClick?: boolean | ((event: DxEvent<MouseEvent | PointerEvent | TouchEvent>) => boolean);
+    /**
+     * @docid
+     * @default true
+     * @public
+     */
+    hideOnParentScroll?: boolean;
     /**
      * @docid
      * @type Enums.Position|PositionConfig
@@ -144,16 +159,9 @@ export interface dxPopoverOptions<TComponent> extends dxPopupOptions<TComponent>
     /**
      * @docid
      * @default "auto"
-     * @type_function_return number|string
      * @public
      */
     width?: number | string | (() => number | string);
-    /**
-     * @docid
-     * @default true
-     * @public
-     */
-    hideOnParentScroll?: boolean;
 }
 /** @namespace DevExpress.ui */
 export interface dxPopoverAnimation extends dxPopupAnimation {
@@ -174,8 +182,6 @@ export interface dxPopoverAnimation extends dxPopupAnimation {
  * @docid
  * @inherits dxPopup
  * @hasTranscludedContent
- * @module ui/popover
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -198,6 +204,3 @@ export type Properties = dxPopoverOptions<PopoverInstance>;
 
 /** @deprecated use Properties instead */
 export type Options = Properties;
-
-/** @deprecated use Properties instead */
-export type IOptions = Properties;

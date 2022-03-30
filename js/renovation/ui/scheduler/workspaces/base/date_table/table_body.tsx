@@ -7,14 +7,12 @@ import {
   JSXTemplate,
 } from '@devextreme-generator/declarations';
 import { Row } from '../row';
-import { DataCellTemplateProps, ViewCellData } from '../../types.d';
-import {
-  getKeyByGroup,
-  getIsGroupedAllDayPanel,
-} from '../../utils';
+import { DataCellTemplateProps, ViewCellData } from '../../types';
 import { AllDayPanelTableBody } from './all_day_panel/table_body';
 import { LayoutProps } from '../layout_props';
 import { DateTableCellBase } from './cell';
+import { combineClasses } from '../../../../../utils/combine_classes';
+import { DATE_TABLE_ROW_CLASS } from '../../const';
 
 export interface CellTemplateProps extends ViewCellData {
   dataCellTemplate?: JSXTemplate<DataCellTemplateProps>;
@@ -23,16 +21,21 @@ export interface CellTemplateProps extends ViewCellData {
 export const viewFunction = ({
   props: {
     viewData,
-    groupOrientation,
     dataCellTemplate,
     cellTemplate: Cell,
   },
+  rowClasses,
 }: DateTableBody): JSX.Element => (
   <Fragment>
     {viewData
-      .groupedData.map(({ dateTable, allDayPanel, groupIndex }, index) => (
-        <Fragment key={getKeyByGroup(groupIndex, groupOrientation)}>
-          {getIsGroupedAllDayPanel(viewData, index) && (
+      .groupedData.map(({
+        dateTable,
+        allDayPanel,
+        key: fragmentKey,
+        isGroupedAllDayPanel,
+      }) => (
+        <Fragment key={fragmentKey}>
+          {isGroupedAllDayPanel && (
             <AllDayPanelTableBody
               viewData={allDayPanel}
               dataCellTemplate={dataCellTemplate}
@@ -43,16 +46,16 @@ export const viewFunction = ({
               rightVirtualCellCount={viewData.rightVirtualCellCount}
             />
           )}
-          {dateTable.map((cellsRow) => (
+          {dateTable.map(({ key: rowKey, cells }) => (
             <Row
-              className="dx-scheduler-date-table-row"
-              key={cellsRow[0].key - viewData.leftVirtualCellCount}
+              className={rowClasses}
+              key={rowKey}
               leftVirtualCellWidth={viewData.leftVirtualCellWidth}
               rightVirtualCellWidth={viewData.rightVirtualCellWidth}
               leftVirtualCellCount={viewData.leftVirtualCellCount}
               rightVirtualCellCount={viewData.rightVirtualCellCount}
             >
-              {cellsRow.map(({
+              {cells.map(({
                 startDate,
                 endDate,
                 groups,
@@ -102,4 +105,13 @@ export class DateTableBodyProps extends LayoutProps {
   defaultOptionRules: null,
   view: viewFunction,
 })
-export class DateTableBody extends JSXComponent<DateTableBodyProps, 'cellTemplate'>() {}
+export class DateTableBody extends JSXComponent<DateTableBodyProps, 'cellTemplate'>() {
+  get rowClasses(): string {
+    const { addVerticalSizesClassToRows } = this.props;
+
+    return combineClasses({
+      [DATE_TABLE_ROW_CLASS]: true,
+      'dx-scheduler-cell-sizes-vertical': addVerticalSizesClassToRows,
+    });
+  }
+}

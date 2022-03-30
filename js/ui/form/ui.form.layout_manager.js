@@ -1,3 +1,4 @@
+import { getWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import { default as FormItemsRunTimeInfo } from './ui.form.items_runtime_info';
@@ -9,7 +10,7 @@ import { each } from '../../core/utils/iterator';
 import { extend } from '../../core/utils/extend';
 import { normalizeIndexes } from '../../core/utils/array';
 import { compileGetter } from '../../core/utils/data';
-import { removeEvent } from '../../core/remove_event';
+import { removeEvent } from '../../events/remove';
 import messageLocalization from '../../localization/message';
 import { styleProp } from '../../core/utils/style';
 import Widget from '../widget/ui.widget';
@@ -29,11 +30,10 @@ import '../check_box';
 import '../date_box';
 import '../button';
 
-import { getLabelWidthByText } from './components/label';
-import { renderFieldItemTo } from './components/field_item.js';
-import { renderButtonItemTo } from './components/button_item.js';
-import { renderEmptyItemTo } from './components/empty_item.js';
-import { convertToLabelMarkOptions, convertToRenderFieldItemOptions } from './ui.form.layout_manager.utils.js';
+import { renderFieldItem } from './components/field_item';
+import { renderButtonItem } from './components/button_item';
+import { renderEmptyItem } from './components/empty_item';
+import { convertToRenderFieldItemOptions } from './ui.form.layout_manager.utils';
 
 const FORM_EDITOR_BY_DEFAULT = 'dxTextBox';
 
@@ -62,6 +62,7 @@ const LayoutManager = Widget.inherit({
             screenByWidth: null,
             showOptionalMark: false,
             requiredMark: '*',
+            labelMode: 'outside',
             optionalMark: messageLocalization.format('dxForm-optionalMark'),
             requiredMessage: messageLocalization.getFormatter('dxForm-requiredMessage')
         });
@@ -325,23 +326,19 @@ const LayoutManager = Widget.inherit({
         this._refresh();
     },
 
-    _renderTemplate: function($container, item) {
-        switch(item.itemType) {
-            case 'empty':
-                this._renderEmptyItem($container);
-                break;
-            case 'button':
-                this._renderButtonItem(item, $container);
-                break;
-            default:
-                this._renderFieldItem(item, $container);
-        }
-    },
-
     _renderTemplates: function(templatesInfo) {
         const that = this;
-        each(templatesInfo, function(index, info) {
-            that._renderTemplate(info.container, info.formItem);
+        each(templatesInfo, function(_, info) {
+            switch(info.itemType) {
+                case 'empty':
+                    renderEmptyItem(info);
+                    break;
+                case 'button':
+                    that._renderButtonItem(info);
+                    break;
+                default:
+                    that._renderFieldItem(info);
+            }
         });
     },
 
@@ -377,22 +374,19 @@ const LayoutManager = Widget.inherit({
                 const $itemElement = $(itemElement);
                 const itemRenderedCountInPreviousRows = e.location.row * colCount;
                 const item = that._items[e.location.col + itemRenderedCountInPreviousRows];
-                const $fieldItem = $('<div>')
-                    .addClass(item.cssClass)
-                    .appendTo($itemElement);
+                if(!item) {
+                    return;
+                }
 
-                templatesInfo.push({
-                    container: $fieldItem,
-                    formItem: item
-                });
+                const itemCssClassList = [item.cssClass];
 
                 $itemElement.toggleClass(SINGLE_COLUMN_ITEM_CONTENT, that.isSingleColumnMode(this));
 
                 if(e.location.row === 0) {
-                    $fieldItem.addClass(LAYOUT_MANAGER_FIRST_ROW_CLASS);
+                    itemCssClassList.push(LAYOUT_MANAGER_FIRST_ROW_CLASS);
                 }
                 if(e.location.col === 0) {
-                    $fieldItem.addClass(LAYOUT_MANAGER_FIRST_COL_CLASS);
+                    itemCssClassList.push(LAYOUT_MANAGER_FIRST_COL_CLASS);
                 }
 
                 if(item.itemType === SIMPLE_ITEM_TYPE && that.option('isRoot')) {
@@ -402,11 +396,26 @@ const LayoutManager = Widget.inherit({
                 const rowsCount = that._getRowsCount();
                 const isLastRow = e.location.row === rowsCount - 1;
                 if(isLastColumn) {
-                    $fieldItem.addClass(LAYOUT_MANAGER_LAST_COL_CLASS);
+                    itemCssClassList.push(LAYOUT_MANAGER_LAST_COL_CLASS);
                 }
                 if(isLastRow) {
-                    $fieldItem.addClass(LAYOUT_MANAGER_LAST_ROW_CLASS);
+                    itemCssClassList.push(LAYOUT_MANAGER_LAST_ROW_CLASS);
                 }
+
+                if(item.itemType !== 'empty') {
+                    itemCssClassList.push(FIELD_ITEM_CLASS);
+                    itemCssClassList.push(that.option('cssItemClass'));
+                    if(isDefined(item.col)) {
+                        itemCssClassList.push('dx-col-' + item.col);
+                    }
+                }
+
+                templatesInfo.push({
+                    itemType: item.itemType,
+                    item,
+                    $parent: $itemElement,
+                    rootElementCssClassList: itemCssClassList
+                });
             },
             cols: that._generateRatio(colCount),
             rows: that._generateRatio(that._getRowsCount(), true),
@@ -445,7 +454,7 @@ const LayoutManager = Widget.inherit({
         }
 
         const minColWidth = this.option('minColWidth');
-        const width = this.$element().width();
+        const width = getWidth(this.$element());
         const itemsCount = this._items.length;
         const maxColCount = Math.floor(width / minColWidth) || 1;
 
@@ -530,32 +539,28 @@ const LayoutManager = Widget.inherit({
     },
 
     _renderEmptyItem: function($container) {
-        renderEmptyItemTo({ $container });
+        renderEmptyItem({ $container });
     },
 
-    _renderButtonItem: function(item, $container) {
-        $container
-            .addClass(FIELD_ITEM_CLASS)
-            .addClass(isDefined(item.col) ? 'dx-col-' + item.col : '');
-
-        const instance = renderButtonItemTo({
+    _renderButtonItem: function({ item, $parent, rootElementCssClassList }) {
+        const { $rootElement, buttonInstance } = renderButtonItem({
             item,
-            $container,
+            $parent,
+            rootElementCssClassList,
             validationGroup: this.option('validationGroup'),
             createComponentCallback: this._createComponent.bind(this),
-            cssItemClass: this.option('cssItemClass'),
         });
 
         // TODO: try to remove '_itemsRunTimeInfo' from 'render' function
         this._itemsRunTimeInfo.add({
             item,
-            widgetInstance: instance, // TODO: try to remove 'widgetInstance'
+            widgetInstance: buttonInstance, // TODO: try to remove 'widgetInstance'
             guid: item.guid,
-            $itemContainer: $container
+            $itemContainer: $rootElement
         });
     },
 
-    _renderFieldItem: function(item, $container) {
+    _renderFieldItem: function({ item, $parent, rootElementCssClassList }) {
         const editorValue = this._getDataByField(item.dataField);
         let canAssignUndefinedValueToEditor = false;
         if(editorValue === undefined) {
@@ -565,18 +570,14 @@ const LayoutManager = Widget.inherit({
 
         const name = item.dataField || item.name;
 
-        $container
-            .addClass(FIELD_ITEM_CLASS)
-            .addClass(isDefined(item.col) ? 'dx-col-' + item.col : '');
-
-        const { $fieldEditorContainer, instance } = renderFieldItemTo(convertToRenderFieldItemOptions({
-            $container,
+        const { $fieldEditorContainer, widgetInstance, $rootElement } = renderFieldItem(convertToRenderFieldItemOptions({
+            $parent,
+            rootElementCssClassList,
             item,
             name,
             editorValue,
             canAssignUndefinedValueToEditor,
-            containerCssClass: this.option('cssItemClass'),
-            parentComponent: this._getComponentOwner(),
+            formOrLayoutManager: this._getFormOrThis(),
             createComponentCallback: this._createComponent.bind(this),
             useFlexLayout: this._hasBrowserFlex(),
             formLabelLocation: this.option('labelLocation'),
@@ -589,23 +590,20 @@ const LayoutManager = Widget.inherit({
             template: item.template ? this._getTemplate(item.template) : null,
             itemId: this.option('form') && this.option('form').getItemID(name),
             managerMarkOptions: this._getMarkOptions(),
+            labelMode: this.option('labelMode'),
         }));
 
-        if(instance && item.dataField) {
+        this.option('onFieldItemRendered')?.();
+
+        if(widgetInstance && item.dataField) {
             // TODO: move to renderFieldItem ?
-            this._bindDataField(instance, item.dataField, item.editorType, $fieldEditorContainer);
+            this._bindDataField(widgetInstance, item.dataField, item.editorType, $fieldEditorContainer);
         }
         this._itemsRunTimeInfo.add({
             item,
-            widgetInstance: instance,
+            widgetInstance,
             guid: item.guid,
-            $itemContainer: $container
-        });
-    },
-
-    _getLabelWidthByText: function({ text, location }) {
-        return getLabelWidthByText({
-            text, location, markOptions: convertToLabelMarkOptions(this._getMarkOptions())
+            $itemContainer: $rootElement
         });
     },
 
@@ -618,15 +616,15 @@ const LayoutManager = Widget.inherit({
         };
     },
 
-    _getComponentOwner: function() {
+    _getFormOrThis: function() {
         return this.option('form') || this;
     },
 
     _bindDataField: function(editorInstance, dataField, editorType, $container) {
-        const componentOwner = this._getComponentOwner();
+        const formOrThis = this._getFormOrThis();
 
         editorInstance.on('enterKey', function(args) {
-            componentOwner._createActionByOption('onEditorEnterKey')(extend(args, { dataField: dataField }));
+            formOrThis._createActionByOption('onEditorEnterKey')(extend(args, { dataField: dataField }));
         });
 
         this._createWatcher(editorInstance, $container, dataField);
@@ -634,6 +632,18 @@ const LayoutManager = Widget.inherit({
     },
 
     _createWatcher: function(editorInstance, $container, dataField) {
+        function compareArrays(array1, array2) {
+            if(!Array.isArray(array1) || !Array.isArray(array2) || (array1.length !== array2.length)) {
+                return false;
+            }
+            for(let i = 0; i < array1.length; i++) {
+                if(array1[i] !== array2[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         const that = this;
         const watch = that._getWatch();
 
@@ -646,12 +656,23 @@ const LayoutManager = Widget.inherit({
                 return that._getDataByField(dataField);
             },
             function() {
-                editorInstance.option('value', that._getDataByField(dataField));
+                const fieldValue = that._getDataByField(dataField);
+                if(editorInstance.NAME === 'dxTagBox') {
+                    const editorValue = editorInstance.option('value');
+                    if((fieldValue !== editorValue) && compareArrays(fieldValue, editorValue)) {
+                        // handle array only, it can be wrapped into Proxy (T1020953)
+                        return;
+                    }
+                }
+                editorInstance.option('value', fieldValue);
             },
             {
                 deep: true,
                 skipImmediate: true
-            }
+            },
+            ///#DEBUG
+            { createWatcherDataField: dataField }
+            ///#ENDDEBUG
         );
 
         eventsEngine.on($container, removeEvent, dispose);
@@ -774,6 +795,7 @@ const LayoutManager = Widget.inherit({
                 break;
             case 'alignItemLabels':
             case 'labelLocation':
+            case 'labelMode':
             case 'requiredMessage':
                 this._invalidate();
                 break;

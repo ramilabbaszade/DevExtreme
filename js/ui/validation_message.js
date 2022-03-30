@@ -1,3 +1,4 @@
+import { getOuterWidth } from '../core/utils/size';
 import $ from '../core/renderer';
 import registerComponent from '../core/component_registrator';
 import Overlay from './overlay/ui.overlay';
@@ -19,7 +20,7 @@ const ValidationMessage = Overlay.inherit({
             shading: false,
             width: 'auto',
             height: 'auto',
-            closeOnOutsideClick: false,
+            hideOnOutsideClick: false,
             animation: null,
             visible: true,
             propagateOutsideClick: true,
@@ -28,6 +29,8 @@ const ValidationMessage = Overlay.inherit({
             contentTemplate: this._renderInnerHtml,
             maxWidth: '100%',
 
+            container: this.$element(),
+            target: undefined,
             mode: 'auto',
             validationErrors: undefined,
             positionRequest: undefined,
@@ -46,10 +49,33 @@ const ValidationMessage = Overlay.inherit({
     _initMarkup() {
         this.callBase();
 
-        this.$element().addClass(INVALID_MESSAGE);
-        this.$wrapper().addClass(INVALID_MESSAGE);
+        this._ensureMessageNotEmpty();
+        this._updatePositionByTarget();
         this._toggleModeClass();
         this._updateContentId();
+    },
+
+    _updatePositionByTarget: function() {
+        const { target } = this.option();
+
+        this.option('position.of', target);
+    },
+
+    _ensureMessageNotEmpty: function() {
+        this._textMarkup = this._getTextMarkup();
+
+        const shouldShowMessage = this.option('visible') && this._textMarkup;
+        this._toggleVisibilityClasses(shouldShowMessage);
+    },
+
+    _toggleVisibilityClasses: function(visible) {
+        if(visible) {
+            this.$element().addClass(INVALID_MESSAGE);
+            this.$wrapper().addClass(INVALID_MESSAGE);
+        } else {
+            this.$element().removeClass(INVALID_MESSAGE);
+            this.$wrapper().removeClass(INVALID_MESSAGE);
+        }
     },
 
     _updateContentId() {
@@ -63,14 +89,19 @@ const ValidationMessage = Overlay.inherit({
 
     _renderInnerHtml(element) {
         const $element = element && $(element);
-        const validationErrors = this.option('validationErrors') || [];
+
+        $element?.html(this._textMarkup);
+    },
+
+    _getTextMarkup() {
+        const validationErrors = this.option('validationErrors') ?? [];
         let validationErrorMessage = '';
         validationErrors.forEach((err) => {
             const separator = validationErrorMessage ? '<br />' : '';
-            validationErrorMessage += separator + encodeHtml(err?.message || '');
+            validationErrorMessage += separator + encodeHtml(err?.message ?? '');
         });
 
-        $element?.html(validationErrorMessage);
+        return validationErrorMessage;
     },
 
     _toggleModeClass() {
@@ -82,7 +113,7 @@ const ValidationMessage = Overlay.inherit({
 
     updateMaxWidth() {
         const target = this.option('target');
-        const targetWidth = target?.outerWidth?.() || $(target).outerWidth();
+        const targetWidth = getOuterWidth(target);
         let maxWidth = '100%';
         if(targetWidth) {
             maxWidth = Math.max(targetWidth, VALIDATION_MESSAGE_MIN_WIDTH);
@@ -117,6 +148,7 @@ const ValidationMessage = Overlay.inherit({
         const { name, value } = args;
         switch(name) {
             case 'target':
+                this._updatePositionByTarget();
                 this.updateMaxWidth();
                 this.callBase(args);
                 break;
@@ -139,6 +171,7 @@ const ValidationMessage = Overlay.inherit({
                 this._updateContentId();
                 break;
             case 'validationErrors':
+                this._ensureMessageNotEmpty();
                 this._renderInnerHtml(this.$content());
                 break;
             default:

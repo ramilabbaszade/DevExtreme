@@ -1,3 +1,4 @@
+import { getHeight, getWidth } from '../core/utils/size';
 import $ from '../core/renderer';
 import { Component } from '../core/component';
 import Action from '../core/action';
@@ -6,7 +7,7 @@ import config from '../core/config';
 
 import { resetActiveElement } from '../core/utils/dom';
 import { Deferred } from '../core/utils/deferred';
-import { isFunction, isPlainObject } from '../core/utils/type';
+import { isPlainObject } from '../core/utils/type';
 import { each } from '../core/utils/iterator';
 import { extend } from '../core/utils/extend';
 import { getWindow } from '../core/utils/window';
@@ -53,20 +54,10 @@ export const FakeDialogComponent = Component.inherit({
                 options: {
                     width: 276
                 }
-            },
-            {
-                device: { platform: 'android' },
-                options: {
-                    lWidth: '60%',
-                    pWidth: '80%'
-                }
             }
         ]);
     }
 });
-
-export let title = '';
-
 
 export const custom = function(options) {
     const deferred = new Deferred();
@@ -112,19 +103,15 @@ export const custom = function(options) {
     });
 
     const popupInstance = new Popup($element, extend({
-        title: options.title || title,
+        title: options.title ?? '',
         showTitle: ensureDefined(options.showTitle, true),
         dragEnabled: ensureDefined(options.dragEnabled, true),
         height: 'auto',
-        width: function() {
-            const isPortrait = $(window).height() > $(window).width();
-            const key = (isPortrait ? 'p' : 'l') + 'Width';
-            const widthOption = Object.prototype.hasOwnProperty.call(options, key) ? options[key] : options['width'];
-
-            return isFunction(widthOption) ? widthOption() : widthOption;
-        },
+        width: options.width,
         showCloseButton: options.showCloseButton || false,
         ignoreChildEvents: false,
+        container: $element,
+        visualContainer: window,
         onContentReady: function(args) {
             args.component.$content()
                 .addClass(DX_DIALOG_CONTENT_CLASSNAME)
@@ -185,6 +172,12 @@ export const custom = function(options) {
         .addClass(DX_DIALOG_ROOT_CLASSNAME);
 
     function show() {
+        if(devices.real().platform === 'android') {
+            const isPortrait = getHeight(window) > getWidth(window);
+            const width = isPortrait ? '80%' : '60%';
+            popupInstance.option({ width });
+        }
+
         popupInstance.show();
         return deferred.promise();
     }
@@ -202,13 +195,13 @@ export const custom = function(options) {
     };
 };
 
-export const alert = function(messageHtml, title, showTitle) {
+export const alert = function(messageHtml, title = '', showTitle) {
     const options = isPlainObject(messageHtml) ? messageHtml : { title, messageHtml, showTitle, dragEnabled: showTitle };
 
     return custom(options).show();
 };
 
-export const confirm = function(messageHtml, title, showTitle) {
+export const confirm = function(messageHtml, title = '', showTitle) {
     const options = isPlainObject(messageHtml)
         ? messageHtml
         : {
@@ -224,9 +217,3 @@ export const confirm = function(messageHtml, title, showTitle) {
 
     return custom(options).show();
 };
-
-///#DEBUG
-export const DEBUG_set_title = function(value) {
-    title = value;
-};
-///#ENDDEBUG

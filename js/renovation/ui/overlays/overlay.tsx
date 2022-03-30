@@ -13,12 +13,13 @@ import { DomComponentWrapper } from '../common/dom_component_wrapper';
 import { BaseWidgetProps } from '../common/base_props';
 
 export const viewFunction = ({
-  props,
+  componentProps,
   restAttributes,
 }: Overlay): JSX.Element => (
   <DomComponentWrapper
     componentType={LegacyOverlay}
-    componentProps={props}
+    componentProps={componentProps}
+    templateNames={[]}
   // eslint-disable-next-line react/jsx-props-no-spreading
     {...restAttributes}
   />
@@ -36,7 +37,7 @@ export class OverlayProps extends BaseWidgetProps {
 
   @OneWay() height?: number | string | (() => number | string);
 
-  @OneWay() closeOnOutsideClick? = false;
+  @OneWay() hideOnOutsideClick? = false;
 
   @OneWay() hideOnParentScroll? = false;
 
@@ -65,4 +66,9 @@ export class OverlayProps extends BaseWidgetProps {
   defaultOptionRules: null,
   view: viewFunction,
 })
-export class Overlay extends JSXComponent(OverlayProps) { }
+export class Overlay extends JSXComponent(OverlayProps) {
+  /* istanbul ignore next: WA for Angular */
+  get componentProps(): OverlayProps {
+    return this.props;
+  }
+}

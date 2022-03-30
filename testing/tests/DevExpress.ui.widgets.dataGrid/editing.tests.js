@@ -6,6 +6,7 @@ import renderer from 'core/renderer';
 import browser from 'core/utils/browser';
 import commonUtils from 'core/utils/common';
 import { Deferred } from 'core/utils/deferred';
+import { getHeight, getWidth, setWidth, getOffset } from 'core/utils/size';
 import typeUtils from 'core/utils/type';
 import eventsEngine from 'events/core/events_engine';
 import pointerEvents from 'events/pointer';
@@ -14,13 +15,14 @@ import 'generic_light.css!';
 import $ from 'jquery';
 import 'ui/autocomplete';
 import 'ui/color_box';
+import 'ui/tag_box';
 import 'ui/data_grid';
 import 'ui/drop_down_box';
 import 'ui/drop_down_button';
 import 'ui/switch';
 import 'ui/validator';
 import errors from 'ui/widget/ui.errors';
-import { getCells, MockColumnsController, MockDataController, setupDataGridModules } from '../../helpers/dataGridMocks.js';
+import { getCells, generateItems, MockColumnsController, MockDataController, setupDataGridModules } from '../../helpers/dataGridMocks.js';
 import pointerMock from '../../helpers/pointerMock.js';
 import DataGridWrapper from '../../helpers/wrappers/dataGridWrappers.js';
 
@@ -2811,6 +2813,9 @@ QUnit.module('Editing with real dataController', {
                 asyncLoadEnabled: false,
                 store: this.array,
                 paginate: true
+            },
+            selection: {
+                mode: 'none'
             },
             masterDetail: {
                 enabled: false,
@@ -6798,46 +6803,6 @@ QUnit.module('Editing with real dataController', {
         assert.strictEqual(items[0].data.isYoung, false, 'field value');
     });
 
-    if(device.ios || device.android) {
-        // T322738
-        QUnit.testInActiveWindow('Native click is used when allowUpdating is true', function(assert) {
-            // arrange
-            const that = this;
-            const rowsView = this.rowsView;
-            const testElement = $('#container');
-
-            that.option('columns', ['name', 'age']);
-            $.extend(that.options.editing, {
-                allowUpdating: true,
-                mode: 'batch'
-            });
-
-            rowsView.render(testElement);
-
-            // assert
-            assert.ok(testElement.find('table').hasClass('dx-native-click'), 'native click is used');
-        });
-
-        // T322738
-        QUnit.testInActiveWindow('Native click is not used when allowUpdating is false', function(assert) {
-            // arrange
-            const that = this;
-            const rowsView = this.rowsView;
-            const testElement = $('#container');
-
-            $.extend(that.options.editing, {
-                allowUpdating: false,
-                mode: 'batch'
-            });
-            // act
-            rowsView.render(testElement);
-
-            // assert
-            assert.ok(!testElement.find('table').hasClass('dx-native-click'), 'native click is not used');
-        });
-    }
-
-
     // T105941
     QUnit.testInActiveWindow('Focused cell when editing cell in batch mode', function(assert) {
         // arrange
@@ -7773,12 +7738,13 @@ QUnit.module('Editing with real dataController', {
         assert.strictEqual(window.getComputedStyle(svgIcon.find('svg')[0]).pointerEvents, 'none', 'dx-svg-icon svg does not allow pointer events');
     });
 
-    QUnit.test('Add a custom command column', function(assert) {
+    QUnit.test('Add a custom command column with useLegacyColumnButtonTemplate', function(assert) {
         // arrange
         const that = this;
         const rowsView = that.rowsView;
         const $testElement = $('#container');
 
+        this.options.useLegacyColumnButtonTemplate = true;
         $.extend(that.options.editing, {
             mode: 'row',
             allowUpdating: true,
@@ -7816,6 +7782,119 @@ QUnit.module('Editing with real dataController', {
         assert.strictEqual($customCommandCell.children('.mylink').text(), 'My link', 'text of the custom link');
         assert.strictEqual($customCommandCell.children('.mybutton').length, 1, 'has custom button');
         assert.strictEqual($customCommandCell.children('.mybutton').text(), 'My button', 'text of the custom button');
+    });
+
+    QUnit.test('Add a custom command column', function(assert) {
+        // arrange
+        const that = this;
+        const rowsView = that.rowsView;
+        const $testElement = $('#container');
+
+        $.extend(that.options.editing, {
+            mode: 'row',
+            allowUpdating: true,
+            allowDeleting: true
+        });
+        that.options.columns.push({ type: 'buttons' }, {
+            type: 'buttons',
+            cssClass: 'mybuttons',
+            buttons: [
+                {
+                    text: 'My link',
+                    cssClass: 'mylink'
+                },
+                {
+                    cssClass: 'mybutton',
+                    template: function($cellElement, options) {
+                        return $('<div/>').addClass('mybuttontext').text('My button');
+                    }
+                }
+            ]
+        });
+        that.columnsController.reset();
+
+        // act
+        rowsView.render($testElement);
+
+        // assert
+        const $linkElements = $testElement.find('.dx-command-edit').first().find('.dx-link');
+        assert.strictEqual($linkElements.length, 2, 'link count');
+        assert.ok($linkElements.eq(0).hasClass('dx-link-edit'), 'the edit link');
+        assert.ok($linkElements.eq(1).hasClass('dx-link-delete'), 'the delete link');
+
+        const $customCommandCell = $testElement.find('.mybuttons').first();
+        assert.strictEqual($customCommandCell.length, 1, 'has custom command cell');
+        assert.strictEqual($customCommandCell.children('.mylink').length, 1, 'has custom link');
+        assert.strictEqual($customCommandCell.children('.mylink').text(), 'My link', 'text of the custom link');
+        assert.strictEqual($customCommandCell.children('.mybutton').length, 1, 'has custom button cssClass');
+        assert.strictEqual($customCommandCell.children('.mybutton').children('.mybuttontext').length, 1, 'has custom button content');
+        assert.strictEqual($customCommandCell.children('.mybutton').text(), 'My button', 'text of the custom button');
+    });
+
+    QUnit.test('Add a custom command column click handler', function(assert) {
+        // arrange
+        const that = this;
+        const rowsView = that.rowsView;
+        const $testElement = $('#container');
+        const clickSpy = sinon.spy();
+        that.options.columns.push({
+            type: 'buttons',
+            cssClass: 'mybuttons',
+            buttons: [
+                {
+                    cssClass: 'mybutton',
+                    onClick: clickSpy,
+                    template: function($cellElement, options) {
+                        return $('<div/>').addClass('mybuttontext').text('My button');
+                    }
+                }
+            ]
+        });
+        that.columnsController.reset();
+
+        // act
+        rowsView.render($testElement);
+
+        $('.mybuttontext').first().trigger('click');
+
+        // assert
+        assert.strictEqual(clickSpy.callCount, 1, 'click is fired once');
+    });
+
+    // T1045908
+    QUnit.test('The click event should not be prevented for custom command column', function(assert) {
+        // arrange
+        const event = $.Event('click');
+        const clickHandler = sinon.spy();
+        const $testElement = $('#container');
+
+        this.options.columns.push(
+            {
+                type: 'buttons',
+                cssClass: 'mybuttons',
+                buttons: [
+                    {
+                        template: function($cellElement, options) {
+                            return $('<div/>').addClass('mybutton').text('My button').on('click', clickHandler);
+                        }
+                    }
+                ]
+            }
+        );
+        this.columnsController.reset();
+        this.rowsView.render($testElement);
+
+        const $customCommandCell = $testElement.find('.mybuttons').first();
+        const $customButton = $customCommandCell.find('.mybutton');
+        assert.strictEqual($customCommandCell.length, 1, 'has custom command cell');
+        assert.strictEqual($customButton.length, 1, 'has custom button cssClass');
+
+        // act
+        $customButton.trigger(event);
+
+        // assert
+        assert.notOk(event.isDefaultPrevented(), 'default is not prevented');
+        assert.strictEqual(clickHandler.callCount, 1, 'click is fired once');
     });
 
     QUnit.test('Changing edit icon in the \'buttons\' command column', function(assert) {
@@ -9457,6 +9536,32 @@ QUnit.module('Editing with real dataController', {
                 'key': 1,
                 'type': 'update'
             }], 'row change');
+        });
+
+        QUnit.test('editing.changes should not highlight changes in edited row in mode="row"', function(assert) {
+            // arrange
+            const rowsView = this.rowsView;
+            const $testElement = $('#container');
+
+            $.extend(this.options.editing, {
+                allowUpdating: true,
+                mode: 'row'
+            });
+            rowsView.render($testElement);
+
+            // act
+            this.editRow(0);
+            this.clock.tick();
+
+            this.option('editing.changes', [{
+                data: { name: 'asd' },
+                key: 1,
+                type: 'update',
+            }]);
+
+            const cell = rowsView.element().find('tbody > tr > td').eq(0);
+
+            assert.notOk(cell.hasClass('dx-cell-modified'));
         });
 
         QUnit.test('editCell should not create empty changes object', function(assert) {
@@ -11469,7 +11574,7 @@ QUnit.module('Editing with validation', {
         // T335660
         const overlayInstance = $overlayElement.dxOverlay('instance');
         assert.ok(overlayInstance, 'has overlay instance');
-        assert.ok(overlayInstance.option('target').hasClass('dx-editor-cell'), 'target of the overlay');
+        assert.ok(overlayInstance.option('position.of').hasClass('dx-editor-cell'), 'target of the overlay');
 
         // act
         $inputElement = getInputElements($testElement).first();
@@ -11638,11 +11743,12 @@ QUnit.module('Editing with validation', {
         assert.equal($overlayContent.length, 1, 'has tooltip');
         assert.strictEqual($overlayWrapper.css('visibility'), 'visible', 'validation message wrapper is visible');
         assert.ok(rowsView.element().find('.dx-freespace-row').is(':visible'), 'visible freespace row');
-        assert.ok(rowsView.element().find('.dx-freespace-row').height() > 0, 'freespace row has height ');
+        assert.ok(getHeight(rowsView.element().find('.dx-freespace-row')) > 0, 'freespace row has height ');
 
         // T526383
         const $modifiedCell = cells.eq(1);
-        assert.ok($overlayContent.offset().top >= ($modifiedCell.offset().top + $modifiedCell.height()), 'tooltip is under the cell');
+        const coercion = browser.mozilla ? 1 : 0;
+        assert.ok((getOffset($overlayContent[0]).top + coercion) >= (getOffset($modifiedCell[0]).top + getHeight($modifiedCell)), 'tooltip is under the cell');
     });
 
     // T200857
@@ -11862,8 +11968,8 @@ QUnit.module('Editing with validation', {
         assert.ok(selectBoxInstance.option('opened'), 'drop-down editor is shown');
         assert.ok(invalidTooltipInstance.option('visible'), 'invalid message tooltip is visible');
         assert.ok(revertTooltipInstance.option('visible'), 'revert tooltip is visible');
-        assert.ok(selectBoxInstance.$element().offset().left + selectBoxInstance.$element().width() < revertTooltipInstance.$content().offset().left, 'revert tooltip is shown after selectbox');
-        assert.ok(revertTooltipInstance.$content().offset().left + revertTooltipInstance.$content().width() < invalidTooltipInstance.$content().offset().left, 'invalid tooltip is shown after revert tooltip');
+        assert.ok(selectBoxInstance.$element().offset().left + getWidth(selectBoxInstance.$element()) < revertTooltipInstance.$content().offset().left, 'revert tooltip is shown after selectbox');
+        assert.ok(revertTooltipInstance.$content().offset().left + getWidth(revertTooltipInstance.$content()) < invalidTooltipInstance.$content().offset().left, 'invalid tooltip is shown after revert tooltip');
     });
 
     // T523770
@@ -11915,8 +12021,8 @@ QUnit.module('Editing with validation', {
         assert.ok(selectBoxInstance.option('opened'), 'drop-down editor is shown');
         assert.ok(invalidTooltipInstance.option('visible'), 'invalid message tooltip is visible');
         assert.ok(revertTooltipInstance.option('visible'), 'revert tooltip is visible');
-        assert.ok(invalidTooltipInstance.$content().offset().left + invalidTooltipInstance.$content().width() < revertTooltipInstance.$content().offset().left, 'revert tooltip is shown after invalid tooltip');
-        assert.roughEqual(revertTooltipInstance.$content().offset().left + revertTooltipInstance.$content().width(), selectBoxInstance.$element().offset().left, 1.1, 'selectbox is shown after revert tooltip');
+        assert.ok(invalidTooltipInstance.$content().offset().left + getWidth(invalidTooltipInstance.$content()) < revertTooltipInstance.$content().offset().left, 'revert tooltip is shown after invalid tooltip');
+        assert.roughEqual(revertTooltipInstance.$content().offset().left + getWidth(revertTooltipInstance.$content()), selectBoxInstance.$element().offset().left, 1.5, 'selectbox is shown after revert tooltip');
 
         $('#qunit-fixture').removeClass('qunit-fixture-static').css('width', '');
     });
@@ -14155,7 +14261,7 @@ QUnit.module('Editing with validation', {
         const that = this;
         const rowsView = that.rowsView;
 
-        that.$element().width(400);
+        setWidth(that.$element(), 400);
 
         rowsView.render(that.gridContainer);
 
@@ -14196,7 +14302,7 @@ QUnit.module('Editing with validation', {
         const that = this;
         const rowsView = that.rowsView;
 
-        that.$element().width(400);
+        setWidth(that.$element(), 400);
 
         rowsView.render(that.gridContainer);
 
@@ -14251,7 +14357,7 @@ QUnit.module('Editing with validation', {
         const that = this;
         const rowsView = that.rowsView;
 
-        that.$element().width(500);
+        setWidth(that.$element(), 500);
 
         rowsView.render(that.gridContainer);
 
@@ -14297,7 +14403,7 @@ QUnit.module('Editing with validation', {
         // arrange
         const rowsView = this.rowsView;
 
-        this.$element().width(500);
+        setWidth(this.$element(), 500);
 
         rowsView.render(this.gridContainer);
 
@@ -16334,7 +16440,9 @@ QUnit.module('Editing with scrolling', {
 
         that.options.scrolling = {
             mode: 'infinite',
-            useNative: false
+            useNative: false,
+            legacyMode: false,
+            prerenderedRowCount: 1
         };
 
         that.options.onRowValidating = function(e) {
@@ -16350,21 +16458,21 @@ QUnit.module('Editing with scrolling', {
 
         // assert
         assert.equal(that.dataController.pageIndex(), 0, 'page index');
-        assert.equal(that.dataController.items().length, 8, 'count items');
+        assert.equal(that.dataController.items().length, 7, 'count items');
 
         // arrange
         that.rowsView.scrollTo({ y: 500 });
 
         // assert
         assert.equal(that.dataController.pageIndex(), 2, 'page index');
-        assert.equal(that.dataController.items().length, 16, 'count items');
+        assert.equal(that.dataController.items().length, 8, 'count items');
 
         // arrange
         that.addRow();
         that.clock.tick();
 
         // assert
-        assert.equal(that.dataController.items().length, 17, 'count items');
+        assert.equal(that.dataController.items().length, 9, 'count items');
 
         // arrange
         that.rowsView.scrollTo({ y: 0 });
@@ -16377,7 +16485,7 @@ QUnit.module('Editing with scrolling', {
 
         // assert
         const items = that.dataController.items();
-        assert.equal(items.length, 17, 'count items');
+        assert.equal(items.length, 7, 'count items');
         assert.ok(items[0].isNewRow, 'inserted item');
     });
 
@@ -16611,7 +16719,8 @@ QUnit.module('Editing with scrolling', {
                 scrolling: {
                     mode: rowRenderingMode,
                     rowRenderingMode: rowRenderingMode,
-                    rowPageSize: 5
+                    rowPageSize: 5,
+                    legacyMode: false
                 }
             });
 
@@ -17376,6 +17485,124 @@ QUnit.module('Edit Form', {
         assert.equal($textEditors.eq(1).dxTextBox('instance').option('readOnly'), false, 'item 1 readOnly false by default');
     });
 
+    QUnit.test('editing.form.labelMode should be passed to editors', function(assert) {
+        this.setupModules(this);
+
+        const that = this;
+        const rowsView = this.rowsView;
+        const testElement = $('#container');
+
+        $.extend(that.options.editing, {
+            mode: 'form',
+            allowUpdating: true,
+            form: {
+                labelMode: 'floating',
+                items: [{
+                    dataField: 'name'
+                }, {
+                    dataField: 'phone',
+                    isRequired: true,
+                    editorOptions: {
+                        labelMode: 'hidden'
+                    }
+                }, {
+                    dataField: 'custom'
+                }]
+            }
+        });
+
+        rowsView.render(testElement);
+
+        // act
+        that.editRow(0);
+
+        // assert
+        const $textEditors = testElement.find('.dx-form .dx-texteditor');
+
+        assert.equal($textEditors.length, 3, 'text editor count');
+        assert.equal($textEditors.eq(0).dxTextBox('instance').option('labelMode'), 'floating', 'item 0 labelMode');
+        assert.equal($textEditors.eq(0).dxTextBox('instance').option('label'), 'Name', 'item 0 label');
+        assert.equal($textEditors.eq(0).dxTextBox('instance').option('labelMark'), '\u00A0*', 'item 0 label mark');
+        assert.equal($textEditors.eq(1).dxTextBox('instance').option('labelMode'), 'hidden', 'item 1 labelMode');
+        assert.equal($textEditors.eq(1).dxTextBox('instance').option('label'), 'Phone', 'item 1 label');
+        assert.equal($textEditors.eq(1).dxTextBox('instance').option('labelMark'), '\u00A0*', 'item 1 label mark');
+    });
+
+    ['static', 'floating'].forEach(labelMode => {
+        QUnit.test(`Form item with boolean editor should have visible label if editing.form.labelMode is ${labelMode}`, function(assert) {
+            this.setupModules(this);
+
+            const that = this;
+            const rowsView = this.rowsView;
+            const testElement = $('#container');
+
+            $.extend(that.options.editing, {
+                mode: 'form',
+                allowUpdating: true,
+                form: {
+                    labelMode,
+                    items: [{
+                        dataField: 'name'
+                    }, {
+                        dataField: 'phone',
+                        editorOptions: {
+                            labelMode: 'hidden'
+                        }
+                    }, {
+                        dataField: 'custom'
+                    }]
+                }
+            });
+
+            rowsView.render(testElement);
+
+            that.columnOption(0, 'dataType', 'boolean');
+
+            // act
+            that.editRow(0);
+
+            // assert
+            const formLayoutItems = testElement.find('.dx-form').dxForm('instance')._rootLayoutManager.option('items');
+
+            assert.strictEqual(formLayoutItems[0].label.visible, true, 'item 0 label.visible is assigned');
+            assert.strictEqual(formLayoutItems[1].label.visible, undefined, 'item 1 label.visible is not assigned');
+        });
+    });
+
+    QUnit.test('value should be correct if editorType is dxTagBox for lookup column (T1054830)', function(assert) {
+        this.array[0].tags = [1, 2];
+        this.columns.push({ dataField: 'tags', lookup: { valueExpr: 'this' } });
+
+        this.setupModules(this);
+
+        const that = this;
+        const rowsView = this.rowsView;
+        const testElement = $('#container');
+
+        $.extend(that.options.editing, {
+            mode: 'form',
+            allowUpdating: true,
+            form: {
+                labelMode: 'floating',
+                items: [{
+                    dataField: 'tags',
+                    editorType: 'dxTagBox'
+                }]
+            }
+        });
+
+        rowsView.render(testElement);
+
+        // act
+        that.editRow(0);
+
+        // assert
+        const $textEditors = testElement.find('.dx-form .dx-texteditor');
+
+        assert.equal($textEditors.length, 1, 'text editor count');
+        assert.deepEqual($textEditors.eq(0).dxTagBox('instance').option('value'), [1, 2], 'item 0 value');
+    });
+
     QUnit.testInActiveWindow('Focus editor after click on a label', function(assert) {
         this.setupModules(this);
 
@@ -17827,7 +18054,6 @@ QUnit.module('Edit Form', {
 
     QUnit.test('Edit form when group form items are specified and simple form items have editor type', function(assert) {
         // arrange
-
         this.options.editing.form = {
             items: [{ itemType: 'group', items: [{ dataField: 'name', editorType: 'dxAutocomplete' }] }]
         };
@@ -17893,9 +18119,9 @@ QUnit.module('Edit Form', {
 
     QUnit.test('Edit form when formItem is specified with editorType in the column and the editorName is overridden on the onEditorPreparing event', function(assert) {
         // arrange
-
         this.options.onEditorPreparing = (e) => {
             if(e.dataField === 'name') {
+                assert.strictEqual(e.editorName, 'dxColorBox', 'editorName arg');
                 e.editorName = 'dxAutocomplete';
             }
         };
@@ -19981,5 +20207,935 @@ QUnit.module('Async validation', {
 
         // assert
         assert.ok($editor.hasClass('dx-validation-pending'));
+    });
+});
+
+QUnit.module('Editing - new row position', {
+    beforeEach: function() {
+        this.contentReadyCallbacks = $.Callbacks();
+        this.clock = sinon.useFakeTimers();
+
+        this.$element = () => $('#container');
+
+        this.array = generateItems(100);
+        this.columns = ['id', 'field1', 'field2', 'field3', 'field4'];
+
+        this.options = {
+            tabIndex: 0,
+            loadingTimeout: 0,
+            autoNavigateToFocusedRow: true,
+            editing: {
+                mode: 'row',
+                allowUpdating: true,
+                allowAdding: true
+            },
+            paging: {
+                pageSize: 10
+            },
+            commonColumnSettings: {
+                allowEditing: true
+            },
+            columns: this.columns,
+            dataSource: {
+                asyncLoadEnabled: false,
+                store: {
+                    type: 'array',
+                    data: this.array,
+                    key: 'id'
+                },
+                paginate: true
+            },
+            scrolling: {
+                mode: 'standard'
+            },
+            onRowPrepared: function(e) {
+                $(e.rowElement).height(34);
+            }
+        };
+
+        this.setupModules = () => {
+            setupDataGridModules(this, ['data', 'columns', 'columnHeaders', 'rows', 'gridView', 'editing', 'editingRowBased', 'editingFormBased', 'editingCellBased', 'editorFactory', 'virtualScrolling', 'focus'], {
+                initViews: true
+            });
+
+            this.on = (name, callBack) => {
+                if(name === 'contentReady') {
+                    this.contentReadyCallbacks.add(callBack);
+                }
+            };
+        };
+    },
+    afterEach: function() {
+        this.dispose();
+        this.contentReadyCallbacks.empty();
+        this.clock.restore();
+    }
+}, () => {
+    const configWithPaging = {
+        name: 'paging',
+        options: {
+            paging: {
+                enabled: true,
+                pageSize: 10
+            }
+        }
+    };
+    const configWithVirtualScrolling = {
+        name: 'virtual scrolling',
+        options: {
+            scrolling: {
+                mode: 'virtual',
+                legacyMode: false,
+                rowPageSize: 5,
+                prerenderedRowCount: 1
+            }
+        }
+    };
+
+
+    [configWithPaging, configWithVirtualScrolling].forEach((config) => {
+        QUnit.module(`with ${config.name}`, {
+            beforeEach: function() {
+                this.options = $.extend(true, {}, this.options, config.options);
+            }
+        }, () => {
+            QUnit.test('newRowPosition = first', function(assert) {
+                // arrange
+                const $testElement = $('#container');
+
+                this.options.editing.newRowPosition = 'first';
+                this.setupModules();
+                this.clock.tick();
+
+                this.rowsView.render($testElement);
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 10, 'row count');
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, 11, 'row count');
+                assert.ok(rows[0].isNewRow, 'new row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').first();
+                const $input = $insertRow.find('td').eq(0).find('.dx-texteditor-input');
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'first row is inserted');
+                assert.ok($insertRow.hasClass('dx-edit-row'), 'inserted row is edited');
+                assert.ok($input.is(':focus'), 'editor of the first cell is focused');
+            });
+
+            QUnit.test('newRowPosition = first when pageIndex = 2', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.paging.pageIndex = 2;
+                this.options.editing.newRowPosition = 'first';
+                this.setupModules();
+                this.clock.tick();
+
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+                $(this.rowsView.getScrollable().container()).trigger('scroll');
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 7 : 10, 'row count');
+                assert.strictEqual(this.pageIndex(), 2, 'pageIndex');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+                $(this.rowsView.getScrollable().container()).trigger('scroll');
+                this.clock.tick();
+                this.contentReadyCallbacks.fire();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 7 : 11, 'row count');
+                assert.ok(rows[0].isNewRow, 'new row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').first();
+                const $input = $insertRow.find('td').eq(0).find('.dx-texteditor-input');
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'first row is inserted');
+                assert.ok($insertRow.hasClass('dx-edit-row'), 'inserted row is edited');
+                assert.ok($input.is(':focus'), 'editor of the first cell is focused');
+            });
+
+            QUnit.test('newRowPosition = last', function(assert) {
+                // arrange
+                const $testElement = $('#container');
+
+                this.options.editing.newRowPosition = 'last';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                config.name === 'virtual scrolling' && this.dataController._rowsScrollController.viewportSize(rows.length);
+                this.addRow();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 9, 'pageIndex');
+                assert.strictEqual(rows.length, 11, 'row count');
+                assert.ok(rows[10].isNewRow, 'new row');
+            });
+
+            QUnit.test('newRowPosition = last when page is last', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.paging.pageIndex = 9;
+                this.options.editing.newRowPosition = 'last';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+                $(this.rowsView.getScrollable().container()).trigger('scroll');
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 9, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 7 : 10, 'row count');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+                $(this.rowsView.getScrollable().container()).trigger('scroll');
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 9, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 7 : 11, 'row count');
+                assert.ok(rows[rows.length - 1].isNewRow, 'new row');
+            });
+
+            QUnit.test('newRowPosition = pageBottom', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.editing.newRowPosition = 'pageBottom';
+                this.options.paging.pageIndex = 2;
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+                $(this.rowsView.getScrollable().container()).trigger('scroll');
+                this.clock.tick();
+
+                // assert
+                const rowCount = config.name === 'virtual scrolling' ? 7 : 10;
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 2, 'pageIndex');
+                assert.strictEqual(rows.length, rowCount, 'row count');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 2, 'pageIndex');
+                assert.strictEqual(rows.length, rowCount + 1, 'row count');
+
+                if(config.name === 'virtual scrolling') {
+                    assert.ok(rows[5].isNewRow, 'new row');
+                } else {
+                    assert.ok(rows[10].isNewRow, 'new row');
+                }
+            });
+
+            QUnit.test('newRowPosition = pageTop', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.editing.newRowPosition = 'pageTop';
+                this.options.paging.pageIndex = 2;
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+                $(this.rowsView.getScrollable().container()).trigger('scroll');
+                this.clock.tick();
+
+                // assert
+                const rowCount = config.name === 'virtual scrolling' ? 7 : 10;
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 2, 'pageIndex');
+                assert.strictEqual(rows.length, rowCount, 'row count');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 2, 'pageIndex');
+                assert.strictEqual(rows.length, rowCount + 1, 'row count');
+                assert.ok(rows[0].isNewRow, 'new row');
+            });
+
+            QUnit.test('newRowPosition = viewportBottom', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.editing.newRowPosition = 'viewportBottom';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, 11, 'row count');
+                assert.ok(rows[5].isNewRow, 'new row');
+            });
+
+            QUnit.test('newRowPosition = viewportTop', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+                const isVirtualScrolling = config.name === 'virtual scrolling';
+
+                this.options.height = 200;
+                this.options.editing.newRowPosition = 'viewportTop';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                const scrollable = this.rowsView.getScrollable();
+                scrollable.scrollTo({ y: 40 });
+                $(scrollable.container()).trigger('scroll');
+                this.clock.tick();
+
+                // assert
+                assert.strictEqual(this.rowsView.getTopVisibleItemIndex(), isVirtualScrolling ? 0 : 1, 'top visible item index');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, isVirtualScrolling ? 8 : 11, 'row count');
+                assert.ok(rows[isVirtualScrolling ? 0 : 1].isNewRow, 'new row');
+            });
+
+            QUnit.test('newRowPosition = pageBottom when there are no items', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.dataSource.store.data = [];
+                this.options.editing.newRowPosition = 'pageBottom';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, 0, 'row count');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, 1, 'row count');
+                assert.ok(rows[0].isNewRow, 'new row');
+            });
+
+            QUnit.test('newRowPosition = pageTop when there are no items', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.dataSource.store.data = [];
+                this.options.editing.newRowPosition = 'pageTop';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, 0, 'row count');
+
+                // act
+                this.addRow();
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, 1, 'row count');
+                assert.ok(rows[0].isNewRow, 'new row');
+            });
+        });
+    });
+});
+
+QUnit.module('Editing - changes with insertBeforeKey/insertAfterKey', {
+    beforeEach: function() {
+        this.clock = sinon.useFakeTimers();
+
+        this.$element = () => $('#container');
+
+        this.array = generateItems(100);
+        this.columns = ['id', 'field1', 'field2', 'field3', 'field4'];
+
+        this.options = {
+            tabIndex: 0,
+            loadingTimeout: 0,
+            autoNavigateToFocusedRow: true,
+            editing: {
+                mode: 'row',
+                allowUpdating: true,
+                allowAdding: true
+            },
+            paging: {
+                pageSize: 10
+            },
+            commonColumnSettings: {
+                allowEditing: true
+            },
+            columns: this.columns,
+            dataSource: {
+                asyncLoadEnabled: false,
+                store: {
+                    type: 'array',
+                    data: this.array,
+                    key: 'id'
+                },
+                paginate: true
+            },
+            scrolling: {
+                mode: 'standard'
+            },
+            onRowPrepared: function(e) {
+                $(e.rowElement).height(34);
+            }
+        };
+
+        this.setupModules = () => {
+            setupDataGridModules(this, ['data', 'columns', 'columnHeaders', 'rows', 'gridView', 'editing', 'editingRowBased', 'editingFormBased', 'editingCellBased', 'editorFactory', 'virtualScrolling'], {
+                initViews: true
+            });
+        };
+    },
+    afterEach: function() {
+        this.dispose();
+        this.clock.restore();
+    }
+}, () => {
+    const configWithPaging = {
+        name: 'paging',
+        options: {
+            paging: {
+                enabled: true,
+                pageSize: 10
+            }
+        }
+    };
+    const configWithVirtualScrolling = {
+        name: 'virtual scrolling',
+        options: {
+            scrolling: {
+                mode: 'virtual',
+                legacyMode: false,
+                rowPageSize: 5,
+                prerenderedRowCount: 1
+            }
+        }
+    };
+
+    [configWithPaging, configWithVirtualScrolling].forEach((config) => {
+        QUnit.module(`with ${config.name}`, {
+            beforeEach: function() {
+                this.options = $.extend(true, {}, this.options, config.options);
+            }
+        }, () => {
+            QUnit.test('Insert row when specified insertAfterKey', function(assert) {
+                // arrange
+                const $testElement = $('#container');
+
+                this.setupModules();
+                this.clock.tick();
+
+                this.rowsView.render($testElement);
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                this.option('editing.changes', [{ type: 'insert', insertAfterKey: 5 }]);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 11, 'row count');
+                assert.strictEqual(rows[4].key, 5, 'key of the fifth row');
+                assert.ok(rows[5].isNewRow, 'new row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').eq(5);
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'row is inserted');
+                assert.notOk($insertRow.hasClass('dx-edit-row'), 'inserted row is not edited');
+            });
+
+            QUnit.test('Insert row when specified insertBeforeKey', function(assert) {
+                // arrange
+                const $testElement = $('#container');
+
+                this.setupModules();
+                this.clock.tick();
+
+                this.rowsView.render($testElement);
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                this.option('editing.changes', [{ type: 'insert', insertBeforeKey: 5 }]);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 11, 'row count');
+                assert.ok(rows[4].isNewRow, 'new row');
+                assert.strictEqual(rows[5].key, 5, 'key of the fifth row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').eq(4);
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'row is inserted');
+                assert.notOk($insertRow.hasClass('dx-edit-row'), 'inserted row is not edited');
+            });
+
+            QUnit.test('Go to the page with the inserted row when specified insertAfterKey', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.setupModules();
+                this.clock.tick();
+
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                this.option('editing.changes', [{ type: 'insert', insertAfterKey: 13 }]);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 7 : 10, 'row count');
+
+                // act
+                this.pageIndex(1);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 1, 'pageIndex');
+                assert.strictEqual(rows[2].key, 13, 'key of the fifth row');
+                assert.ok(rows[3].isNewRow, 'new row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').eq(3);
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'row is inserted');
+                assert.notOk($insertRow.hasClass('dx-edit-row'), 'inserted row is not edited');
+            });
+
+            QUnit.test('Go to the page with the inserted row when specified insertBeforeKey', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.setupModules();
+                this.clock.tick();
+
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                this.option('editing.changes', [{ type: 'insert', insertBeforeKey: 13 }]);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 7 : 10, 'row count');
+                // act
+                this.pageIndex(1);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 1, 'pageIndex');
+                assert.ok(rows[2].isNewRow, 'new row');
+                assert.strictEqual(rows[3].key, 13, 'key of the fifth row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').eq(2);
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'row is inserted');
+                assert.notOk($insertRow.hasClass('dx-edit-row'), 'inserted row is not edited');
+            });
+
+            QUnit.test('The insertAfterKey should not be ignored when newRowPosition = \'last\'', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.editing.newRowPosition = 'last';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                this.option('editing.changes', [{ type: 'insert', insertAfterKey: 5 }]);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 8 : 11, 'row count');
+                assert.strictEqual(rows[4].key, 5, 'key of the fifth row');
+                assert.ok(rows[5].isNewRow, 'new row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').eq(5);
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'row is inserted');
+                assert.notOk($insertRow.hasClass('dx-edit-row'), 'inserted row is not edited');
+            });
+
+            QUnit.test('The insertAfterKey should not be ignored when newRowPosition = \'first\'', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.paging.pageIndex = 1;
+                this.options.editing.newRowPosition = 'first';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+                $(this.rowsView.getScrollable().container()).trigger('scroll');
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 1, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 7 : 10, 'row count');
+
+                // act
+                this.option('editing.changes', [{ type: 'insert', insertAfterKey: 15 }]);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 1, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 8 : 11, 'row count');
+                assert.strictEqual(rows[4].key, 15, 'key of the fifth row');
+                assert.ok(rows[5].isNewRow, 'new row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').eq(5);
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'row is inserted');
+                assert.notOk($insertRow.hasClass('dx-edit-row'), 'inserted row is not edited');
+            });
+
+            QUnit.test('The insertBeforeKey should not be ignored when newRowPosition = \'last\'', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.editing.newRowPosition = 'last';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(rows.length, 10, 'row count');
+
+                // act
+                this.option('editing.changes', [{ type: 'insert', insertBeforeKey: 5 }]);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 0, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 8 : 11, 'row count');
+                assert.ok(rows[4].isNewRow, 'new row');
+                assert.strictEqual(rows[5].key, 5, 'key of the fifth row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').eq(4);
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'row is inserted');
+                assert.notOk($insertRow.hasClass('dx-edit-row'), 'inserted row is not edited');
+            });
+
+            QUnit.test('The insertBeforeKey should not be ignored when newRowPosition = \'first\'', function(assert) {
+                // arrange
+                const $testElement = $('#container').height(200);
+
+                this.options.height = 200;
+                this.options.paging.pageIndex = 1;
+                this.options.editing.newRowPosition = 'first';
+                this.setupModules();
+                this.clock.tick();
+                this.rowsView.render($testElement);
+                this.rowsView.height(200);
+                this.rowsView.resize();
+                this.clock.tick();
+                $(this.rowsView.getScrollable().container()).trigger('scroll');
+                this.clock.tick();
+
+                // assert
+                let rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 1, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 7 : 10, 'row count');
+
+                // act
+                this.option('editing.changes', [{ type: 'insert', insertBeforeKey: 15 }]);
+                this.clock.tick();
+
+                // assert
+                rows = this.getVisibleRows();
+                assert.strictEqual(this.pageIndex(), 1, 'pageIndex');
+                assert.strictEqual(rows.length, config.name === 'virtual scrolling' ? 8 : 11, 'row count');
+                assert.ok(rows[4].isNewRow, 'new row');
+                assert.strictEqual(rows[5].key, 15, 'key of the fifth row');
+
+                const $insertRow = $testElement.find('tbody > .dx-data-row').eq(4);
+                assert.ok($insertRow.hasClass('dx-row-inserted'), 'row is inserted');
+                assert.notOk($insertRow.hasClass('dx-edit-row'), 'inserted row is not edited');
+            });
+        });
+    });
+});
+
+QUnit.module('Editing - public arguments of the events/templates', {
+    beforeEach: function() {
+        this.clock = sinon.useFakeTimers();
+
+        this.$element = () => $('#container');
+        this.gridContainer = $('#container > .dx-datagrid');
+
+        this.array = [
+            { name: 'Alex', age: 15, lastName: 'John', phone: '555555', room: 1 },
+            { name: 'Dan', age: 16, lastName: 'Skip', phone: '553355', room: 2 },
+            { name: 'Vadim', age: 17, lastName: 'Dog', phone: '225555', room: 3 },
+            { name: 'Dmitry', age: 18, lastName: 'Cat', phone: '115555', room: 4 },
+            { name: 'Sergey', age: 18, lastName: 'Larry', phone: '550055', room: 5 },
+            { name: 'Kate', age: 20, lastName: 'Glock', phone: '501555', room: 6 },
+            { name: 'Dan', age: 21, lastName: 'Zikerman', phone: '1228844', room: 7 }
+        ];
+        this.columns = ['name', 'age', 'lastName', 'phone', 'room'];
+
+        this.options = {
+            editing: {
+                mode: 'row',
+                allowUpdating: true
+            },
+            commonColumnSettings: {
+                allowEditing: true
+            },
+            columns: this.columns,
+            dataSource: {
+                asyncLoadEnabled: false,
+                store: this.array,
+                paginate: true
+            }
+        };
+
+        this.$testElement = $('#container');
+
+        this.setupModules = () => {
+            setupDataGridModules(this, ['data', 'columns', 'columnHeaders', 'rows', 'masterDetail', 'editing', 'editingRowBased', 'editingFormBased', 'editingCellBased', 'editorFactory', 'errorHandling'], {
+                initViews: true
+            });
+
+            this.editingController.component.$element = function() {
+                return this.$testElement;
+            };
+        };
+
+        this.renderRowsView = () => {
+            this.rowsView.render(this.$testElement);
+        };
+    },
+    afterEach: function() {
+        this.dispose();
+        this.clock.restore();
+    }
+}, () => {
+    ['row', 'batch', 'cell', 'form', 'popup'].forEach((editMode) => {
+        // T1054619
+        QUnit.test(`Check arguments of the editCellTemplate in ${editMode} mode`, function(assert) {
+            // arrange
+            const editCellTemplateSpy = sinon.spy();
+
+            this.options.editing.mode = editMode;
+            this.columns[0] = { dataField: 'name', editCellTemplate: editCellTemplateSpy };
+            this.setupModules();
+            this.renderRowsView();
+
+            // act
+            if(editMode === 'batch' || editMode === 'cell') {
+                this.editCell(0, 0);
+            } else {
+                this.editRow(0);
+            }
+            this.clock.tick();
+
+            // assert
+            const args = editCellTemplateSpy.getCall(0).args[1];
+            assert.strictEqual(editCellTemplateSpy.callCount, 1, 'editCellTemplate is called');
+            assert.strictEqual(args.column.dataField, 'name', 'column arg');
+            assert.strictEqual(args.columnIndex, 0, 'columnIndex arg');
+            assert.strictEqual(args.component, this.editingController.component, 'component arg');
+            assert.deepEqual(args.data, this.array[0], 'data arg');
+            assert.strictEqual(args.row, this.getVisibleRows()[0], 'row arg');
+            assert.strictEqual(args.rowIndex, 0, 'rowIndex arg');
+            assert.strictEqual(args.rowType, editMode === 'form' ? 'detail' : 'data', 'rowType arg');
+            assert.strictEqual(typeof args.setValue, 'function', 'setValue arg');
+            assert.strictEqual(args.value, 'Alex', 'value arg');
+
+            if(editMode !== 'form' && editMode !== 'popup') {
+                assert.strictEqual(args.displayValue, 'Alex', 'displayValue arg');
+                assert.strictEqual(args.text, 'Alex', 'text arg');
+            }
+        });
+
+        [true, false].forEach((repaintChangesOnly) => {
+            QUnit.test(`Check the watch argument of the editCellTemplate in ${editMode} mode when repaintChangesOnly = ${repaintChangesOnly}`, function(assert) {
+                // arrange
+                const watchSpy = sinon.spy();
+                const editCellTemplateSpy = sinon.spy((container, cellInfo) => {
+                    cellInfo.watch && cellInfo.watch((data) => {
+                        return data;
+                    }, watchSpy);
+                });
+
+                this.options.editing.mode = editMode;
+                this.options.repaintChangesOnly = repaintChangesOnly;
+                this.columns[0] = { dataField: 'name', editCellTemplate: editCellTemplateSpy };
+                this.columns[1] = { dataField: 'age', setCellValue: (newData, value) => { newData.age = value; } };
+                this.setupModules();
+                this.renderRowsView();
+
+                // act
+                if(editMode === 'batch' || editMode === 'cell') {
+                    this.editCell(0, 0);
+                } else {
+                    this.editRow(0);
+                }
+                this.clock.tick();
+
+                // assert
+                const args = editCellTemplateSpy.getCall(0).args[1];
+                assert.strictEqual(editCellTemplateSpy.callCount, 1, 'editCellTemplate is called');
+
+                if(repaintChangesOnly) {
+                    assert.strictEqual(typeof args.watch, 'function', 'watch arg');
+
+                    if(editMode !== 'batch' && editMode !== 'cell') {
+                        // act
+                        $(this.getCellElement(0, 1)).find('.dx-numberbox').dxNumberBox('instance').option('value', 123);
+                        this.clock.tick();
+
+                        // assert
+                        assert.strictEqual(watchSpy.callCount, 1, 'watch update is called');
+                    }
+                } else {
+                    assert.strictEqual(args.watch, undefined, 'watch arg');
+                }
+            });
+        });
     });
 });

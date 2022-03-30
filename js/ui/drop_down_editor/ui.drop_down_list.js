@@ -1,3 +1,4 @@
+import { getOuterHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { getWindow } from '../../core/utils/window';
 const window = getWindow();
@@ -29,6 +30,8 @@ const SKIP_GESTURE_EVENT_CLASS = 'dx-skip-gesture-event';
 const SEARCH_EVENT = 'input';
 
 const SEARCH_MODES = ['startswith', 'contains', 'endwith', 'notcontains'];
+
+const useCompositionEvents = devices.real().platform !== 'android';
 
 const DropDownList = DropDownEditor.inherit({
 
@@ -441,7 +444,6 @@ const DropDownList = DropDownEditor.inherit({
 
         this._clearFilter();
         this._clearSelectedItem();
-        this._preventFiltering = true;
     },
 
     _listItemElements: function() {
@@ -483,17 +485,15 @@ const DropDownList = DropDownEditor.inherit({
         this._setAriaTargetForList();
         this._list.option('_listAttributes', { 'role': 'combobox' });
 
-        this._renderPreventBlur(this._$list);
+        this._renderPreventBlurOnListClick();
         this._setListFocusedElementOptionChange();
     },
 
-    _renderPreventBlur: function($target) {
+    _renderPreventBlurOnListClick: function() {
         const eventName = addNamespace('mousedown', 'dxDropDownList');
 
-        eventsEngine.off($target, eventName);
-        eventsEngine.on($target, eventName, function(e) {
-            e.preventDefault();
-        }.bind(this));
+        eventsEngine.off(this._$list, eventName);
+        eventsEngine.on(this._$list, eventName, (e) => e.preventDefault());
     },
 
     _renderOpenedState: function() {
@@ -659,11 +659,13 @@ const DropDownList = DropDownEditor.inherit({
 
         if(this._shouldRenderSearchEvent()) {
             eventsEngine.on(this._input(), this._getSearchEvent(), (e) => { this._searchHandler(e); });
-            eventsEngine.on(this._input(), this._getCompositionStartEvent(), () => { this._isTextCompositionInProgress(true); });
-            eventsEngine.on(this._input(), this._getCompositionEndEvent(), (e) => {
-                this._isTextCompositionInProgress(undefined);
-                this._searchHandler(e, this._searchValue());
-            });
+            if(useCompositionEvents) {
+                eventsEngine.on(this._input(), this._getCompositionStartEvent(), () => { this._isTextCompositionInProgress(true); });
+                eventsEngine.on(this._input(), this._getCompositionEndEvent(), (e) => {
+                    this._isTextCompositionInProgress(undefined);
+                    this._searchHandler(e, this._searchValue());
+                });
+            }
         }
     },
 
@@ -674,8 +676,10 @@ const DropDownList = DropDownEditor.inherit({
     _refreshEvents: function() {
         eventsEngine.off(this._input(), this._getSearchEvent());
         eventsEngine.off(this._input(), this._getSetFocusPolicyEvent());
-        eventsEngine.off(this._input(), this._getCompositionStartEvent());
-        eventsEngine.off(this._input(), this._getCompositionEndEvent());
+        if(useCompositionEvents) {
+            eventsEngine.off(this._input(), this._getCompositionStartEvent());
+            eventsEngine.off(this._input(), this._getCompositionEndEvent());
+        }
 
         this.callBase();
     },
@@ -824,9 +828,9 @@ const DropDownList = DropDownEditor.inherit({
         const $element = this.$element();
         const $customBoundaryContainer = this._$customBoundaryContainer;
         const offsetTop = $element.offset().top - ($customBoundaryContainer ? $customBoundaryContainer.offset().top : 0);
-        const windowHeight = $(window).outerHeight();
-        const containerHeight = $customBoundaryContainer ? Math.min($customBoundaryContainer.outerHeight(), windowHeight) : windowHeight;
-        const maxHeight = Math.max(offsetTop, containerHeight - offsetTop - $element.outerHeight());
+        const windowHeight = getOuterHeight(window);
+        const containerHeight = $customBoundaryContainer ? Math.min(getOuterHeight($customBoundaryContainer), windowHeight) : windowHeight;
+        const maxHeight = Math.max(offsetTop, containerHeight - offsetTop - getOuterHeight($element));
 
         return Math.min(containerHeight * 0.5, maxHeight);
     },

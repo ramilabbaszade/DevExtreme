@@ -1,5 +1,6 @@
 import {
   Component, ComponentBindings, JSXComponent, OneWay, TwoWay, Event,
+  RefObject, Ref, Method, Mutable, Effect,
 } from '@devextreme-generator/declarations';
 import LegacyCalendar from '../../../ui/calendar';
 import { DomComponentWrapper } from '../common/dom_component_wrapper';
@@ -9,13 +10,16 @@ import { BaseWidgetProps } from '../common/base_props';
 function today(): Date { return new Date(); }
 
 export const viewFunction = ({
-  props,
+  componentProps,
   restAttributes,
+  domComponentWrapperRef,
 }: Calendar): JSX.Element => (
   <DomComponentWrapper
     componentType={LegacyCalendar}
-    componentProps={props}
-  // eslint-disable-next-line react/jsx-props-no-spreading
+    componentProps={componentProps}
+    templateNames={['cellTemplate']}
+    ref={domComponentWrapperRef}
+    // eslint-disable-next-line react/jsx-props-no-spreading
     {...restAttributes}
   />
 );
@@ -45,4 +49,23 @@ export class CalendarProps extends BaseWidgetProps {
   defaultOptionRules: null,
   view: viewFunction,
 })
-export class Calendar extends JSXComponent<CalendarProps>() { }
+export class Calendar extends JSXComponent<CalendarProps>() {
+  @Ref() domComponentWrapperRef!: RefObject<DomComponentWrapper>;
+
+  @Mutable() instance!: { focus };
+
+  @Effect()
+  saveInstance(): void {
+    this.instance = this.domComponentWrapperRef.current?.getInstance() as unknown as { focus };
+  }
+
+  @Method()
+  focus(): void {
+    this.instance?.focus();
+  }
+
+  /* istanbul ignore next: WA for Angular */
+  get componentProps(): CalendarProps {
+    return this.props;
+  }
+}

@@ -2,15 +2,13 @@ import $ from 'jquery';
 import 'ui/file_manager';
 import FileUploader from 'ui/file_uploader';
 import fx from 'animation/fx';
-import renderer from 'core/renderer';
-import browser from 'core/utils/browser';
-import { compare as compareVersion } from 'core/utils/version';
 import CustomFileSystemProvider from 'file_management/custom_provider';
 import ErrorCode from 'file_management/error_codes';
 import { Consts, FileManagerWrapper, FileManagerProgressPanelWrapper, createTestFileSystem, createUploaderFiles, stubFileReader, getDropFileEvent } from '../../../helpers/fileManagerHelpers.js';
 import NoDuplicatesFileProvider from '../../../helpers/fileManager/file_provider.no_duplicates.js';
 import SlowFileProvider from '../../../helpers/fileManager/file_provider.slow.js';
 import { CLICK_EVENT } from '../../../helpers/grid/keyboardNavigationHelper.js';
+import { implementationsMap } from 'core/utils/size';
 
 
 const { test } = QUnit;
@@ -99,6 +97,7 @@ QUnit.module('Editing operations', moduleConfig, () => {
 
         $input.val('TestFolder 1').trigger('change');
 
+        $input.trigger($.Event('keydown', { key: 'enter' }));
         $input.trigger($.Event('keyup', { key: 'enter' }));
         this.clock.tick(400);
 
@@ -169,6 +168,7 @@ QUnit.module('Editing operations', moduleConfig, () => {
 
         $input.val('Test 4').trigger('change');
 
+        $input.trigger($.Event('keydown', { key: 'enter' }));
         $input.trigger($.Event('keyup', { key: 'enter' }));
         this.clock.tick(400);
 
@@ -707,38 +707,55 @@ QUnit.module('Editing operations', moduleConfig, () => {
 
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible in initail state');
 
-        itemViewPanel.trigger('dragenter');
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragenter');
         assert.roughEqual(dropZonePlaceholder.offset().top, itemViewPanel.offset().top, 0.02, 'drop zone has correct offset');
         assert.roughEqual(dropZonePlaceholder.offset().left, itemViewPanel.offset().left, 0.02, 'drop zone has correct offset');
         assert.ok(dropZonePlaceholder.is(':visible'), 'drop zone is visible');
 
-        itemViewPanel.trigger('dragleave');
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragleave');
+        assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible');
+    });
+
+    test('upload drop zone must hide on dragleave at the left edge (splitter issue)', function(assert) {
+        const itemViewPanel = this.wrapper.getItemsViewPanel();
+        const dropZonePlaceholder = this.wrapper.getUploaderDropZonePlaceholder();
+
+        assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible in initail state');
+
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragenter');
+        assert.roughEqual(dropZonePlaceholder.offset().top, itemViewPanel.offset().top, 0.02, 'drop zone has correct offset');
+        assert.roughEqual(dropZonePlaceholder.offset().left, itemViewPanel.offset().left, 0.02, 'drop zone has correct offset');
+        assert.ok(dropZonePlaceholder.is(':visible'), 'drop zone is visible');
+
+        const splitterHalfWidth = parseFloat(this.wrapper.getSplitter().css('margin-left'));
+
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragleave', { top: 1, left: splitterHalfWidth - 1 });
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible');
     });
 
     test('upload drop zone does not hide on drag interaction', function(assert) {
         const itemViewPanel = this.wrapper.getItemsViewPanel();
-        const detailsItemRow = $(this.wrapper.getRowsInDetailsView()[0]);
+        const detailsItemNameCell = $(this.wrapper.getDetailsCell('Name', 1));
         const dropZonePlaceholder = this.wrapper.getUploaderDropZonePlaceholder();
 
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible in initail state');
 
-        itemViewPanel.trigger('dragenter');
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragenter');
         assert.roughEqual(dropZonePlaceholder.offset().top, itemViewPanel.offset().top, 0.02, 'drop zone has correct offset');
         assert.roughEqual(dropZonePlaceholder.offset().left, itemViewPanel.offset().left, 0.02, 'drop zone has correct offset');
         assert.ok(dropZonePlaceholder.is(':visible'), 'drop zone is visible');
 
-        detailsItemRow.trigger('dragenter');
+        this.wrapper.triggerDragEvent(detailsItemNameCell, 'dragenter');
         assert.roughEqual(dropZonePlaceholder.offset().top, itemViewPanel.offset().top, 0.02, 'drop zone has correct offset');
         assert.roughEqual(dropZonePlaceholder.offset().left, itemViewPanel.offset().left, 0.02, 'drop zone has correct offset');
         assert.ok(dropZonePlaceholder.is(':visible'), 'drop zone is visible');
 
-        detailsItemRow.trigger('dragleave');
+        this.wrapper.triggerDragEvent(detailsItemNameCell, 'dragleave');
         assert.roughEqual(dropZonePlaceholder.offset().top, itemViewPanel.offset().top, 0.02, 'drop zone has correct offset');
         assert.roughEqual(dropZonePlaceholder.offset().left, itemViewPanel.offset().left, 0.02, 'drop zone has correct offset');
         assert.ok(dropZonePlaceholder.is(':visible'), 'drop zone is visible');
 
-        itemViewPanel.trigger('dragleave');
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragleave');
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible');
     });
 
@@ -791,10 +808,10 @@ QUnit.module('Editing operations', moduleConfig, () => {
 
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible in initail state');
 
-        itemViewPanel.trigger('dragenter');
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragenter');
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible');
 
-        itemViewPanel.trigger('dragleave');
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragleave');
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible');
 
         fileManager.option('permissions.upload', true);
@@ -805,12 +822,12 @@ QUnit.module('Editing operations', moduleConfig, () => {
 
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible in initail state');
 
-        itemViewPanel.trigger('dragenter');
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragenter');
         assert.roughEqual(dropZonePlaceholder.offset().top, itemViewPanel.offset().top, 0.02, 'drop zone has correct offset');
         assert.roughEqual(dropZonePlaceholder.offset().left, itemViewPanel.offset().left, 0.02, 'drop zone has correct offset');
         assert.ok(dropZonePlaceholder.is(':visible'), 'drop zone is visible');
 
-        itemViewPanel.trigger('dragleave');
+        this.wrapper.triggerDragEvent(itemViewPanel, 'dragleave');
         assert.notOk(dropZonePlaceholder.is(':visible'), 'drop zone is invisible');
     });
 
@@ -1276,8 +1293,8 @@ QUnit.module('Editing operations', moduleConfig, () => {
     });
 
     test('parent and all of selected folders must be disabled: copy folders in files area via toolbar (T939043)', function(assert) {
-        const originalFunc = renderer.fn.width;
-        renderer.fn.width = () => 1200;
+        const originalFunc = implementationsMap.getWidth;
+        implementationsMap.getWidth = () => 1200;
 
         this.$element.dxFileManager('option', {
             selectionMode: 'multiple',
@@ -1305,14 +1322,10 @@ QUnit.module('Editing operations', moduleConfig, () => {
         assert.ok($folderNodes.eq(2).is(':visible'), '\'Folder 2\' node is visible');
         assert.notOk($folderNodes.eq(3).is(`.${Consts.DISABLED_STATE_CLASS}`), '\'Folder 3\' node is enabled');
         assert.ok($folderNodes.eq(3).is(':visible'), '\'Folder 3\' node is visible');
-        renderer.fn.width = originalFunc;
+        implementationsMap.getWidth = originalFunc;
     });
 
     test('parent and selected folders must be disabled: copy folder in deep location (T939043)', function(assert) {
-        if(browser.msie && compareVersion($.fn.jquery, [3], 1) === 0) {
-            assert.ok(true, 'This test not for IE + jQuery 3.x');
-            return;
-        }
         this.$element.dxFileManager('option', {
             currentPath: 'Folder 1/Folder 1.1/Folder 1.1.1/Folder 1.1.1.1',
             itemView: {
@@ -1353,10 +1366,6 @@ QUnit.module('Editing operations', moduleConfig, () => {
     });
 
     test('parent and selected folders must be disabled and selected folder must be collapsed: copy folder in deep location (T939043)', function(assert) {
-        if(browser.msie && compareVersion($.fn.jquery, [3], 1) === 0) {
-            assert.ok(true, 'This test not for IE + jQuery 3.x');
-            return;
-        }
         this.$element.dxFileManager('option', {
             currentPath: 'Folder 1/Folder 1.1/Folder 1.1.1/Folder 1.1.1.1',
             itemView: {
@@ -1506,10 +1515,6 @@ QUnit.module('Editing operations', moduleConfig, () => {
     });
 
     test('treeView must update expand node icons on folder move - detailsView (T946436)', function(assert) {
-        if(browser.msie && compareVersion($.fn.jquery, [3], 1) === 0) {
-            assert.ok(true, 'This test not for IE + jQuery 3.x');
-            return;
-        }
         const operationDelay = 400;
         this.fileManager.option({
             fileSystemProvider: new SlowFileProvider({
@@ -1548,10 +1553,6 @@ QUnit.module('Editing operations', moduleConfig, () => {
     });
 
     test('treeView must update expand node icons on folder move - thumbnailsView (T946436)', function(assert) {
-        if(browser.msie && compareVersion($.fn.jquery, [3], 1) === 0) {
-            assert.ok(true, 'This test not for IE + jQuery 3.x');
-            return;
-        }
         const operationDelay = 400;
         this.fileManager.option({
             fileSystemProvider: new SlowFileProvider({
@@ -1591,10 +1592,6 @@ QUnit.module('Editing operations', moduleConfig, () => {
     });
 
     test('treeView must update expand node icons on folder create - treeView (T946436)', function(assert) {
-        if(browser.msie && compareVersion($.fn.jquery, [3], 1) === 0) {
-            assert.ok(true, 'This test not for IE + jQuery 3.x');
-            return;
-        }
         const operationDelay = 400;
         this.fileManager.option({
             fileSystemProvider: new SlowFileProvider({
@@ -1736,8 +1733,8 @@ QUnit.module('Editing operations', moduleConfig, () => {
     });
 
     test('it should not be possible to invoke move/copy dialog for treeView folders (T1004864)', function(assert) {
-        const originalFunc = renderer.fn.width;
-        renderer.fn.width = () => 1200;
+        const originalFunc = implementationsMap.getWidth;
+        implementationsMap.getWidth = () => 1200;
 
         this.$element.dxFileManager('option', {
             selectionMode: 'multiple',
@@ -1777,6 +1774,39 @@ QUnit.module('Editing operations', moduleConfig, () => {
         assert.strictEqual(this.wrapper.isFolderNodeToggleOpened('Folder 3', true), null, '\'Folder 3\' toggle is absent');
 
         this.wrapper.getDialogButton('Cancel').trigger('dxclick');
-        renderer.fn.width = originalFunc;
+        implementationsMap.getWidth = originalFunc;
+    });
+
+    test('create folder by Enter in dialog input - issue with IME compositionEnd for Chinese (T1024643)', function(assert) {
+        this.wrapper.getToolbarButton('New directory').trigger('dxclick');
+        this.clock.tick(400);
+
+        const $input = this.wrapper.getDialogTextInput();
+        assert.ok($input.has(':focus'), 'dialog\'s input element should be focused');
+        assert.strictEqual($input.val(), 'Untitled directory', 'input has default value');
+
+        $input.val('Test 4').trigger('change');
+
+        const fileManager = this.wrapper.getInstance();
+        const createItemDialog = fileManager._editing._dialogManager._createItemDialog;
+        assert.strictEqual(createItemDialog._hasCompositionJustEnded, undefined, 'composition not yet started');
+
+        $input.trigger($.Event('keydown', { key: 'enter' }));
+        $input.trigger($.Event('keyup', { key: 'enter' }));
+        this.clock.tick(400);
+
+        assert.strictEqual(createItemDialog._hasCompositionJustEnded, true, 'compositionEnded successfully');
+
+        const $folderNode = this.wrapper.getFolderNode(4);
+        assert.strictEqual($folderNode.find('span').text(), 'Test 4', 'folder created');
+        assert.strictEqual(this.wrapper.getFocusedItemText(), 'Files', 'root folder selected');
+    });
+
+    test('the entire widget must not be repainted when the permissions option changed (T1051605)', function(assert) {
+        const fileManager = this.wrapper.getInstance();
+        const initMarkupSpy = sinon.stub(fileManager, '_initMarkup');
+        assert.ok(initMarkupSpy.notCalled, '_initMarkup not called yet');
+        fileManager.option('permissions', { copy: true });
+        assert.ok(initMarkupSpy.notCalled, '_initMarkup not called yet');
     });
 });

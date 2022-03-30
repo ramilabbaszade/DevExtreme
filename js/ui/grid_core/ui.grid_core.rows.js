@@ -1,3 +1,4 @@
+import { getHeight, getOuterHeight, getWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { getWindow, hasWindow } from '../../core/utils/window';
 import eventsEngine from '../../events/core/events_engine';
@@ -12,10 +13,9 @@ import { compileGetter } from '../../core/utils/data';
 import gridCoreUtils from './ui.grid_core.utils';
 import { ColumnsView } from './ui.grid_core.columns_view';
 import Scrollable from '../scroll_view/ui.scrollable';
-import { removeEvent } from '../../core/remove_event';
+import { removeEvent } from '../../events/remove';
 import messageLocalization from '../../localization/message';
 import browser from '../../core/utils/browser';
-import getScrollRtlBehavior from '../../core/utils/scroll_rtl_behavior';
 
 const ROWS_VIEW_CLASS = 'rowsview';
 const CONTENT_CLASS = 'content';
@@ -55,7 +55,7 @@ export const rowsModule = {
                 indicatorSrc: '',
                 showPane: true
             },
-            rowTemplate: null,
+            dataRowTemplate: null,
             columnAutoWidth: false,
             noDataText: messageLocalization.format('dxDataGrid-noDataText'),
             wordWrapEnabled: false,
@@ -151,7 +151,7 @@ export const rowsModule = {
                 },
 
                 _createRow: function(row) {
-                    const $row = this.callBase(row);
+                    const $row = this.callBase.apply(this, arguments);
 
                     if(row) {
                         const isGroup = row.rowType === 'group';
@@ -270,7 +270,7 @@ export const rowsModule = {
                         this._scrollRight = getMaxHorizontalScrollOffset(e.component) - this._scrollLeft;
 
                         if(isNativeScrolling) {
-                            scrollLeft = getScrollRtlBehavior().positive ? this._scrollRight : -this._scrollRight;
+                            scrollLeft = -this._scrollRight;
                         }
 
                         if(!this.isScrollbarVisible(true)) {
@@ -540,13 +540,16 @@ export const rowsModule = {
                             };
                         }
 
-                        this._renderCell($row, {
-                            value: isExpanded,
-                            row: row,
-                            rowIndex: rowIndex,
-                            column: expandColumn,
-                            columnIndex: i
-                        });
+                        if(this._needRenderCell(i, options.columnIndices)) {
+                            this._renderCell($row, {
+                                value: isExpanded,
+                                row: row,
+                                rowIndex: rowIndex,
+                                column: expandColumn,
+                                columnIndex: i,
+                                columnIndices: options.columnIndices
+                            });
+                        }
                     }
 
                     const groupColumnAlignment = getDefaultAlignment(this.option('rtlEnabled'));
@@ -556,6 +559,7 @@ export const rowsModule = {
                         columns[groupCellOptions.columnIndex],
                         {
                             command: null,
+                            type: null,
                             cssClass: null,
                             width: null,
                             showWhenGrouped: false,
@@ -567,13 +571,16 @@ export const rowsModule = {
                         groupColumn.colspan = groupCellOptions.colspan;
                     }
 
-                    this._renderCell($row, {
-                        value: row.values[row.groupIndex],
-                        row: row,
-                        rowIndex: rowIndex,
-                        column: groupColumn,
-                        columnIndex: groupCellOptions.columnIndex
-                    });
+                    if(this._needRenderCell(groupCellOptions.columnIndex + 1, options.columnIndices)) {
+                        this._renderCell($row, {
+                            value: row.values[row.groupIndex],
+                            row: row,
+                            rowIndex: rowIndex,
+                            column: groupColumn,
+                            columnIndex: groupCellOptions.columnIndex + 1,
+                            columnIndices: options.columnIndices
+                        });
+                    }
                 },
 
                 _renderRows: function($table, options) {
@@ -592,15 +599,26 @@ export const rowsModule = {
                     }
                 },
 
-                _renderRow: function($table, options) {
-                    const that = this;
+                _renderDataRowByTemplate($table, options, dataRowTemplate) {
                     const row = options.row;
-                    const rowTemplate = that.option('rowTemplate');
+                    const rowOptions = extend({ columns: options.columns }, row);
+                    const $tbody = this._createRow(row, 'tbody');
+                    $tbody.appendTo($table);
+                    this.renderTemplate($tbody, dataRowTemplate, rowOptions, true, options.change);
+                    this._rowPrepared($tbody, rowOptions, options.row);
+                },
 
-                    if((row.rowType === 'data' || row.rowType === 'group') && !isDefined(row.groupIndex) && rowTemplate) {
-                        that.renderTemplate($table, rowTemplate, extend({ columns: options.columns }, row), true);
+                _renderRow: function($table, options) {
+                    const row = options.row;
+                    const rowTemplate = this.option().rowTemplate;
+                    const dataRowTemplate = this.option('dataRowTemplate');
+
+                    if(row.rowType === 'data' && dataRowTemplate) {
+                        this._renderDataRowByTemplate($table, options, dataRowTemplate);
+                    } else if((row.rowType === 'data' || row.rowType === 'group') && !isDefined(row.groupIndex) && rowTemplate) {
+                        this.renderTemplate($table, rowTemplate, extend({ columns: options.columns }, row), true);
                     } else {
-                        that.callBase($table, options);
+                        this.callBase($table, options);
                     }
                 },
 
@@ -629,7 +647,7 @@ export const rowsModule = {
                 _createTable: function() {
                     const $table = this.callBase.apply(this, arguments);
 
-                    if(this.option('rowTemplate')) {
+                    if(this.option().rowTemplate || this.option().dataRowTemplate) {
                         $table.appendTo(this.component.$element());
                     }
 
@@ -637,20 +655,19 @@ export const rowsModule = {
                 },
 
                 _renderCore: function(change) {
-                    const that = this;
-                    const $element = that.element();
+                    const $element = this.element();
 
-                    $element.addClass(that.addWidgetPrefix(ROWS_VIEW_CLASS)).toggleClass(that.addWidgetPrefix(NOWRAP_CLASS), !that.option('wordWrapEnabled'));
-                    $element.toggleClass(EMPTY_CLASS, that._dataController.items().length === 0);
+                    $element.addClass(this.addWidgetPrefix(ROWS_VIEW_CLASS)).toggleClass(this.addWidgetPrefix(NOWRAP_CLASS), !this.option('wordWrapEnabled'));
+                    $element.toggleClass(EMPTY_CLASS, this._dataController.isEmpty());
 
-                    that.setAria('role', 'presentation', $element);
+                    this.setAria('role', 'presentation', $element);
 
-                    const $table = that._renderTable({ change: change });
-                    that._updateContent($table, change);
+                    const $table = this._renderTable({ change: change });
+                    this._updateContent($table, change);
 
-                    that.callBase(change);
+                    this.callBase(change);
 
-                    that._lastColumnWidths = null;
+                    this._lastColumnWidths = null;
                 },
 
                 _getRows: function(change) {
@@ -780,8 +797,8 @@ export const rowsModule = {
                                 freeSpaceRowElements.hide();
                                 deferUpdate(() => {
                                     const scrollbarWidth = this.getScrollbarWidth(true);
-                                    const elementHeightWithoutScrollbar = this.element().height() - scrollbarWidth;
-                                    const contentHeight = contentElement.outerHeight();
+                                    const elementHeightWithoutScrollbar = getHeight(this.element()) - scrollbarWidth;
+                                    const contentHeight = getOuterHeight(contentElement);
                                     const showFreeSpaceRow = (elementHeightWithoutScrollbar - contentHeight) > 0;
                                     const rowsHeight = this._getRowsHeight(contentElement.children().first());
                                     const $tableElement = $table || this.getTableElements();
@@ -874,7 +891,7 @@ export const rowsModule = {
                 },
 
                 contentWidth: function() {
-                    return this.element().width() - this.getScrollbarWidth();
+                    return getWidth(this.element()) - this.getScrollbarWidth();
                 },
 
                 getScrollbarWidth: function(isHorizontal) {
@@ -974,7 +991,7 @@ export const rowsModule = {
                     const $element = this.element();
 
                     if(arguments.length === 0) {
-                        return $element ? $element.outerHeight(true) : 0;
+                        return $element ? getOuterHeight($element, true) : 0;
                     }
 
                     that._hasHeight = hasHeight === undefined ? height !== 'auto' : hasHeight;
@@ -1006,6 +1023,9 @@ export const rowsModule = {
                             animation: animation,
                             visible: isLoading
                         };
+                        if(isLoading) {
+                            visibilityOptions.position = gridCoreUtils.calculateLoadPanelPosition($element);
+                        }
                         clearTimeout(that._hideLoadingTimeoutID);
                         if(loadPanel.option('visible') && !isLoading) {
                             that._hideLoadingTimeoutID = setTimeout(function() {
@@ -1034,28 +1054,37 @@ export const rowsModule = {
                     return $cells;
                 },
 
-                getTopVisibleItemIndex: function(isFloor) {
+                _getBoundaryVisibleItemIndex: function(isTop, isFloor) {
                     const that = this;
                     let itemIndex = 0;
-                    let prevOffsetTop = 0;
-                    let offsetTop = 0;
-                    const scrollPosition = that._scrollTop;
+                    let prevOffset = 0;
+                    let offset = 0;
+                    let viewportBoundary = that._scrollTop;
                     const $contentElement = that._findContentElement();
                     const contentElementOffsetTop = $contentElement && $contentElement.offset().top;
-                    const items = that._dataController.items();
+                    const dataController = this.getController('data');
+                    const items = dataController.items();
                     const tableElement = that.getTableElement();
 
                     if(items.length && tableElement) {
                         const rowElements = that._getRowElements(tableElement).filter(':visible');
 
+                        if(!isTop) {
+                            const height = this._hasHeight ? getOuterHeight(this.element()) : $(getWindow()).outerHeight();
+
+                            viewportBoundary += height;
+                        }
+
                         for(itemIndex = 0; itemIndex < items.length; itemIndex++) {
-                            prevOffsetTop = offsetTop;
-                            const rowElement = rowElements.eq(itemIndex);
-                            if(rowElement.length) {
-                                offsetTop = rowElement.offset().top - contentElementOffsetTop;
-                                if(offsetTop > scrollPosition) {
+                            prevOffset = offset;
+                            const $rowElement = $(rowElements).eq(itemIndex);
+                            if($rowElement.length) {
+                                offset = $rowElement.offset();
+                                offset = (isTop ? offset.top : offset.top + getOuterHeight($rowElement)) - contentElementOffsetTop;
+
+                                if(offset > viewportBoundary) {
                                     if(itemIndex) {
-                                        if(isFloor || scrollPosition * 2 < Math.round(offsetTop + prevOffsetTop)) {
+                                        if(isFloor || viewportBoundary * 2 < Math.round(offset + prevOffset)) {
                                             itemIndex--;
                                         }
                                     }
@@ -1069,6 +1098,14 @@ export const rowsModule = {
                     }
 
                     return itemIndex;
+                },
+
+                getTopVisibleItemIndex: function(isFloor) {
+                    return this._getBoundaryVisibleItemIndex(true, isFloor);
+                },
+
+                getBottomVisibleItemIndex: function(isFloor) {
+                    return this._getBoundaryVisibleItemIndex(false, isFloor);
                 },
 
                 getTopVisibleRowData: function() {
@@ -1096,6 +1133,7 @@ export const rowsModule = {
                         case 'showRowLines':
                         case 'rowAlternationEnabled':
                         case 'rowTemplate':
+                        case 'dataRowTemplate':
                         case 'twoWayBindingEnabled':
                             that._invalidate(true, true);
                             args.handled = true;

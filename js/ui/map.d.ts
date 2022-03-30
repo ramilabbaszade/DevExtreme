@@ -14,7 +14,7 @@ import Widget, {
 } from './widget/ui.widget';
 
 /** @public */
-export type ClickEvent = NativeEventInfo<dxMap>;
+export type ClickEvent = NativeEventInfo<dxMap, MouseEvent | PointerEvent>;
 
 /** @public */
 export type DisposingEvent = EventInfo<dxMap>;
@@ -127,33 +127,9 @@ export interface dxMapOptions extends WidgetOptions<dxMap> {
     /**
      * @docid
      * @default 300
-     * @type_function_return number|string
      * @public
      */
     height?: number | string | (() => number | string);
-    /**
-     * @docid
-     * @default { bing: '', google: '', googleStatic: '' }
-     * @public
-     * @deprecated dxMapOptions.apiKey
-     */
-    key?: string | {
-      /**
-       * @docid
-       * @default ""
-       */
-      bing?: string;
-      /**
-       * @docid
-       * @default ""
-       */
-      google?: string;
-      /**
-       * @docid
-       * @default ""
-       */
-      googleStatic?: string;
-    };
     /**
      * @docid
      * @public
@@ -198,6 +174,7 @@ export interface dxMapOptions extends WidgetOptions<dxMap> {
     /**
      * @docid
      * @default null
+     * @type function
      * @type_function_param1 e:object
      * @type_function_param1_field4 location:object
      * @type_function_param1_field5 event:event
@@ -322,7 +299,6 @@ export interface dxMapOptions extends WidgetOptions<dxMap> {
     /**
      * @docid
      * @default 300
-     * @type_function_return number|string
      * @public
      */
     width?: number | string | (() => number | string);
@@ -337,8 +313,6 @@ export interface dxMapOptions extends WidgetOptions<dxMap> {
 /**
  * @docid
  * @inherits Widget
- * @module ui/map
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -382,6 +356,3 @@ export type Properties = dxMapOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxMapOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxMapOptions;

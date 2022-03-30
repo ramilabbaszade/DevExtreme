@@ -1,12 +1,13 @@
 import $ from 'jquery';
 import { Component } from 'core/component';
 import OldEditor from 'ui/editor/editor';
-import NewEditor from 'renovation/ui/editors/internal/editor.j';
+import NewEditor from 'renovation/ui/editors/common/editor.j';
 import Class from 'core/class';
 import ValidationEngine from 'ui/validation_engine';
 import hoverEvents from 'events/hover';
 import { wrapRenovatedWidget } from '../../helpers/wrapRenovatedWidget.js';
 import Validator from 'ui/validator';
+import { getOuterWidth } from 'core/utils/size';
 
 import 'generic_light.css!';
 
@@ -257,6 +258,58 @@ QUnit.module('validation', {
         assert.ok(this.editor.$element().hasClass(INVALID_VALIDATION_CLASS), 'editor is invalid');
     });
 
+    QUnit.test('should change "isValid" option if "validationStatus" option is defined on init', function(assert) {
+        this.reinitEditor({ validationStatus: 'invalid' });
+
+        assert.strictEqual(this.editor.option('isValid'), false, 'isValid option is changed');
+    });
+
+    QUnit.test('should change "validationStatus" option if "isValid" option is defined on init', function(assert) {
+        this.reinitEditor({ isValid: false });
+
+        assert.strictEqual(this.editor.option('validationStatus'), 'invalid', 'validationStatus option is changed');
+    });
+
+    QUnit.test('should change "isValid" option if "validationStatus" option is changed on runtime', function(assert) {
+        this.reinitEditor({});
+        this.editor.option({ validationStatus: 'invalid' });
+
+        assert.strictEqual(this.editor.option('isValid'), false, 'isValid option is changed');
+    });
+
+    QUnit.test('should change "validationStatus" option if "isValid" option is changed on runtime', function(assert) {
+        this.reinitEditor({});
+        this.editor.option({ isValid: false });
+
+        assert.strictEqual(this.editor.option('validationStatus'), 'invalid', 'validationStatus option is changed');
+    });
+
+    QUnit.test('should change "validationErrors" option if "validationError" option is defined on init', function(assert) {
+        this.reinitEditor({ validationError: { message: 'error' } });
+
+        assert.strictEqual(this.editor.option('validationErrors')[0].message, 'error', 'validationErrors option is changed');
+    });
+
+    QUnit.test('should change "validationError" option if "validationErrors" option is defined on init', function(assert) {
+        this.reinitEditor({ validationErrors: [{ message: 'error' }] });
+
+        assert.strictEqual(this.editor.option('validationError').message, 'error', 'validationError option is changed');
+    });
+
+    QUnit.test('should change "validationErrors" option if "validationError" option is changed on runtime', function(assert) {
+        this.reinitEditor({});
+        this.editor.option({ validationError: { message: 'error' } });
+
+        assert.strictEqual(this.editor.option('validationErrors')[0].message, 'error', 'validationErrors option is changed');
+    });
+
+    QUnit.test('should change "validationError" option if "validationErrors" option is changed on runtime', function(assert) {
+        this.reinitEditor({});
+        this.editor.option({ validationErrors: [{ message: 'error' }] });
+
+        assert.strictEqual(this.editor.option('validationError').message, 'error', 'validationError option is changed');
+    });
+
     QUnit.test('validator integration', function(assert) {
         this.reinitEditor({ value: '1' });
         new Validator(this.editor.$element(), {
@@ -298,7 +351,7 @@ QUnit.module('validation', {
             this.reinitEditor({
                 isValid: true,
                 validationError: {
-                    message: ''
+                    message: 'some'
                 },
                 validationStatus: 'pending'
             });
@@ -320,7 +373,7 @@ QUnit.module('validation', {
                     validationMessageMode: 'always',
                     isValid: false,
                     validationError: {
-                        message: ''
+                        message: 'some'
                     }
                 });
                 const validationMessage = this.getValidationMessage();
@@ -329,6 +382,34 @@ QUnit.module('validation', {
 
                 this.editor.option('validationMessageMode', 'auto');
                 assert.strictEqual(validationMessage.option('mode'), 'auto', 'validationMessage has correct "mode" option after option change');
+            });
+
+            QUnit.test('validationMessage should be updated after validationError option runtime change', function(assert) {
+                this.reinitEditor({
+                    isValid: true,
+                    validationError: {
+                        message: '1'
+                    },
+                    validationStatus: 'invalid'
+                });
+
+                this.editor.option({ validationError: { message: '2' } });
+                const message = this.getValidationMessage().$content().text();
+                assert.strictEqual(message, '2', 'validation message is updated');
+            });
+
+            QUnit.test('validationMessage should be updated after validationErrors option runtime change', function(assert) {
+                this.reinitEditor({
+                    isValid: true,
+                    validationError: {
+                        message: '2'
+                    },
+                    validationStatus: 'invalid'
+                });
+
+                this.editor.option({ validationErrors: [{ message: '3' }] });
+                const message = this.getValidationMessage().$content().text();
+                assert.strictEqual(message, '3', 'validation message is updated');
             });
 
             if(!Editor.IS_RENOVATED_WIDGET) {
@@ -393,7 +474,7 @@ QUnit.module('validation', {
                         this.reinitEditor({
                             isValid: false,
                             validationError: {
-                                message: ''
+                                message: 'Message'
                             },
                             validationMessageOffset: offset
                         });
@@ -488,7 +569,7 @@ QUnit.module('validation', {
                 });
 
                 const $validationMessage = this.getValidationMessageElement();
-                assert.strictEqual($validationMessage.outerWidth(), width, 'validation message width is correct');
+                assert.strictEqual(getOuterWidth($validationMessage), width, 'validation message width is correct');
             });
 
             QUnit.test('should be equal to editor width after property runtime change', function(assert) {
@@ -496,7 +577,7 @@ QUnit.module('validation', {
                 this.editor.option('width', width);
 
                 const $validationMessage = this.getValidationMessageElement();
-                assert.strictEqual($validationMessage.outerWidth(), width, 'validation message width is correct');
+                assert.strictEqual(getOuterWidth($validationMessage), width, 'validation message width is correct');
             });
 
             QUnit.test('should be correct for small content', function(assert) {
@@ -510,9 +591,9 @@ QUnit.module('validation', {
                 });
 
                 const $content = this.getValidationMessage().$content();
-                const contentWidth = $content.outerWidth();
+                const contentWidth = getOuterWidth($content);
 
-                assert.strictEqual($content.css('width', 'auto').outerWidth(), contentWidth, 'validation message width is correct');
+                assert.strictEqual(getOuterWidth($content.css('width', 'auto')), contentWidth, 'validation message width is correct');
             });
 
             QUnit.test('should be min 100px if the editor has smaller size (T376114)', function(assert) {
@@ -526,7 +607,7 @@ QUnit.module('validation', {
                 });
                 const $content = this.getValidationMessage().$content();
 
-                assert.strictEqual($content.outerWidth(), 100, 'the validation message width is correct');
+                assert.strictEqual(getOuterWidth($content), 100, 'the validation message width is correct');
             });
 
             QUnit.test('should be equal to width in visible area after render in hidden area', function(assert) {
@@ -549,7 +630,7 @@ QUnit.module('validation', {
                 $hiddenDiv.css('display', 'block');
 
                 const $validationMessage = this.getValidationMessageElement();
-                assert.strictEqual($validationMessage.outerWidth(), 305, 'overlay width was set correctly');
+                assert.strictEqual(getOuterWidth($validationMessage), 305, 'overlay width was set correctly');
             });
 
             QUnit.test('content width should be less or equal to message width', function(assert) {
@@ -566,7 +647,7 @@ QUnit.module('validation', {
                 const $validationMessage = validationMessage.$content();
                 const $content = validationMessage.$content();
 
-                assert.ok($content.outerWidth() <= $validationMessage.outerWidth(), 'validation message width is correct');
+                assert.ok(getOuterWidth($content) <= getOuterWidth($validationMessage), 'validation message width is correct');
             });
 
             skipForRenovated('update validation message maxWidth on editor width change', () => {
@@ -582,11 +663,11 @@ QUnit.module('validation', {
 
                     this.editor.option('width', 200);
                     let $content = this.getValidationMessage().$content();
-                    assert.strictEqual($content.outerWidth(), 200, 'the validation message width is correct');
+                    assert.strictEqual(getOuterWidth($content), 200, 'the validation message width is correct');
 
                     this.editor.option('width', 80);
                     $content = this.getValidationMessage().$content();
-                    assert.strictEqual($content.outerWidth(), 100, 'the validation message width is correct');
+                    assert.strictEqual(getOuterWidth($content), 100, 'the validation message width is correct');
                 });
             });
         });
@@ -721,6 +802,15 @@ QUnit.module('aria accessibility', moduleConfig, () => {
         editor.option('isValid', true);
         assert.strictEqual($editor.attr('aria-invalid'), expectedFalseValue, 'aria-invalid does not exist in valid state');
         assert.strictEqual($editor.attr('aria-describedby'), undefined, 'aria-describedby does not exist in valid state');
+    });
+
+    QUnit.test('"onMarkupRendered" is called after markup render (for validator integration)', function(assert) {
+        const markupRenderedStub = sinon.stub();
+        this.fixture.createEditor({
+            _onMarkupRendered: markupRenderedStub
+        });
+
+        assert.ok(markupRenderedStub.calledOnce);
     });
 });
 

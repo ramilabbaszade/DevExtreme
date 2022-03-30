@@ -1,6 +1,7 @@
 import HorizontalAppointmentsStrategy from './strategy_horizontal';
 import dateUtils from '../../../../core/utils/date';
 import query from '../../../../data/query';
+import { sortAppointmentsByStartDate } from '../dataProvider/utils';
 
 const HOURS_IN_DAY = 24;
 const MINUTES_IN_HOUR = 60;
@@ -8,9 +9,6 @@ const MILLISECONDS_IN_MINUTE = 60000;
 const ZERO_APPOINTMENT_DURATION_IN_DAYS = 1;
 
 class HorizontalMonthLineRenderingStrategy extends HorizontalAppointmentsStrategy {
-    get viewDataProvider() { return this.options.viewDataProvider; }
-    get appointmentDataProvider() { return this.options.appointmentDataProvider; }
-
     calculateAppointmentWidth(appointment, position) {
         const startDate = dateUtils.trimTime(position.info.appointment.startDate);
         const { normalizedEndDate } = position.info.appointment;
@@ -48,7 +46,7 @@ class HorizontalMonthLineRenderingStrategy extends HorizontalAppointmentsStrateg
 
     createTaskPositionMap(items, skipSorting) {
         if(!skipSorting) {
-            this.appointmentDataProvider.sortAppointmentsByStartDate(items);
+            sortAppointmentsByStartDate(items, this.dataAccessors);
         }
 
         return super.createTaskPositionMap(items);

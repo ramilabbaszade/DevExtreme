@@ -36,7 +36,8 @@ export const dataControllerModule = {
 
                 if(dataSource) {
                     if(value !== undefined) {
-                        if(dataSource[optionName]() !== value) {
+                        const oldValue = that._getPagingOptionValue(optionName);
+                        if(oldValue !== value) {
                             if(optionName === 'pageSize') {
                                 dataSource.pageIndex(0);
                             }
@@ -45,9 +46,9 @@ export const dataControllerModule = {
                             that._skipProcessingPagingChange = true;
                             that.option('paging.' + optionName, value);
                             that._skipProcessingPagingChange = false;
-
+                            const pageIndex = dataSource.pageIndex();
                             return dataSource[optionName === 'pageIndex' ? 'load' : 'reload']()
-                                .done(that.pageChanged.fire.bind(that.pageChanged));
+                                .done(() => that.pageChanged.fire(pageIndex));
                         }
                         return Deferred().resolve().promise();
                     }
@@ -61,6 +62,7 @@ export const dataControllerModule = {
                 init: function() {
                     const that = this;
                     that._items = [];
+                    that._cachedProcessedItems = null;
                     that._columnsController = that.getController('columns');
 
                     that._currentOperationTypes = null;
@@ -74,6 +76,7 @@ export const dataControllerModule = {
                     that._loadErrorHandler = that._handleLoadError.bind(that);
                     that._customizeStoreLoadOptionsHandler = that._handleCustomizeStoreLoadOptions.bind(that);
                     that._changingHandler = that._handleChanging.bind(that);
+                    that._dataPushedHandler = that._handleDataPushed.bind(that);
 
                     that._columnsController.columnsChanged.add(that._columnsChangedHandler);
 
@@ -90,8 +93,11 @@ export const dataControllerModule = {
 
                     that._refreshDataSource();
                 },
+                _getPagingOptionValue: function(optionName) {
+                    return this._dataSource[optionName]();
+                },
                 callbackNames: function() {
-                    return ['changed', 'loadingChanged', 'dataErrorOccurred', 'pageChanged', 'dataSourceChanged'];
+                    return ['changed', 'loadingChanged', 'dataErrorOccurred', 'pageChanged', 'dataSourceChanged', 'pushed'];
                 },
                 callbackFlags: function(name) {
                     if(name === 'dataErrorOccurred') {
@@ -126,6 +132,29 @@ export const dataControllerModule = {
                     this._items = [];
                     this._refreshDataSource();
                 },
+                _handleDataSourceChange(args) {
+                    if(args.value === args.previousValue || (
+                        this.option('columns') &&
+                        Array.isArray(args.value) &&
+                        Array.isArray(args.previousValue)
+                    )) {
+                        const isValueChanged = args.value !== args.previousValue;
+                        if(isValueChanged) {
+                            const store = this.store();
+                            if(store) {
+                                store._array = args.value;
+                            }
+                        }
+
+                        const isParasiteChange = Array.isArray(args.value) && !isValueChanged && this._dataSource?.isLoading();
+                        if(!isParasiteChange) {
+                            this.refresh(this.option('repaintChangesOnly'));
+                        }
+                        return true;
+                    }
+
+                    return false;
+                },
                 optionChanged: function(args) {
                     const that = this;
                     let dataSource;
@@ -134,15 +163,10 @@ export const dataControllerModule = {
                         args.handled = true;
                     }
 
-                    if(args.name === 'dataSource' && args.name === args.fullName && (args.value === args.previousValue || (that.option('columns') && Array.isArray(args.value) && Array.isArray(args.previousValue)))) {
-                        if(args.value !== args.previousValue) {
-                            const store = that.store();
-                            if(store) {
-                                store._array = args.value;
-                            }
-                        }
+                    if(args.name === 'dataSource'
+                        && args.name === args.fullName
+                        && this._handleDataSourceChange(args)) {
                         handled();
-                        that.refresh(that.option('repaintChangesOnly'));
                         return;
                     }
 
@@ -163,7 +187,8 @@ export const dataControllerModule = {
                         case 'paging':
                             dataSource = that.dataSource();
                             if(dataSource && that._setPagingOptions(dataSource)) {
-                                dataSource.load().done(that.pageChanged.fire.bind(that.pageChanged));
+                                const pageIndex = dataSource.pageIndex();
+                                dataSource.load().done(() =>that.pageChanged.fire(pageIndex));
                             }
                             handled();
                             break;
@@ -245,6 +270,12 @@ export const dataControllerModule = {
 
                     storeLoadOptions.filter = this.combinedFilter(storeLoadOptions.filter);
 
+                    if(storeLoadOptions.filter?.length === 1 && storeLoadOptions.filter[0] === '!') {
+                        e.data = [];
+                        e.extra = e.extra || {};
+                        e.extra.totalCount = 0;
+                    }
+
                     if(!columnsController.isDataSourceApplied()) {
                         columnsController.updateColumnDataTypes(dataSource);
                     }
@@ -272,7 +303,10 @@ export const dataControllerModule = {
                     // B255430
                     const updateItemsHandler = function() {
                         that._columnsController.columnsChanged.remove(updateItemsHandler);
-                        that.updateItems();
+                        that.updateItems({
+                            repaintChangesOnly: false,
+                            virtualColumnsScrolling: e.changeTypes.virtualColumnsScrolling
+                        });
                     };
 
                     if(changeTypes.sorting || changeTypes.grouping) {
@@ -364,6 +398,9 @@ export const dataControllerModule = {
                 _handleLoadError: function(e) {
                     this.dataErrorOccurred.fire(e);
                 },
+                _handleDataPushed: function(changes) {
+                    this.pushed.fire(changes);
+                },
                 fireError: function() {
                     this.dataErrorOccurred.fire(errors.Error.apply(errors, arguments));
                 },
@@ -416,6 +453,7 @@ export const dataControllerModule = {
                     that.callBase();
                     dataSource = that._dataSource;
                     that._useSortingGroupingFromColumns = true;
+                    that._cachedProcessedItems = null;
                     if(dataSource) {
                         that._setPagingOptions(dataSource);
                         that.setDataSource(dataSource);
@@ -626,22 +664,31 @@ export const dataControllerModule = {
                     return false;
                 },
                 _getChangedColumnIndices: function(oldItem, newItem, visibleRowIndex, isLiveUpdate) {
-                    if(oldItem.rowType === newItem.rowType && newItem.rowType !== 'group' && newItem.rowType !== 'groupFooter') {
-                        const columnIndices = [];
+                    let columnIndices;
+                    if(oldItem.rowType === newItem.rowType) {
+                        if(newItem.rowType !== 'group' && newItem.rowType !== 'groupFooter') {
+                            columnIndices = [];
 
-                        if(newItem.rowType !== 'detail') {
-                            for(let columnIndex = 0; columnIndex < oldItem.values.length; columnIndex++) {
-                                if(this._isCellChanged(oldItem, newItem, visibleRowIndex, columnIndex, isLiveUpdate)) {
-                                    columnIndices.push(columnIndex);
+                            if(newItem.rowType !== 'detail') {
+                                for(let columnIndex = 0; columnIndex < oldItem.values.length; columnIndex++) {
+                                    if(this._isCellChanged(oldItem, newItem, visibleRowIndex, columnIndex, isLiveUpdate)) {
+                                        columnIndices.push(columnIndex);
+                                    }
                                 }
                             }
                         }
-
-                        return columnIndices;
+                        if(newItem.rowType === 'group' && newItem.isExpanded === oldItem.isExpanded && oldItem.cells) {
+                            columnIndices = oldItem.cells.map((cell, index) => cell.column?.type !== 'groupExpand' ? index : -1).filter(index => index >= 0);
+                        }
                     }
+                    return columnIndices;
                 },
                 _partialUpdateRow: function(oldItem, newItem, visibleRowIndex, isLiveUpdate) {
-                    const changedColumnIndices = this._getChangedColumnIndices(oldItem, newItem, visibleRowIndex, isLiveUpdate);
+                    let changedColumnIndices = this._getChangedColumnIndices(oldItem, newItem, visibleRowIndex, isLiveUpdate);
+
+                    if(changedColumnIndices?.length && this.option('dataRowTemplate')) {
+                        changedColumnIndices = undefined;
+                    }
 
                     if(changedColumnIndices) {
                         oldItem.cells && oldItem.cells.forEach(function(cell, columnIndex) {
@@ -707,7 +754,7 @@ export const dataControllerModule = {
                             item1.update && item1.update(item2);
                             item1.cells.forEach(function(cell) {
                                 if(cell && cell.update) {
-                                    cell.update(item2);
+                                    cell.update(item2, true);
                                 }
                             });
                         }
@@ -773,12 +820,14 @@ export const dataControllerModule = {
                         change.isLiveUpdate = true;
                     }
 
-                    this._correctRowIndices(function getRowIndexCorrection(rowIndex) {
-                        const oldItem = oldItems[rowIndex];
+                    this._correctRowIndices((rowIndex) => {
+                        const oldRowIndexOffset = this._rowIndexOffset || 0;
+                        const rowIndexOffset = this.getRowIndexOffset();
+                        const oldItem = oldItems[rowIndex - oldRowIndexOffset];
                         const key = getRowKey(oldItem);
-                        const newRowIndex = newIndexByKey[key];
+                        const newVisibleRowIndex = newIndexByKey[key];
 
-                        return newRowIndex >= 0 ? newRowIndex - rowIndex : 0;
+                        return newVisibleRowIndex >= 0 ? newVisibleRowIndex + rowIndexOffset - rowIndex : 0;
                     });
                 },
                 _correctRowIndices: noop,
@@ -793,9 +842,16 @@ export const dataControllerModule = {
                     change.changeType = changeType;
 
                     if(dataSource) {
-                        items = change.items || dataSource.items();
-                        items = this._beforeProcessItems(items);
-                        items = this._processItems(items, change);
+                        const cachedProcessedItems = this._cachedProcessedItems;
+                        if(change.useProcessedItemsCache && cachedProcessedItems) {
+                            items = cachedProcessedItems;
+                        } else {
+                            items = change.items || dataSource.items();
+                            items = this._beforeProcessItems(items);
+                            items = this._processItems(items, change);
+                            this._cachedProcessedItems = items;
+                        }
+
                         items = this._afterProcessItems(items, change);
 
                         change.items = items;
@@ -809,7 +865,14 @@ export const dataControllerModule = {
                             if(oldItems) {
                                 item.cells = oldItems[index].cells || [];
                             }
+
+                            const newItem = items[index];
+                            if(newItem) {
+                                item.loadIndex = newItem.loadIndex;
+                            }
                         });
+
+                        this._rowIndexOffset = this.getRowIndexOffset();
                     } else {
                         this._items = [];
                     }
@@ -841,7 +904,8 @@ export const dataControllerModule = {
                     const that = this;
 
                     if(that._repaintChangesOnly !== undefined) {
-                        change.repaintChangesOnly = that._repaintChangesOnly;
+                        change.repaintChangesOnly = change.repaintChangesOnly ?? that._repaintChangesOnly;
+                        change.needUpdateDimensions = change.needUpdateDimensions || that._needUpdateDimensions;
                     } else if(change.changes) {
                         change.repaintChangesOnly = that.option('repaintChangesOnly');
                     } else if(isDataChanged) {
@@ -889,15 +953,24 @@ export const dataControllerModule = {
                     return null;
                 },
                 _applyFilter: function() {
-                    const that = this;
-                    const dataSource = that._dataSource;
+                    const dataSource = this._dataSource;
 
                     if(dataSource) {
                         dataSource.pageIndex(0);
+                        this._isFilterApplying = true;
 
-                        return that.reload().done(that.pageChanged.fire.bind(that.pageChanged));
+                        return this.reload().done(() => {
+                            if(this._isFilterApplying) {
+                                this.pageChanged.fire();
+                            }
+                        });
                     }
                 },
+
+                resetFilterApplying: function() {
+                    this._isFilterApplying = false;
+                },
+
                 filter: function(filterExpr) {
                     const dataSource = this._dataSource;
                     const filter = dataSource && dataSource.filter();
@@ -1009,6 +1082,7 @@ export const dataControllerModule = {
                         oldDataSource.loadError.remove(that._loadErrorHandler);
                         oldDataSource.customizeStoreLoadOptions.remove(that._customizeStoreLoadOptionsHandler);
                         oldDataSource.changing.remove(that._changingHandler);
+                        oldDataSource.pushed.remove(that._dataPushedHandler);
                         oldDataSource.dispose(that._isSharedDataSource);
                     }
 
@@ -1028,6 +1102,7 @@ export const dataControllerModule = {
                         dataSource.loadError.add(that._loadErrorHandler);
                         dataSource.customizeStoreLoadOptions.add(that._customizeStoreLoadOptionsHandler);
                         dataSource.changing.add(that._changingHandler);
+                        dataSource.pushed.add(that._dataPushedHandler);
                     }
                 },
                 items: function() {
@@ -1223,6 +1298,12 @@ export const dataControllerModule = {
 
                 getCachedStoreData: function() {
                     return this._dataSource && this._dataSource.getCachedStoreData();
+                },
+
+                isLastPageLoaded: function() {
+                    const pageIndex = this.pageIndex();
+                    const pageCount = this.pageCount();
+                    return pageIndex === (pageCount - 1);
                 }
             };
 

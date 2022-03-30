@@ -6,12 +6,13 @@ import { DomComponentWrapper } from '../common/dom_component_wrapper';
 import { BaseWidgetProps } from '../common/base_props';
 
 export const viewFunction = ({
-  props,
+  componentProps,
   restAttributes,
 }: ValidationMessage): JSX.Element => (
   <DomComponentWrapper
     componentType={LegacyValidationMessage}
-    componentProps={props}
+    componentProps={componentProps}
+    templateNames={[]}
   // eslint-disable-next-line react/jsx-props-no-spreading
     {...restAttributes}
   />
@@ -27,7 +28,7 @@ export class ValidationMessageProps extends BaseWidgetProps {
 
   @OneWay() boundary?: string | Element | null;
 
-  @OneWay() container?: string | Element | null;
+  @OneWay() visualContainer?: string | Element | null;
 
   @OneWay() target?: string | Element | null;
 
@@ -39,4 +40,9 @@ export class ValidationMessageProps extends BaseWidgetProps {
   defaultOptionRules: null,
   view: viewFunction,
 })
-export class ValidationMessage extends JSXComponent(ValidationMessageProps) { }
+export class ValidationMessage extends JSXComponent(ValidationMessageProps) {
+  /* istanbul ignore next: WA for Angular */
+  get componentProps(): ValidationMessageProps {
+    return this.props;
+  }
+}

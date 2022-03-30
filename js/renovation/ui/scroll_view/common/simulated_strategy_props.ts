@@ -6,8 +6,8 @@ import {
   BaseScrollableProps,
 } from './base_scrollable_props';
 import {
-  ScrollEventArgs, ScrollableShowScrollbar,
-} from './types.d';
+  ScrollEventArgs, ScrollableShowScrollbar, RefreshStrategy, ScrollLocationChangeArgs,
+} from './types';
 import { isDesktop } from '../utils/get_default_option_value';
 
 @ComponentBindings()
@@ -20,7 +20,9 @@ export class ScrollableSimulatedProps extends BaseScrollableProps {
 
   @OneWay() scrollByThumb = isDesktop();
 
-  @Event() onVisibilityChange?: (args: boolean) => void;
+  @OneWay() refreshStrategy: RefreshStrategy = 'simulated';
+
+  @Event() onVisibilityChange?: (visible: boolean) => void;
 
   @Event() onStart?: EventCallback<ScrollEventArgs>;
 
@@ -28,12 +30,5 @@ export class ScrollableSimulatedProps extends BaseScrollableProps {
 
   @Event() onBounce?: EventCallback<ScrollEventArgs>;
 
-  // @Event()
-  // contentTranslateOffsetChange?: (scrollProp: 'left' | 'top', translateOffset: number) => void;
-
-  @Event()
-  scrollLocationChange?: (fullScrollProp: 'scrollLeft' | 'scrollTop', location: number) => void;
-
-  @Event()
-  pocketStateChange?: (newState: number) => void;
+  @Event() scrollLocationChange?: EventCallback<ScrollLocationChangeArgs>;
 }

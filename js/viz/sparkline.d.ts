@@ -1,14 +1,10 @@
+import DataSource, { DataSourceLike } from '../data/data_source';
+
 import {
     EventInfo,
     InitializedEventInfo,
     ChangedOptionInfo,
 } from '../events/index';
-
-import DataSource, {
-    DataSourceOptions,
-} from '../data/data_source';
-
-import Store from '../data/abstract_store';
 
 import {
     FileSavingEventInfo,
@@ -75,11 +71,11 @@ export interface dxSparklineOptions extends BaseSparklineOptions<dxSparkline> {
     barPositiveColor?: string;
     /**
      * @docid
-     * @type Array<any>|Store|DataSource|DataSourceOptions|string
      * @notUsedInTheme
      * @public
+     * @type Store|DataSource|DataSourceOptions|string|Array<any>
      */
-    dataSource?: Array<any> | Store | DataSource | DataSourceOptions | string;
+    dataSource?: DataSourceLike<any>;
     /**
      * @docid
      * @default '#666666'
@@ -194,8 +190,6 @@ export interface dxSparklineOptions extends BaseSparklineOptions<dxSparkline> {
 /**
  * @docid
  * @inherits BaseSparkline, DataHelperMixin
- * @module viz/sparkline
- * @export default
  * @namespace DevExpress.viz
  * @public
  */
@@ -208,6 +202,3 @@ export type Properties = dxSparklineOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxSparklineOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxSparklineOptions;

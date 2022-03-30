@@ -43,8 +43,6 @@ export interface dxValidationGroupOptions extends DOMComponentOptions<dxValidati
  * @docid
  * @inherits DOMComponent
  * @hasTranscludedContent
- * @module ui/validation_group
- * @export default
  * @namespace DevExpress.ui
  * @public
  */
@@ -58,16 +56,20 @@ export default class dxValidationGroup extends DOMComponent<dxValidationGroupOpt
     /**
      * @docid
      * @publicName validate()
-     * @return dxValidationGroupResult
      * @public
+     * @return dxValidationGroupResult
      */
-    validate(): dxValidationGroupResult;
+    validate(): ValidationResult;
 }
+
+/** @public */
+export type ValidationResult = dxValidationGroupResult;
 
 /**
  * @docid
  * @type object
  * @namespace DevExpress.ui
+ * @deprecated {ui/validation_group.ValidationResult}
  */
 export interface dxValidationGroupResult {
     /**
@@ -104,6 +106,3 @@ export type Properties = dxValidationGroupOptions;
 
 /** @deprecated use Properties instead */
 export type Options = dxValidationGroupOptions;
-
-/** @deprecated use Properties instead */
-export type IOptions = dxValidationGroupOptions;

@@ -291,16 +291,6 @@ const ScrollView = Scrollable.inherit(isServerSide ? scrollViewServerConfig : {
         this._reachBottomEnable(showOrHide);
     },
 
-    /**
-    * @name dxScrollView.isFull
-    * @publicName isFull()
-    * @return boolean
-    * @hidden
-    */
-    isFull: function() {
-        return $(this.content()).height() > $(this.container()).height();
-    },
-
     refresh: function() {
         if(!this.hasActionSubscription('onPullDown')) {
             return;

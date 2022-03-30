@@ -9,6 +9,7 @@ import fx from 'animation/fx';
 import positionUtils from 'animation/position';
 import ValidationGroup from 'ui/validation_group';
 import eventsEngine from 'events/core/events_engine';
+import Scheduler from 'ui/scheduler';
 
 import 'generic_light.css!';
 import 'integration/angular';
@@ -21,7 +22,6 @@ import 'ui/menu';
 import 'ui/popup';
 import 'ui/popover';
 import 'ui/date_box';
-import 'ui/scheduler';
 import 'ui/slide_out_view';
 import 'ui/tabs';
 import 'ui/text_box';
@@ -32,6 +32,7 @@ import Button from 'ui/button';
 import '../../helpers/ignoreAngularTimers.js';
 
 const FILTERING_TIMEOUT = 700;
+const isRenovatedScheduler = !!Scheduler.IS_RENOVATED_WIDGET;
 
 fx.off = true;
 
@@ -972,7 +973,7 @@ QUnit.module('dxScheduler', {
     }
 });
 
-QUnit.test('Custom store with ISO8601 dates', function(assert) {
+QUnit[isRenovatedScheduler ? 'skip' : 'test']('Custom store with ISO8601 dates', function(assert) {
     const $markup = $('<div dx-scheduler="schedulerOptions"></div>');
 
     const controller = function($scope) {

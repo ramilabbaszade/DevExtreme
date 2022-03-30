@@ -70,6 +70,38 @@ QUnit.module('Button', function() {
             assert.ok(params.validationGroup, 'validationGroup should be passed');
         });
 
+        QUnit.test('onClick handler should not closure on a first one', function(assert) {
+            this.instance.option('onClick', () => {});
+            this.element.trigger('dxclick');
+
+            const clickHandler = sinon.stub();
+
+            this.instance.option('onClick', clickHandler);
+            this.element.trigger('dxclick');
+
+            assert.ok(clickHandler.calledOnce, 'second handler is called');
+        });
+
+        QUnit.test('onClick should have validationGroup parameter even if validationGroup is inited on another element (T1041957)', function(assert) {
+            const clickHandler = sinon.stub();
+
+            this.instance.option({
+                onClick: clickHandler,
+                validationGroup: 'group'
+            });
+
+            try {
+                ValidationEngine.registerValidatorInGroup('group', sinon.stub());
+
+                this.element.trigger('dxclick');
+
+                const params = clickHandler.getCall(0).args[0];
+                assert.ok(params.validationGroup, 'validationGroup should be passed');
+            } finally {
+                ValidationEngine.initGroups();
+            }
+        });
+
         QUnit.test('icon', function(assert) {
             this.instance.option('icon', 'home');
             assert.equal(this.element.find('.dx-icon-home').length, 1);
@@ -592,58 +624,56 @@ QUnit.module('Button', function() {
             this.$element.trigger('dxclick');
         });
 
-        if(!isRenovation) {
-            QUnit.test('Form should be submitted only when an async validation rule is passed positively (T887207)', function(assert) {
-                this.clock.restore();
-                let value = 'a';
-                const validValue = 'b';
-                const validator = new Validator($('<div>').appendTo(this.$form), {
-                    adapter: sinon.createStubInstance(DefaultAdapter),
-                    validationRules: [{
-                        type: 'async',
-                        validationCallback: function() {
-                            const d = new Deferred();
-                            setTimeout(() => {
-                                d.resolve({
-                                    isValid: value === validValue
-                                });
-                            }, 10);
-                            return d.promise();
-                        }
-                    }]
-                });
-                const done = assert.async();
-                const onSubmit = () => {
-                    assert.strictEqual(value, validValue, 'submitted with valid value');
+        QUnit.test('Form should be submitted only when an async validation rule is passed positively (T887207)', function(assert) {
+            this.clock.restore();
+            let value = 'a';
+            const validValue = 'b';
+            const validator = new Validator($('<div>').appendTo(this.$form), {
+                adapter: sinon.createStubInstance(DefaultAdapter),
+                validationRules: [{
+                    type: 'async',
+                    validationCallback: function() {
+                        const d = new Deferred();
+                        setTimeout(() => {
+                            d.resolve({
+                                isValid: value === validValue
+                            });
+                        }, 10);
+                        return d.promise();
+                    }
+                }]
+            });
+            const done = assert.async();
+            const onSubmit = () => {
+                assert.strictEqual(value, validValue, 'submitted with valid value');
 
-                    ValidationEngine.initGroups();
-                    this.$form.off('submit', onSubmit);
-                    done();
-                };
-                const triggerButtonClick = () => {
-                    this.$element.trigger('dxclick');
-                };
+                ValidationEngine.initGroups();
+                this.$form.off('submit', onSubmit);
+                done();
+            };
+            const triggerButtonClick = () => {
+                this.$element.trigger('dxclick');
+            };
 
-                this.$form.on('submit', onSubmit);
+            this.$form.on('submit', onSubmit);
 
-                this.$element.dxButton({
-                    validationGroup: 'testGroup',
-                    onOptionChanged: function(args) {
-                        if(args.name === 'disabled') {
-                            if(args.value === false && validator._validationInfo.result.status === 'invalid') {
-                                setTimeout(function() {
-                                    value = validValue;
-                                    triggerButtonClick();
-                                });
-                            }
+            this.$element.dxButton({
+                validationGroup: 'testGroup',
+                onOptionChanged: function(args) {
+                    if(args.name === 'disabled') {
+                        if(args.value === false && validator._validationInfo.result.status === 'invalid') {
+                            setTimeout(function() {
+                                value = validValue;
+                                triggerButtonClick();
+                            });
                         }
                     }
-                });
-
-                ValidationEngine.registerValidatorInGroup('testGroup', validator);
-                triggerButtonClick();
+                }
             });
-        }
+
+            ValidationEngine.registerValidatorInGroup('testGroup', validator);
+            triggerButtonClick();
+        });
     });
 
     QUnit.module('templates', function() {

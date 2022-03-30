@@ -58,6 +58,7 @@ import { GroupingHeaderPanelExtender } from 'ui/data_grid/ui.data_grid.grouping'
 import { HeaderPanel } from 'ui/data_grid/ui.data_grid.header_panel';
 import Action from 'core/action';
 import devices from 'core/devices';
+import { getHeight } from 'core/utils/size';
 import publicComponentUtils from 'core/utils/public_component';
 
 const TestDraggingHeader2 = columnsResizingReordering.DraggingHeaderView.inherit({
@@ -86,6 +87,7 @@ QUnit.module('ColumnsSeparator', () => {
     function createColumnsSeparator2(userOptions, columnsCommonSettings) {
         return new columnsResizingReordering.ColumnsSeparatorView({
             option: function(name) {
+                if(!name) return userOptions;
                 return userOptions[name];
             },
             _controllers: {
@@ -319,7 +321,7 @@ QUnit.module('ColumnsSeparator', () => {
         columnsSeparator.height(73);
 
         // assert
-        assert.equal(columnsSeparator.element().height(), 73, 'element height');
+        assert.equal(getHeight(columnsSeparator.element()), 73, 'element height');
     });
 
     QUnit.test('Get/set width', function(assert) {
@@ -542,7 +544,7 @@ QUnit.module('ColumnsSeparator', () => {
 
         // arrange
         const $separator = separator.element();
-        assert.equal($separator.height(), 145, 'height of columns separator');
+        assert.equal(getHeight($separator), 145, 'height of columns separator');
         assert.equal($separator.css('top'), '100px', 'height of columns separator');
     });
 
@@ -630,7 +632,7 @@ QUnit.module('ColumnsSeparator', () => {
         tablePosition.update();
 
         // arrange
-        assert.equal(separator.element().height(), columnHeadersViewHeight + rowsViewHeight - scrollBarWidth, 'height of columns separator');
+        assert.equal(getHeight(separator.element()), columnHeadersViewHeight + rowsViewHeight - scrollBarWidth, 'height of columns separator');
     });
 
     function columnSeparatorHeightTest(assert, isResizing, isDragging) {
@@ -707,7 +709,7 @@ QUnit.module('ColumnsSeparator', () => {
             expectedHeight += rowsViewHeight - scrollBarWidth;
         }
 
-        assert.equal(separator.element().height(), expectedHeight, 'height of columns separator');
+        assert.equal(getHeight(separator.element()), expectedHeight, 'height of columns separator');
     }
 
     // T816406, T889787
@@ -901,6 +903,7 @@ QUnit.module('Columns resizing', {
             },
 
             option: function(name) {
+                if(!name) return that.options;
                 return that.options[name];
             },
 
@@ -2054,6 +2057,7 @@ QUnit.module('Columns resizing', {
         // assert
         assert.ok(!resizeController._isReadyResizing, 'resizing is not ready');
         assert.equal(resizeController._columnsSeparatorView._testCursorName, '', 'cursorName');
+        assert.strictEqual(resizeController._columnsSeparatorView._testPosX, null, 'posX'); // T1027834
         assert.equal(resizeController._pointsByColumns, null, 'points by columns is reset');
     });
 
@@ -2709,7 +2713,7 @@ QUnit.module('Columns resizing', {
 
         // assert
         assert.ok(controller._trackerView);
-        assert.roughEqual(testElement.find('.dx-datagrid-tracker').height(), resultHeight, 0.1);
+        assert.roughEqual(testElement.find('.dx-datagrid-tracker').height(), resultHeight, 0.6);
     });
 
     QUnit.test('TrackerView. Position and height are not changed when tracker ccs class is not applied', function(assert) {
@@ -2731,7 +2735,7 @@ QUnit.module('Columns resizing', {
 
         // assert
         assert.equal($tracker.css('top'), 'auto', 'top');
-        assert.equal($tracker.height(), 0, 'height');
+        assert.equal(getHeight($tracker), 0, 'height');
     });
 
     QUnit.test('TrackerView. It is visible when alloColumnResizing is true and empty columns options', function(assert) {
@@ -2786,7 +2790,7 @@ QUnit.module('Columns resizing', {
         assert.ok(!trackerView._tablePositionController.positionChanged.has(trackerView._positionChanged), 'trackerView is unsubscribe from positionChanged');
     });
 
-    // B239204
+    // B239204, T1027834
     QUnit.test('Reset value cursor when not visible separator_B239204', function(assert) {
         // arrange
         this.component._views.columnsSeparatorView = new MockColumnsSeparatorView($('#container'), true, { top: -10000, left: 0 });
@@ -2822,6 +2826,7 @@ QUnit.module('Columns resizing', {
 
         // assert
         assert.equal(resizeController._columnsSeparatorView.cursorName, '');
+        assert.strictEqual(resizeController._columnsSeparatorView.posX, null);
     });
 
     // T694325
@@ -3249,6 +3254,7 @@ QUnit.module('Headers reordering', {
             },
 
             option: function(value) {
+                if(!value) return that.options;
                 return that.options[value];
             },
 

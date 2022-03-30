@@ -157,6 +157,21 @@ export default class ComponentWrapper extends DOMComponent<ComponentWrapperProps
     ) as Record<string, unknown>;
   }
 
+  _initializeComponent(): void {
+    super._initializeComponent();
+
+    this._templateManager?.addDefaultTemplates(this.getDefaultTemplates());
+    this._props = this._optionsWithDefaultTemplates(this.option());
+    this._propsInfo.templates.forEach((template) => {
+      this._componentTemplates[template] = this._createTemplateComponent(this._props[template]);
+    });
+
+    Object.keys(this._getActionConfigsFull()).forEach((name) => this._addAction(name));
+
+    this._viewRef = createRef();
+    this.defaultKeyHandlers = this._createDefaultKeyHandlers();
+  }
+
   _initMarkup(): void {
     const props = this.getProps();
     this._renderWrapper(props);
@@ -201,15 +216,15 @@ export default class ComponentWrapper extends DOMComponent<ComponentWrapperProps
   get elementAttr(): HTMLAttributes<unknown> {
     if (!this._elementAttr) {
       const { attributes } = this.$element()[0];
-      this._elementAttr = {
-        ...Object.keys(attributes).reduce((result, key) => {
+      const attrs = Array.from<{ name: string; value: unknown }>(attributes)
+        .filter((attr) => !this._propsInfo.templates.includes(attr.name)
+      && attributes[attr.name]?.specified)
+        .reduce((result, { name, value }) => {
           const updatedAttributes = result;
-          if (attributes[key].specified) {
-            updatedAttributes[attributes[key].name] = attributes[key].value;
-          }
+          updatedAttributes[name] = value;
           return updatedAttributes;
-        }, {}),
-      };
+        }, {});
+      this._elementAttr = attrs;
       this._storedClasses = this.$element()[0].getAttribute('class') || '';
     }
     const elemStyle: CSSStyleDeclaration = this.$element()[0].style;
@@ -242,7 +257,8 @@ export default class ComponentWrapper extends DOMComponent<ComponentWrapperProps
     const {
       allowNull, twoWay, elements, props,
     } = this._propsInfo;
-    const { defaultProps } = this._viewComponent;
+    const defaultWidgetPropsKeys = Object.keys(this._viewComponent.defaultProps);
+    const defaultOptions = this._getDefaultOptions();
     const { ref, children, onKeyboardHandled } = options;
     const onKeyDown = onKeyboardHandled
       ? (_: never, event_options: unknown[]): void => {
@@ -264,14 +280,14 @@ export default class ComponentWrapper extends DOMComponent<ComponentWrapperProps
       setDefaultOptionValue(widgetProps, () => null),
     );
 
-    Object.keys(defaultProps).forEach(
+    defaultWidgetPropsKeys.forEach(
       setDefaultOptionValue(
         widgetProps,
-        (name: string) => defaultProps[name],
+        (name: string) => defaultOptions[name],
       ),
     );
     twoWay.forEach(([name, defaultName]) => {
-      setDefaultOptionValue(widgetProps, () => defaultProps[defaultName])(name);
+      setDefaultOptionValue(widgetProps, () => defaultOptions[defaultName])(name);
     });
 
     elements.forEach((name: string) => {
@@ -371,20 +387,9 @@ export default class ComponentWrapper extends DOMComponent<ComponentWrapperProps
     super._init();
 
     this.customKeyHandlers = {};
-    this._templateManager?.addDefaultTemplates(this.getDefaultTemplates());
-    this._props = this._optionsWithDefaultTemplates(this.option());
     this._actionsMap = {};
     this._aria = {};
-
     this._componentTemplates = {};
-    this._propsInfo.templates.forEach((template) => {
-      this._componentTemplates[template] = this._createTemplateComponent(this._props[template]);
-    });
-
-    Object.keys(this._getActionConfigsFull()).forEach((name) => this._addAction(name));
-
-    this._viewRef = createRef();
-    this.defaultKeyHandlers = this._createDefaultKeyHandlers();
   }
 
   _createDefaultKeyHandlers(): Record<string, Function> {
@@ -425,10 +430,15 @@ export default class ComponentWrapper extends DOMComponent<ComponentWrapperProps
   }
 
   _optionChanged(option: Option): void {
-    const { name, fullName, value } = option;
+    const {
+      name,
+      fullName,
+      value,
+      previousValue,
+    } = option;
     updatePropsImmutable(this._props, this.option(), name, fullName);
 
-    if (this._propsInfo.templates.includes(name)) {
+    if (this._propsInfo.templates.includes(name) && value !== previousValue) {
       this._componentTemplates[name] = this._createTemplateComponent(value);
     }
 
@@ -448,6 +458,7 @@ export default class ComponentWrapper extends DOMComponent<ComponentWrapperProps
       return renderer.createElement(TemplateWrapper, {
         template: this._getTemplate(this._templateManager.anonymousTemplateName),
         transclude: true,
+        renovated: true,
       });
     }
     return null;
@@ -537,13 +548,11 @@ export default class ComponentWrapper extends DOMComponent<ComponentWrapperProps
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setAria(name: string, value: string): void {
     this._aria[name] = value;
-    this.repaint();
+    this._initMarkup();
   }
 }
 
-/// #DEBUG
 ComponentWrapper.IS_RENOVATED_WIDGET = true;
-/// #ENDDEBUG
 
 /* eslint-enable @typescript-eslint/ban-types */
 /* eslint-enable @typescript-eslint/no-unsafe-member-access */

@@ -1088,7 +1088,7 @@ QUnit.module('Grouping with basic remoteOperations', {
         source.load();
 
         // assert
-        assert.equal(source.itemsCount(), 4);
+        assert.equal(source.itemsCount(), 2);
 
         // act
         source.changeRowExpand([1]);
@@ -4965,7 +4965,7 @@ QUnit.module('Remote group paging', {
                 }, {
                     key: 2, items: null
                 }]);
-                assert.equal(source.itemsCount(), 6);
+                assert.equal(source.itemsCount(), 3);
             });
 
             QUnit.test('Expand second level group', function(assert) {
@@ -6409,6 +6409,117 @@ QUnit.module('Cache', {
         assert.deepEqual(this.loadingCount, 1, 'one loading');
     });
 
+    QUnit.test('load summary from cache on paging for local array (T1042990)', function(assert) {
+        const array = [1, 2, 3, 4];
+        const dataSource = this.createDataSource({
+            store: array
+        });
+
+        let stepCount = 0;
+
+        dataSource.summary({
+            totalAggregates: [{
+                aggregator: {
+                    seed: 0,
+                    step: (a, b) => {
+                        stepCount++;
+                        return a + b;
+                    }
+                }
+            }]
+        });
+        dataSource.load();
+        this.clock.tick();
+
+        assert.equal(stepCount, 4, 'summary is calculated');
+
+        // act
+        dataSource.pageIndex(1);
+        dataSource.load();
+        this.clock.tick();
+
+        // assert
+        assert.equal(stepCount, 4, 'summary is not recalculated');
+        assert.deepEqual(dataSource.items()[0], 4, 'first item on page');
+        assert.deepEqual(dataSource.totalCount(), 4, 'totalCount');
+        assert.deepEqual(dataSource.totalAggregates(), [10], 'totalAggregates');
+    });
+
+    QUnit.test('do not load summary from cache on paging for local array if group summary is defined (T1042990)', function(assert) {
+        const array = [1, 2, 3, 4];
+        const dataSource = this.createDataSource({
+            store: array,
+            group: 'this'
+        });
+
+        let stepCount = 0;
+
+        dataSource.summary({
+            totalAggregates: [{
+                aggregator: {
+                    seed: 0,
+                    step: (a, b) => {
+                        stepCount++;
+                        return a + b;
+                    }
+                }
+            }],
+            groupAggregates: [{
+                aggregator: 'count'
+            }]
+        });
+        dataSource.load();
+        this.clock.tick();
+
+        assert.equal(stepCount, 4, 'summary is calculated');
+
+        // act
+        dataSource.pageIndex(1);
+        dataSource.load();
+        this.clock.tick();
+
+        // assert
+        assert.equal(stepCount, 8, 'summary is recalculated');
+        assert.deepEqual(dataSource.items()[0].key, 4, 'first item key on page');
+        assert.deepEqual(dataSource.items()[0].aggregates, [1], 'first item aggregates on page');
+        assert.deepEqual(dataSource.totalCount(), 4, 'totalCount');
+        assert.deepEqual(dataSource.totalAggregates(), [10], 'totalAggregates');
+    });
+
+    QUnit.test('calculate summary on load without operations for local array', function(assert) {
+        const array = [1, 2, 3, 4];
+        const dataSource = this.createDataSource({
+            store: array
+        });
+
+        let stepCount = 0;
+
+        dataSource.summary({
+            totalAggregates: [{
+                aggregator: {
+                    seed: 0,
+                    step: (a, b) => {
+                        stepCount++;
+                        return a + b;
+                    }
+                }
+            }]
+        });
+        dataSource.load();
+        this.clock.tick();
+
+        assert.equal(stepCount, 4, 'summary is calculated');
+
+        // act
+        dataSource.load();
+        this.clock.tick();
+
+        // assert
+        assert.equal(stepCount, 8, 'summary is recalculated');
+        assert.deepEqual(dataSource.totalCount(), 4, 'totalCount');
+        assert.deepEqual(dataSource.totalAggregates(), [10], 'totalAggregates');
+    });
+
     QUnit.test('New mode. Data should be loaded from the cache with the same load params', function(assert) {
         const dataSource = this.createDataSource({
             remoteOperations: {
@@ -6416,7 +6527,7 @@ QUnit.module('Cache', {
                 sorting: true
             },
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 mode: 'virtual',
                 rowRenderingMode: 'virtual'
             }
@@ -6477,7 +6588,7 @@ QUnit.module('Cache', {
             requireGroupCount: true,
             group: ['group1', 'group2'],
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 mode: 'virtual',
                 rowRenderingMode: 'virtual'
             }
@@ -6544,7 +6655,7 @@ QUnit.module('Cache', {
                 sorting: true
             },
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 mode: 'virtual',
                 rowRenderingMode: 'virtual'
             }
@@ -6585,7 +6696,7 @@ QUnit.module('Cache', {
                 sorting: true
             },
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 mode: 'virtual',
                 rowRenderingMode: 'virtual'
             },
@@ -7174,7 +7285,7 @@ QUnit.module('New virtual scrolling mode', {
                 store: TEN_NUMBERS,
                 paginate: true,
                 scrolling: {
-                    newMode: true,
+                    legacyMode: false,
                     mode: 'virtual',
                     rowRenderingMode: 'virtual'
                 },
@@ -7227,7 +7338,7 @@ QUnit.module('New virtual scrolling mode', {
         }
     });
 
-    // TODO the following tests can be removed when newMode is enabled by default
+    // TODO the following tests can be removed when legacyMode is disabled by default
     QUnit.test('startLoadTime was not initialized when loadingChanged is raised', function(assert) {
         // arrange
         const dataSource = this.createDataSource({
@@ -7358,7 +7469,7 @@ QUnit.module('New virtual scrolling mode', {
                 }
             }),
             scrolling: {
-                newMode: true,
+                legacyMode: false,
                 mode: 'virtual',
                 rowRenderingMode: 'virtual'
             },
@@ -7382,7 +7493,7 @@ QUnit.module('New virtual scrolling mode', {
         const dataSource = createDataSource({
             store: [{ id: 1 }],
             scrolling: {
-                newMode: true
+                legacyMode: false
             }
         });
 

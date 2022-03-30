@@ -1,28 +1,24 @@
 import React from 'react';
 import { mount } from 'enzyme';
 import each from 'jest-each';
-import {
-  RefObject,
-} from '@devextreme-generator/declarations';
 
 import {
   Scrollable,
   viewFunction,
 } from '../scrollable';
 
-import {
-  ScrollViewLoadPanel,
-} from '../load_panel';
-import { ScrollableNative } from '../scrollable_native';
-import { ScrollableSimulated } from '../scrollable_simulated';
+import { ScrollableNative } from '../strategy/native';
+import { ScrollableSimulated } from '../strategy/simulated';
 
 import { Widget } from '../../common/widget';
-import { ScrollableDirection, ScrollOffset } from '../common/types.d';
+import { ScrollableDirection, ScrollOffset } from '../common/types';
 
 import { getWindow, setWindow } from '../../../../core/utils/window';
 import * as ElementLocationModule from '../utils/get_element_location_internal';
 import { DIRECTION_BOTH, DIRECTION_HORIZONTAL, DIRECTION_VERTICAL } from '../common/consts';
 import { ScrollableProps } from '../common/scrollable_props';
+import config from '../../../../core/config';
+import { ConfigContextValue } from '../../../common/config_context';
 
 jest.mock('../utils/get_element_location_internal', () => ({
   ...jest.requireActual('../utils/get_element_location_internal'),
@@ -50,15 +46,14 @@ describe('Scrollable', () => {
       forceGeneratePockets: false,
       inertiaEnabled: true,
       needScrollViewContentWrapper: false,
-      needScrollViewLoadPanel: false,
       needRenderScrollbars: true,
       pullDownEnabled: false,
       pulledDownText: 'Release to refresh...',
       pullingDownText: 'Pull down to refresh...',
       reachBottomEnabled: false,
       reachBottomText: 'Loading...',
+      refreshStrategy: 'pullDown',
       refreshingText: 'Refreshing...',
-      rtlEnabled: false,
       scrollByContent: false,
       scrollByThumb: true,
       showScrollbar: 'onHover',
@@ -71,8 +66,7 @@ describe('Scrollable', () => {
 
   each([false, true]).describe('useNative: %o', (useNativeScrolling) => {
     it('should pass all necessary properties to the Widget', () => {
-      const config = {
-        activeStateUnit: '.UIFeedback',
+      const options = {
         useNative: useNativeScrolling,
         direction: 'vertical' as ScrollableDirection,
         width: '120px',
@@ -82,19 +76,20 @@ describe('Scrollable', () => {
         rtlEnabled: true,
         disabled: true,
         focusStateEnabled: false,
-        hoverStateEnabled: !useNativeScrolling,
+        hoverStateEnabled: false,
         tabIndex: 0,
         visible: true,
       };
 
-      const scrollable = mount<Scrollable>(<Scrollable {...config} />);
+      const scrollable = mount<Scrollable>(<Scrollable {...options} />);
 
-      const { direction, useNative, ...restProps } = config;
+      const { direction, useNative, ...restProps } = options;
       expect(scrollable.find(Widget).at(0).props()).toMatchObject({
         classes: useNative
           ? 'dx-scrollable dx-scrollable-native dx-scrollable-native-generic dx-scrollable-vertical dx-scrollable-disabled'
           : 'dx-scrollable dx-scrollable-simulated dx-scrollable-vertical dx-scrollable-disabled',
         ...restProps,
+        disabled: !!useNative,
       });
     });
   });
@@ -108,8 +103,6 @@ describe('Scrollable', () => {
       { name: 'scrollOffset', calledWith: [] },
       { name: 'scrollWidth', calledWith: [] },
       { name: 'scrollHeight', calledWith: [] },
-      { name: 'scrollTo', calledWith: ['arg1'] },
-      { name: 'scrollBy', calledWith: ['arg1'] },
       { name: 'content', calledWith: [] },
       { name: 'container', calledWith: [] },
       { name: 'updateHandler', calledWith: [] },
@@ -257,6 +250,143 @@ describe('Scrollable', () => {
         additionalOffset,
       );
     });
+
+    each([false, true]).describe('useNative: %o', (useNative) => {
+      each([DIRECTION_VERTICAL, DIRECTION_HORIZONTAL, DIRECTION_BOTH]).describe('direction: %o', (direction) => {
+        test.each([0, undefined, null, {},
+          { top: 0 }, { left: 0 }, { top: 0, left: 0 },
+          { x: 0 }, { y: 0 }, { x: 0, y: 0 },
+        ])('scrollBy(%o), not pass info to strategy handler if location not changed', (distance: any) => {
+          const viewModel = new Scrollable({ useNative, direction });
+
+          const scrollByLocationHandler = jest.fn();
+          Object.defineProperties(viewModel, {
+            scrollableRef: {
+              get() { return { current: { scrollByLocation: scrollByLocationHandler } }; },
+            },
+          });
+
+          viewModel.scrollBy(distance);
+
+          expect(scrollByLocationHandler).not.toBeCalled();
+        });
+
+        test.each([20, -20])('scrollBy(%o), distance as number, pass info to strategy handler', (distance) => {
+          const viewModel = new Scrollable({ useNative, direction });
+
+          const scrollByLocationHandler = jest.fn();
+          Object.defineProperties(viewModel, {
+            scrollableRef: {
+              get() { return { scrollByLocation: scrollByLocationHandler }; },
+            },
+          });
+
+          viewModel.scrollBy(distance);
+
+          const expectedDistance = { top: distance, left: distance };
+          if (direction === DIRECTION_VERTICAL) {
+            expectedDistance.left = 0;
+          }
+          if (direction === DIRECTION_HORIZONTAL) {
+            expectedDistance.top = 0;
+          }
+          expect(scrollByLocationHandler).toBeCalledTimes(1);
+          expect(scrollByLocationHandler).toBeCalledWith(expectedDistance);
+        });
+
+        test.each([
+          { top: 20, left: 15 }, { top: -20, left: -15 },
+          { y: 20, x: 15 }, { y: -20, x: -15 },
+        ])('scrollBy(%o), distance as full object, pass info to strategy handler', (distance) => {
+          const viewModel = new Scrollable({ useNative, direction });
+
+          const scrollByLocationHandler = jest.fn();
+          Object.defineProperties(viewModel, {
+            scrollableRef: {
+              get() { return { scrollByLocation: scrollByLocationHandler }; },
+            },
+          });
+
+          viewModel.scrollBy(distance);
+
+          const expectedDistance = {
+            top: distance.top ?? distance.y,
+            left: distance.left ?? distance.x,
+          };
+
+          expect(scrollByLocationHandler).toBeCalledTimes(1);
+          expect(scrollByLocationHandler).toBeCalledWith(expectedDistance);
+        });
+
+        test.each([
+          { top: 20 }, { left: 15 }, { top: -20 }, { left: -15 },
+          { y: 20 }, { x: 15 }, { y: -20 }, { x: -15 },
+        ])('scrollBy(%o), distance as partial object, pass info to strategy handler', (distance) => {
+          const viewModel = new Scrollable({ useNative, direction });
+
+          const scrollByLocationHandler = jest.fn();
+          Object.defineProperties(viewModel, {
+            scrollableRef: {
+              get() { return { scrollByLocation: scrollByLocationHandler }; },
+            },
+          });
+
+          viewModel.scrollBy(distance);
+
+          const expectedDistance = {
+            top: distance.top ?? distance.y ?? 0,
+            left: distance.left ?? distance.x ?? 0,
+          };
+
+          expect(scrollByLocationHandler).toBeCalledTimes(1);
+          expect(scrollByLocationHandler).toBeCalledWith(expectedDistance);
+        });
+
+        const vertical = direction === DIRECTION_VERTICAL || direction === DIRECTION_BOTH;
+        const horizontal = direction === DIRECTION_HORIZONTAL || direction === DIRECTION_BOTH;
+
+        each([
+          [{ top: 30, left: 20 }, undefined, { top: 0, left: 0 }],
+          [{ top: 30, left: 20 }, null, { top: 0, left: 0 }],
+          [{ top: 30, left: 20 }, {}, { top: 0, left: 0 }],
+          [{ top: 30, left: 20 }, 0, { top: vertical ? -30 : 0, left: horizontal ? -20 : 0 }],
+          [{ top: 30, left: 20 }, 20, { top: vertical ? -10 : 0, left: 0 }],
+          [{ top: 30, left: 20 }, 50, { top: vertical ? 20 : 0, left: horizontal ? 30 : 0 }],
+          [{ top: 50, left: 50 }, -100, { top: vertical ? -150 : 0, left: horizontal ? -150 : 0 }],
+          [{ top: 30, left: 20 }, { top: 10 }, { top: -20, left: 0 }],
+          [{ top: 30, left: 20 }, { left: 10 }, { top: 0, left: -10 }],
+          [{ top: 30, left: 20 }, { y: 40 }, { top: 10, left: 0 }],
+          [{ top: 30, left: 20 }, { x: 40 }, { top: 0, left: 20 }],
+          [{ top: 30, left: 20 }, { top: 10, left: 15 }, { top: -20, left: -5 }],
+          [{ top: 30, left: 20 }, { y: 10, x: 15 }, { top: -20, left: -5 }],
+          [{ top: 15, left: 5 }, { top: 40, left: 40 }, { top: 25, left: 35 }],
+
+        ]).describe('initialOffset: %o,', (initialOffset, scrollToValue, expectedScrollByArg) => {
+          it(`scrollTo(${scrollToValue}), calculate correct offset to targetElement and pass it to scrollBy() method`, () => {
+            const viewModel = new Scrollable({ useNative, direction });
+
+            viewModel.scrollBy = jest.fn();
+
+            const currentContentOffset = {
+              scrollTop: initialOffset.top,
+              scrollLeft: initialOffset.left,
+            };
+            viewModel.scrollOffset = () => ({
+              top: currentContentOffset.scrollTop,
+              left: currentContentOffset.scrollLeft,
+            });
+            viewModel.container = () => ({ ...currentContentOffset } as any);
+            viewModel.updateHandler = jest.fn();
+
+            viewModel.scrollTo(scrollToValue);
+
+            expect(viewModel.updateHandler).toBeCalledTimes(useNative ? 0 : 1);
+            expect(viewModel.scrollBy).toBeCalledTimes(1);
+            expect(viewModel.scrollBy).toBeCalledWith(expectedScrollByArg);
+          });
+        });
+      });
+    });
   });
 
   describe('Logic', () => {
@@ -287,6 +417,36 @@ describe('Scrollable', () => {
     });
 
     describe('Getters', () => {
+      describe('rtlEnabled', () => {
+        each`
+        global       | rtlEnabled   | contextConfig      | expected
+        ${true}      | ${true}      | ${true}            | ${true}
+        ${undefined} | ${undefined} | ${undefined}       | ${false}
+        ${true}      | ${true}      | ${undefined}       | ${true}
+        ${true}      | ${false}     | ${undefined}       | ${false}
+        ${true}      | ${true}      | ${false}           | ${true}
+        ${true}      | ${false}     | ${true}            | ${false}
+        ${true}      | ${undefined} | ${undefined}       | ${true}
+        ${true}      | ${undefined} | ${true}            | ${true}
+        ${true}      | ${undefined} | ${false}           | ${false}
+          `
+          .describe('pass the prepared rtl value to the strategy', ({
+            global, rtlEnabled, contextConfig, expected,
+          }) => {
+            const name = `${JSON.stringify({
+              global, rtlEnabled, contextConfig, expected,
+            })}`;
+
+            it(name, () => {
+              const viewModel = new Scrollable({ rtlEnabled });
+              config().rtlEnabled = global;
+              viewModel.config = { rtlEnabled: contextConfig } as ConfigContextValue;
+
+              expect(viewModel.rtlEnabled).toEqual(expected);
+            });
+          });
+      });
+
       each([false, true]).describe('useNative: %o', (useNative) => {
         it('scrollableRef', () => {
           const viewModel = new Scrollable({ useNative });
@@ -299,25 +459,6 @@ describe('Scrollable', () => {
           expect(viewModel.scrollableRef)
             .toEqual(useNative ? 'native' : 'simulated');
         });
-      });
-    });
-  });
-
-  describe('LoadPanel integration', () => {
-    describe('Getters', () => {
-      it('position, targetElement: undefined', () => {
-        const viewModel = new ScrollViewLoadPanel({ });
-
-        expect(viewModel.position).toEqual(undefined);
-      });
-
-      it('position, targetElement is scrollableRef', () => {
-        const scrollableElement = { width: '100' };
-        const scrollableRef = { current: { width: '100' } } as RefObject;
-
-        const viewModel = new ScrollViewLoadPanel({ targetElement: scrollableRef });
-
-        expect(viewModel.position).toEqual({ of: scrollableElement });
       });
     });
   });

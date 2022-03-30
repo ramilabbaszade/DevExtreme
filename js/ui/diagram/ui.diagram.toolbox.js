@@ -1,3 +1,4 @@
+import { getHeight, setHeight, getOuterHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import { extend } from '../../core/utils/extend';
 import { hasWindow, getWindow } from '../../core/utils/window';
@@ -126,14 +127,14 @@ class DiagramToolbox extends DiagramFloatingPanel {
             this._updateElementWidth($inputContainer);
             this._renderSearchInput($inputContainer);
             if(hasWindow()) {
-                panelHeight = 'calc(100% - ' + this._searchInput.$element().height() + 'px)';
+                panelHeight = 'calc(100% - ' + getHeight(this._searchInput.$element()) + 'px)';
             }
         }
 
         const $panel = $('<div>')
             .addClass(DIAGRAM_TOOLBOX_PANEL_CLASS)
-            .appendTo($parent)
-            .height(panelHeight);
+            .appendTo($parent);
+        setHeight($panel, panelHeight);
         this._updateElementWidth($panel);
         this._renderScrollView($panel);
     }
@@ -148,13 +149,13 @@ class DiagramToolbox extends DiagramFloatingPanel {
         let maxHeight = 6;
         if(this._popup) {
             const $title = this._getPopupTitle();
-            maxHeight += $title.outerHeight();
+            maxHeight += getOuterHeight($title);
         }
         if(this._accordion) {
-            maxHeight += this._accordion.$element().outerHeight();
+            maxHeight += getOuterHeight(this._accordion.$element());
         }
         if(this._searchInput) {
-            maxHeight += this._searchInput.$element().outerHeight();
+            maxHeight += getOuterHeight(this._searchInput.$element());
         }
         this.option('maxHeight', maxHeight);
     }
@@ -226,16 +227,17 @@ class DiagramToolbox extends DiagramFloatingPanel {
                             filteringToolboxes: this._toolboxes.length - 1
                         });
                     }
-                    this._createTooltips($toolboxElement.find('[data-toggle="' + DIAGRAM_TOOLTIP_DATATOGGLE + '"]'));
+                    this._createTooltips($toolboxElement);
                 }
             };
             result.push(groupObj);
         }
         return result;
     }
-    _createTooltips(targets) {
+    _createTooltips($toolboxElement) {
         if(this._isTouchMode()) return;
 
+        const targets = $toolboxElement.find('[data-toggle="' + DIAGRAM_TOOLTIP_DATATOGGLE + '"]');
         const $container = this.$element();
         targets.each((index, element) => {
             const $target = $(element);
@@ -269,7 +271,6 @@ class DiagramToolbox extends DiagramFloatingPanel {
         return window.navigator && window.navigator.maxTouchPoints > 0;
     }
     _renderAccordion($container) {
-        const data = this._getAccordionDataSource();
         this._accordion = this._createComponent($container, Accordion, {
             multiple: true,
             animationDuration: 0,
@@ -278,7 +279,7 @@ class DiagramToolbox extends DiagramFloatingPanel {
             hoverStateEnabled: false,
             collapsible: true,
             displayExpr: 'title',
-            dataSource: data,
+            dataSource: this._getAccordionDataSource(),
             disabled: this.option('disabled'),
             itemTemplate: (data, index, $element) => {
                 data.onTemplate(this, $element, data);
@@ -287,13 +288,20 @@ class DiagramToolbox extends DiagramFloatingPanel {
                 this._updateScrollAnimateSubscription(e.component);
             },
             onContentReady: (e) => {
-                for(let i = 0; i < data.length; i++) {
-                    if(data[i].expanded === false) {
+                e.component.option('selectedItems', []);
+                const items = e.component.option('dataSource');
+                for(let i = 0; i < items.length; i++) {
+                    if(items[i].expanded === false) {
                         e.component.collapseItem(i);
-                    } else if(data[i].expanded === true) {
+                    } else if(items[i].expanded === true) {
                         e.component.expandItem(i);
                     }
                 }
+                // expand first group
+                if(items.length && items[0].expanded === undefined) {
+                    e.component.expandItem(0);
+                }
+
                 this._updateScrollAnimateSubscription(e.component);
             }
         });
@@ -318,13 +326,19 @@ class DiagramToolbox extends DiagramFloatingPanel {
             text: this._filterText,
             filteringToolboxes: this._toolboxes.map(($element, index) => index)
         });
-        this._toolboxes.forEach($element => {
-            const $tooltipContainer = $($element);
-            this._createTooltips($tooltipContainer.find('[data-toggle="' + DIAGRAM_TOOLTIP_DATATOGGLE + '"]'));
-        });
+        this.updateTooltips();
 
         this.updateMaxHeight();
         this._scrollView.update();
+    }
+    updateFilter() {
+        this._onInputChanged(this._filterText);
+    }
+    updateTooltips() {
+        this._toolboxes.forEach($element => {
+            const $tooltipContainer = $($element);
+            this._createTooltips($tooltipContainer);
+        });
     }
 
     _createOnShapeCategoryRenderedAction() {

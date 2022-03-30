@@ -1,3 +1,4 @@
+import { getHeight, getOuterHeight, getOuterWidth, getWidth } from 'core/utils/size';
 import $ from 'jquery';
 import DropDownButton from 'ui/drop_down_button';
 import typeUtils from 'core/utils/type';
@@ -6,6 +7,7 @@ import keyboardMock from '../../helpers/keyboardMock.js';
 import ArrayStore from 'data/array_store';
 import { DataSource } from 'data/data_source/data_source';
 import CustomStore from 'data/custom_store';
+import { extend } from 'core/utils/extend';
 
 import 'generic_light.css!';
 
@@ -13,6 +15,7 @@ const DROP_DOWN_BUTTON_CONTENT = 'dx-dropdownbutton-content';
 const DROP_DOWN_BUTTON_POPUP_WRAPPER_CLASS = 'dx-dropdownbutton-popup-wrapper';
 const DROP_DOWN_BUTTON_ACTION_CLASS = 'dx-dropdownbutton-action';
 const DROP_DOWN_BUTTON_TOGGLE_CLASS = 'dx-dropdownbutton-toggle';
+const BUTTON = 'dx-button';
 const BUTTON_GROUP_WRAPPER = 'dx-buttongroup-wrapper';
 const BUTTON_TEXT = 'dx-button-text';
 const LIST_GROUP_HEADER_CLASS = 'dx-list-group-header';
@@ -60,13 +63,13 @@ QUnit.module('button group integration', {}, () => {
 
         const buttonGroup = getButtonGroup(dropDownButton);
         const buttonGroupWrapper = buttonGroup.$element().find(`.${BUTTON_GROUP_WRAPPER}`);
-        assert.strictEqual(buttonGroupWrapper.eq(0).height(), 300, 'height is right');
+        assert.strictEqual(getHeight(buttonGroupWrapper.eq(0)), 300, 'height is right');
 
         $('#container').css('height', '900px');
         dropDownButton.option('height', '50%');
 
         const newButtonGroupWrapper = buttonGroup.$element().find(`.${BUTTON_GROUP_WRAPPER}`);
-        assert.strictEqual(newButtonGroupWrapper.eq(0).height(), 450, 'height after option change in runtime is right');
+        assert.strictEqual(getHeight(newButtonGroupWrapper.eq(0)), 450, 'height after option change in runtime is right');
     });
 });
 
@@ -91,7 +94,7 @@ QUnit.module('popup integration', {
             });
 
             const $popupContent = $(`.${POPUP_CONTENT_CLASS}`);
-            assert.strictEqual($popupContent.height(), contentHeight, 'overlay content height is correct');
+            assert.strictEqual(getHeight($popupContent), contentHeight, 'overlay content height is correct');
         });
 
         QUnit.test('should be equal to content height when dropDownOptions.height is set to auto', function(assert) {
@@ -107,7 +110,7 @@ QUnit.module('popup integration', {
             });
 
             const $popupContent = $(`.${POPUP_CONTENT_CLASS}`);
-            assert.strictEqual($popupContent.height(), contentHeight, 'overlay content height is correct');
+            assert.strictEqual(getHeight($popupContent), contentHeight, 'overlay content height is correct');
         });
 
         QUnit.test('should be equal to content height when dropDownOptions.height in not defined after editor height runtime change', function(assert) {
@@ -122,7 +125,7 @@ QUnit.module('popup integration', {
             dropDownButton.option('height', 200);
 
             const $popupContent = $(`.${POPUP_CONTENT_CLASS}`);
-            assert.strictEqual($popupContent.height(), contentHeight, 'overlay content height is correct');
+            assert.strictEqual(getHeight($popupContent), contentHeight, 'overlay content height is correct');
         });
 
         QUnit.test('should be equal to content height when dropDownOptions.height is set to auto after editor height runtime change', function(assert) {
@@ -140,7 +143,7 @@ QUnit.module('popup integration', {
             dropDownButton.option('height', 200);
 
             const $popupContent = $(`.${POPUP_CONTENT_CLASS}`);
-            assert.strictEqual($popupContent.height(), contentHeight, 'overlay content height is correct');
+            assert.strictEqual(getHeight($popupContent), contentHeight, 'overlay content height is correct');
         });
 
         QUnit.test('should be equal to dropDownOptions.height if it is defined', function(assert) {
@@ -153,7 +156,7 @@ QUnit.module('popup integration', {
             });
 
             const $overlayContent = $(`.${OVERLAY_CONTENT_CLASS}`);
-            assert.strictEqual($overlayContent.outerHeight(), dropDownOptionsHeight, 'overlay content height is correct');
+            assert.strictEqual(getOuterHeight($overlayContent), dropDownOptionsHeight, 'overlay content height is correct');
         });
 
         QUnit.test('should be equal to dropDownOptions.height if it is defined even after editor height runtime change', function(assert) {
@@ -168,7 +171,7 @@ QUnit.module('popup integration', {
             dropDownButton.option('height', 200);
 
             const $overlayContent = $(`.${OVERLAY_CONTENT_CLASS}`);
-            assert.strictEqual($overlayContent.outerHeight(), dropDownOptionsHeight, 'overlay content height is correct');
+            assert.strictEqual(getOuterHeight($overlayContent), dropDownOptionsHeight, 'overlay content height is correct');
         });
 
         QUnit.test('should be equal to wrapper height if dropDownOptions.height is set to 100%', function(assert) {
@@ -181,7 +184,7 @@ QUnit.module('popup integration', {
 
             const $overlayContent = $(`.${OVERLAY_CONTENT_CLASS}`);
             const $overlayWrapper = $(`.${OVERLAY_WRAPPER_CLASS}`);
-            assert.strictEqual($overlayContent.outerHeight(), $overlayWrapper.outerHeight(), 'overlay content height is correct');
+            assert.strictEqual(getOuterHeight($overlayContent), getOuterHeight($overlayWrapper), 'overlay content height is correct');
         });
 
         QUnit.test('should be calculated relative to wrapper when dropDownOptions.height is percent', function(assert) {
@@ -194,7 +197,7 @@ QUnit.module('popup integration', {
 
             const $overlayContent = $(`.${OVERLAY_CONTENT_CLASS}`);
             const $overlayWrapper = $(`.${OVERLAY_WRAPPER_CLASS}`);
-            assert.roughEqual($overlayContent.outerHeight(), $overlayWrapper.outerHeight() / 2, 0.1, 'overlay content height is correct');
+            assert.roughEqual(getOuterHeight($overlayContent), getOuterHeight($overlayWrapper) / 2, 0.1, 'overlay content height is correct');
         });
 
         QUnit.test('should be calculated relative to wrapper after editor height runtime change', function(assert) {
@@ -210,7 +213,7 @@ QUnit.module('popup integration', {
 
             const $overlayContent = $(`.${OVERLAY_CONTENT_CLASS}`);
             const $overlayWrapper = $(`.${OVERLAY_WRAPPER_CLASS}`);
-            assert.roughEqual($overlayContent.outerHeight(), $overlayWrapper.outerHeight() / 2, 0.1, 'overlay content height is correct');
+            assert.roughEqual(getOuterHeight($overlayContent), getOuterHeight($overlayWrapper) / 2, 0.1, 'overlay content height is correct');
         });
     });
 
@@ -257,9 +260,9 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
 
-            assert.strictEqual(overlayContentWidth, $dropDownButton.outerWidth(), 'width is correct on init');
+            assert.strictEqual(overlayContentWidth, getOuterWidth($dropDownButton), 'width is correct on init');
             assert.strictEqual(overlayContentWidth, 500, 'width is correct on init');
         });
 
@@ -276,9 +279,9 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
 
-            assert.strictEqual(overlayContentWidth, $dropDownButton.outerWidth(), 'width is correct on init');
+            assert.strictEqual(overlayContentWidth, getOuterWidth($dropDownButton), 'width is correct on init');
             assert.strictEqual(overlayContentWidth, 100, 'width is correct on init');
         });
 
@@ -292,8 +295,8 @@ QUnit.module('popup integration', {
             const $overlayContent = $(`.${OVERLAY_CONTENT_CLASS}`);
 
             instance.option('width', 700);
-            assert.strictEqual($overlayContent.outerWidth(), $dropDownButton.outerWidth(), 'width are equal after option change');
-            assert.strictEqual($overlayContent.outerWidth(), 700, 'width is correct after option change');
+            assert.strictEqual(getOuterWidth($overlayContent), getOuterWidth($dropDownButton), 'width are equal after option change');
+            assert.strictEqual(getOuterWidth($overlayContent), 700, 'width is correct after option change');
         });
 
         QUnit.test('should be equal to content width if dropDownOptions.width is "auto" and content width is bigger than editor width', function(assert) {
@@ -308,7 +311,7 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const popupContentWidth = $(`.${POPUP_CONTENT_CLASS}`).width();
+            const popupContentWidth = getWidth($(`.${POPUP_CONTENT_CLASS}`));
 
             assert.strictEqual(popupContentWidth, 300, 'width is correct');
         });
@@ -325,7 +328,7 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const popupContentWidth = $(`.${POPUP_CONTENT_CLASS}`).width();
+            const popupContentWidth = getWidth($(`.${POPUP_CONTENT_CLASS}`));
 
             assert.strictEqual(popupContentWidth, 100, 'width is correct');
         });
@@ -342,8 +345,8 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
-            const overlayWrapperWidth = $(`.${OVERLAY_WRAPPER_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
+            const overlayWrapperWidth = getOuterWidth($(`.${OVERLAY_WRAPPER_CLASS}`));
 
             assert.strictEqual(overlayContentWidth, 300, 'width is correct');
             assert.strictEqual(overlayContentWidth, overlayWrapperWidth, 'width is correct');
@@ -361,14 +364,14 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
-            const overlayWrapperWidth = $(`.${OVERLAY_WRAPPER_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
+            const overlayWrapperWidth = getOuterWidth($(`.${OVERLAY_WRAPPER_CLASS}`));
 
             assert.strictEqual(overlayContentWidth, 100, 'width is correct');
             assert.strictEqual(overlayContentWidth, overlayWrapperWidth, 'width is correct');
         });
 
-        QUnit.test('should be equal to wrapper width if dropDownOptions.width is "100%" and container is defined', function(assert) {
+        QUnit.test('should be equal to wrapper width if dropDownOptions.width is "100%" and visualContainer is defined', function(assert) {
             const $container = $('<div>')
                 .css({ width: 150 })
                 .appendTo('#qunit-fixture');
@@ -378,14 +381,14 @@ QUnit.module('popup integration', {
                 width: 100,
                 dropDownOptions: {
                     width: '100%',
-                    container: $container
+                    visualContainer: $container
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
-            const overlayWrapperWidth = $(`.${OVERLAY_WRAPPER_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
+            const overlayWrapperWidth = getOuterWidth($(`.${OVERLAY_WRAPPER_CLASS}`));
 
-            assert.strictEqual(overlayContentWidth, $container.outerWidth(), 'width is correct');
+            assert.strictEqual(overlayContentWidth, getOuterWidth($container), 'width is correct');
             assert.strictEqual(overlayContentWidth, overlayWrapperWidth, 'width is correct');
         });
 
@@ -398,7 +401,7 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
 
             assert.strictEqual(overlayContentWidth, 200, 'width is correct');
         });
@@ -412,7 +415,7 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
 
             assert.strictEqual(overlayContentWidth, 100, 'width is correct');
         });
@@ -426,8 +429,8 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
-            const overlayWrapperWidth = $(`.${OVERLAY_WRAPPER_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
+            const overlayWrapperWidth = getOuterWidth($(`.${OVERLAY_WRAPPER_CLASS}`));
 
             assert.roughEqual(overlayContentWidth, overlayWrapperWidth / 2, 0.1, 'width is correct');
             assert.roughEqual(overlayContentWidth, 150, 0.1, 'width is correct');
@@ -442,14 +445,14 @@ QUnit.module('popup integration', {
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
-            const overlayWrapperWidth = $(`.${OVERLAY_WRAPPER_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
+            const overlayWrapperWidth = getOuterWidth($(`.${OVERLAY_WRAPPER_CLASS}`));
 
             assert.roughEqual(overlayContentWidth, overlayWrapperWidth * 1.5, 0.1, 'width is correct');
             assert.roughEqual(overlayContentWidth, 450, 0.1, 'width is correct');
         });
 
-        QUnit.test('should be calculated relative to wrapper width when container is defined', function(assert) {
+        QUnit.test('should be calculated relative to wrapper width when visualContainer is defined', function(assert) {
             const $container = $('<div>')
                 .css({ width: 500 })
                 .appendTo('#qunit-fixture');
@@ -459,12 +462,12 @@ QUnit.module('popup integration', {
                 width: 300,
                 dropDownOptions: {
                     width: '150%',
-                    container: $container
+                    visualContainer: $container
                 }
             });
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
-            const overlayWrapperWidth = $(`.${OVERLAY_WRAPPER_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
+            const overlayWrapperWidth = getOuterWidth($(`.${OVERLAY_WRAPPER_CLASS}`));
 
             assert.roughEqual(overlayContentWidth, overlayWrapperWidth * 1.5, 0.1, 'width is correct');
             assert.roughEqual(overlayContentWidth, 750, 0.1, 'width is correct');
@@ -481,8 +484,8 @@ QUnit.module('popup integration', {
 
             dropDownButton.option('width', 500);
 
-            const overlayContentWidth = $(`.${OVERLAY_CONTENT_CLASS}`).outerWidth();
-            const overlayWrapperWidth = $(`.${OVERLAY_WRAPPER_CLASS}`).outerWidth();
+            const overlayContentWidth = getOuterWidth($(`.${OVERLAY_CONTENT_CLASS}`));
+            const overlayWrapperWidth = getOuterWidth($(`.${OVERLAY_WRAPPER_CLASS}`));
 
             assert.roughEqual(overlayContentWidth, overlayWrapperWidth * 1.5, 0.1, 'width is correct');
             assert.roughEqual(overlayContentWidth, 750, 0.1, 'width is correct');
@@ -560,7 +563,7 @@ QUnit.module('popup integration', {
         const instance = $dropDownButton.dxDropDownButton('instance');
         const $popupContent = getPopup(instance).$content();
 
-        assert.equal($popupContent.outerWidth(), 84, 'width is right');
+        assert.equal(getOuterWidth($popupContent), 84, 'width is right');
     });
 
     QUnit.test('popup width should be recalculated when button dimension changed', function(assert) {
@@ -704,6 +707,54 @@ QUnit.module('list integration', {}, () => {
         assert.strictEqual(list.option('grouped'), true, 'grouped option transfered');
         assert.strictEqual(list.option('noDataText'), 'No data', 'noDataText option transfered');
         assert.strictEqual(list.option('selectionMode'), 'none', 'selectionMode is none for useSelectMode: false');
+    });
+
+    QUnit.test('text property value should be rendered as the button text after useSelectMode changed to false', function(assert) {
+        const dropDownButton = new DropDownButton('#dropDownButton', {
+            items: [{ id: 1, name: 'Item 1' }],
+            deferRendering: false,
+            useSelectMode: true,
+            keyExpr: 'id',
+            displayExpr: 'name',
+            selectedItemKey: 1,
+            text: 'initial text'
+        });
+        const $element = dropDownButton.$element();
+
+        let $text = $element.find(`.${BUTTON_TEXT}`);
+        assert.strictEqual($text.text(), 'Item 1', 'selected item text is rendered as the button text');
+
+        dropDownButton.option({
+            text: 'new text',
+            useSelectMode: false
+        });
+
+        $text = $element.find(`.${BUTTON_TEXT}`);
+        assert.strictEqual($text.text(), 'new text', 'text property value is rendered as the button text');
+    });
+
+    QUnit.test('selected item text should be rendered as the button text after useSelectMode changed to true (T1049361)', function(assert) {
+        const dropDownButton = new DropDownButton('#dropDownButton', {
+            items: [{ id: 1, name: 'Item 1' }, { id: 2, name: 'Item 2' }],
+            deferRendering: false,
+            useSelectMode: false,
+            keyExpr: 'id',
+            displayExpr: 'name',
+            selectedItemKey: 1,
+            text: 'initial text'
+        });
+        const $element = dropDownButton.$element();
+
+        let $text = $element.find(`.${BUTTON_TEXT}`);
+        assert.strictEqual($text.text(), 'initial text', 'text property value is rendered as the button text');
+
+        dropDownButton.option({
+            selectedItemKey: 2,
+            useSelectMode: true
+        });
+
+        $text = $element.find(`.${BUTTON_TEXT}`);
+        assert.strictEqual($text.text(), 'Item 2', 'selected item text is rendered as the button text');
     });
 
     QUnit.test('groupTemplate should be transfered to list', function(assert) {
@@ -873,8 +924,8 @@ QUnit.module('list integration', {}, () => {
         const toggleButtonElement = getToggleButton(dropDownButton);
         const actionButtonElement = getActionButton(dropDownButton);
 
-        assert.strictEqual(toggleButtonElement.outerHeight(), 36, 'toggleButton has correct height in generic theme');
-        assert.strictEqual(actionButtonElement.outerHeight(), 36, 'actionButton has correct height in generic theme');
+        assert.strictEqual(getOuterHeight(toggleButtonElement), 36, 'toggleButton has correct height in generic theme');
+        assert.strictEqual(getOuterHeight(actionButtonElement), 36, 'actionButton has correct height in generic theme');
     });
 
     QUnit.test('list selection should depend on selectedItemKey option', function(assert) {
@@ -1041,7 +1092,7 @@ QUnit.module('common use cases', {
 
         const toggleButtonElement = getToggleButton(dropDownButton);
 
-        assert.strictEqual(toggleButtonElement.outerWidth(), 20, 'toggleButton has correct width in generic theme');
+        assert.strictEqual(getOuterWidth(toggleButtonElement), 20, 'toggleButton has correct width in generic theme');
     });
 
     QUnit.test('it should be possible to set non-datasource action button', function(assert) {
@@ -2415,5 +2466,68 @@ QUnit.module('custom content template', {}, () => {
 
         const $listItems = getList(dropDownButton).itemElements();
         assert.strictEqual($listItems.eq(0).text(), '1: A', 'itemTemlate has changed item text');
+    });
+});
+
+
+QUnit.module('Accessibility', {
+    beforeEach: function() {
+        this.elementSelector = '#dropDownButton';
+        this.$element = $(this.elementSelector);
+
+        this.createInstance = (options) => {
+            return new DropDownButton(this.elementSelector, extend({
+                items: ['item 1'],
+                text: 'Text'
+            }, options));
+        };
+
+        this.getButtons = () => {
+            return $(this.elementSelector).find(`.${BUTTON}`);
+        };
+    }
+}, () => {
+    QUnit.test('check aria-expanded attr for dropdown', function(assert) {
+        this.createInstance();
+
+        const buttonElements = this.getButtons();
+
+        assert.ok(buttonElements.eq(0).attr('aria-expanded'));
+        assert.ok(this.$element.attr('aria-expanded'));
+    });
+
+
+    QUnit.test('check aria-expanded attr for visible dropdown', function(assert) {
+        this.createInstance({ opened: true });
+
+        const buttonElements = this.getButtons();
+
+        assert.strictEqual(buttonElements.eq(0).attr('aria-expanded'), 'true');
+        assert.strictEqual(this.$element.attr('aria-expanded'), 'true');
+    });
+
+    QUnit.test('check aria-expanded attr for visible dropdown if splitButton is true', function(assert) {
+        const instance = this.createInstance({ splitButton: true });
+
+        instance.open();
+
+        const buttonElements = this.getButtons();
+
+        assert.strictEqual($(buttonElements[0]).attr('aria-expanded'), 'true');
+        assert.strictEqual($(buttonElements[1]).attr('aria-expanded'), 'true');
+        assert.strictEqual(this.$element.attr('aria-expanded'), 'true');
+    });
+
+    QUnit.test('check aria-expanded attr if splitButton is true after dropdown was closed', function(assert) {
+        const instance = this.createInstance({ splitButton: true });
+
+        const buttonElements = this.getButtons();
+
+        instance.open();
+        instance.close();
+
+        assert.strictEqual($(buttonElements[0]).attr('aria-expanded'), 'false');
+        assert.strictEqual($(buttonElements[1]).attr('aria-expanded'), 'false');
+        assert.strictEqual(this.$element.attr('aria-expanded'), 'false');
     });
 });

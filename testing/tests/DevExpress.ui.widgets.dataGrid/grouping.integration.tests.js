@@ -690,6 +690,53 @@ QUnit.module('Initialization', baseModuleConfig, () => {
         assert.deepEqual(dataGrid.getController('data')._dataSource.group(), [{ selector: 'field3', desc: false, isExpanded: true }], 'datasource grouping is up to date');
         assert.equal(dataGrid.columnOption('field3', 'groupIndex'), 0, 'Group by field3');
     });
+
+    QUnit.test('Expand cell of a group row should not be re-rendered when repaintChangesOnly is enabled (T1039699)', function(assert) {
+        const dataGrid = $('#dataGrid').dxDataGrid({
+            dataSource: {
+                store: new ArrayStore({
+                    key: 'ID',
+                    data: [{
+                        ID: 1,
+                        Count: 0,
+                        Name: 'Name 1',
+                        Category: 'Category 1'
+                    }]
+                }),
+                reshapeOnPush: true
+            },
+            repaintChangesOnly: true,
+            columns: [
+                { dataField: 'Category', groupIndex: 0 },
+                { dataField: 'Name', groupIndex: 1, autoExpandGroup: false },
+                'Count'
+            ],
+            summary: {
+                groupItems: [{
+                    summaryType: 'sum',
+                    displayFormat: '{0}',
+                    column: 'Count'
+                }]
+            },
+        }).dxDataGrid('instance');
+
+        this.clock.tick();
+
+        const cell0_0 = $(dataGrid.getCellElement(0, 0)).get(0);
+        const cell1_1 = $(dataGrid.getCellElement(1, 1)).get(0);
+
+        // act
+        dataGrid.getDataSource().store().push([
+            { type: 'update', key: 1, data: { Count: 100 } }
+        ]);
+        this.clock.tick();
+
+        // assert
+        assert.strictEqual($(dataGrid.getCellElement(0, 0)).get(0), cell0_0, 'expand cell in the first row is not re-rendered');
+        assert.strictEqual($(dataGrid.getCellElement(0, 1)).text(), 'Category: Category 1 (100)', 'first group row text');
+        assert.strictEqual($(dataGrid.getCellElement(1, 1)).get(0), cell1_1, 'expand cell in the second row is not re-rendered');
+        assert.strictEqual($(dataGrid.getCellElement(1, 2)).text(), 'Name: Name 1 (100)', 'second group row text');
+    });
 });
 
 
@@ -1181,6 +1228,50 @@ QUnit.module('columnWidth auto option', {
         const $groupSpaceCells = $(dataGrid.getRowElement(1)).children('.dx-datagrid-group-space');
         assert.equal($groupSpaceCells.length, 2, 'two group space cells in second row');
         assert.equal($groupSpaceCells.eq(0).width(), $groupSpaceCells.eq(1).width(), 'group space cell widths are equals');
+    });
+
+    QUnit.test('Group row should have correct widths via setColumnWidths', function(assert) {
+        // arrange
+        $('#dataGrid').dxDataGrid({
+            loadingTimeout: null,
+            dataSource: [{ value0: 0, value1: 1, value2: 2 }],
+            columnAutoWidth: true,
+            width: 400,
+            selection: {
+                mode: 'multiple',
+                showCheckBoxesMode: 'always',
+            },
+            columns: [
+                {
+                    dataField: 'value0',
+                    groupIndex: 0
+                }, {
+                    dataField: 'value1',
+                    width: 100,
+                }, {
+                    dataField: 'value2',
+                    width: 100,
+                }, {
+                    dataField: 'value3',
+                    width: 100,
+                }
+            ],
+            summary: {
+                groupItems: [{
+                    column: 'value3',
+                    alignByColumn: true,
+                }]
+            },
+        });
+
+        // assert
+        const widths = $('.dx-group-row td').toArray().map(el => el.style.width);
+        assert.deepEqual(widths, [
+            '', // select column, no width
+            '', // expand column, no width
+            '', // group column, no width
+            '100px', // summary column, has width
+        ]);
     });
 });
 

@@ -1,8 +1,8 @@
 import {
-  Component, ComponentBindings, JSXComponent, OneWay, Event,
+  Component, ComponentBindings, JSXComponent, OneWay, Event, Template,
 } from '@devextreme-generator/declarations';
 /* eslint-disable import/named */
-import DataSource, { DataSourceOptions } from '../../data/data_source';
+import DataSource, { Options as DataSourceOptions } from '../../data/data_source';
 import Store from '../../data/abstract_store';
 import LegacyList, { dxListItem } from '../../ui/list';
 import { DxElement } from '../../core/element';
@@ -12,13 +12,29 @@ import { EventExtension, DxEvent } from '../../events/index';
 import { DomComponentWrapper } from './common/dom_component_wrapper';
 import { BaseWidgetProps } from './common/base_props';
 
+export interface ItemClickInfo {
+  component?: LegacyList;
+  element?: DxElement;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  model?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  itemData: any;
+  itemElement?: DxElement;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  itemIndex?: number | any;
+  event?: DxEvent;
+}
+
+export type ItemClickEvent = ItemClickInfo & EventExtension;
+
 export const viewFunction = ({
-  props,
+  componentProps,
   restAttributes,
 }: List): JSX.Element => (
   <DomComponentWrapper
     componentType={LegacyList}
-    componentProps={props}
+    componentProps={componentProps}
+    templateNames={['itemTemplate']}
   // eslint-disable-next-line react/jsx-props-no-spreading
     {...restAttributes}
   />
@@ -46,6 +62,8 @@ export class ListProps extends BaseWidgetProps {
   | DataSourceOptions;
 
   //   @OneWay() displayExpr?: string | ((item: any) => string);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  @Template() itemTemplate?: any;
 
   @OneWay() focusStateEnabled?: boolean;
 
@@ -77,19 +95,8 @@ export class ListProps extends BaseWidgetProps {
   //   groupElement?: DxElement, groupIndex?: number
   // }) => any);
 
-  @Event() onItemClick?: ((e: {
-    component?: LegacyList;
-    element?: DxElement;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    model?: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    itemData: any;
-    itemElement?: DxElement;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    itemIndex?: number | any;
-    event?: DxEvent;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } & EventExtension) => any) | string;
+  @Event() onItemClick?: ((e: ItemClickEvent) => any) | string;
 
   // @Event() onItemContextMenu?: ((e: {
   //   component?: dxList, element?: DxElement, model?: any, itemData?: any,
@@ -169,9 +176,6 @@ export class ListProps extends BaseWidgetProps {
 
   // @OneWay()useNativeScrolling?: boolean;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  @OneWay() itemTemplate?: any;
-
 //   @Event() onItemClick?: (e: any) => any = (() => {});
 }
 
@@ -179,4 +183,9 @@ export class ListProps extends BaseWidgetProps {
   defaultOptionRules: null,
   view: viewFunction,
 })
-export class List extends JSXComponent<ListProps>() {}
+export class List extends JSXComponent<ListProps>() {
+  /* istanbul ignore next: WA for Angular */
+  get componentProps(): ListProps {
+    return this.props;
+  }
+}

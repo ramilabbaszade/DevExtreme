@@ -1,21 +1,19 @@
 import { equalByValue } from '../../core/utils/common';
-import {
-    getModelProvider,
-    getTimeZoneCalculator,
-    getResourceManager,
-    getAppointmentDataProvider
-} from './instanceFactory';
-import { AppointmentViewModel } from './appointments/viewModelGenerator';
+import { AppointmentViewModelGenerator } from './appointments/viewModelGenerator';
 import { getGroupCount } from './resources/utils';
+import { getCellWidth, getCellHeight, getAllDayHeight } from './workspaces/helpers/positionHelper';
+import { getCellDuration } from '../../renovation/ui/scheduler/view_model/to_test/views/utils/base';
+import { getAppointmentRenderingStrategyName } from '../../renovation/ui/scheduler/model/appointments';
 
 class AppointmentLayoutManager {
     constructor(instance) {
         this.instance = instance;
-        this.appointmentViewModel = new AppointmentViewModel();
+        this.appointmentViewModel = new AppointmentViewModelGenerator();
     }
 
-    get modelProvider() { return getModelProvider(this.instance.key); }
-    get viewRenderingStrategyName() { return this.modelProvider.getViewRenderingStrategyName(); }
+    get appointmentRenderingStrategyName() {
+        return getAppointmentRenderingStrategyName(this.instance.currentViewType);
+    }
 
     getCellDimensions(options) {
         if(this.instance._workSpace) {
@@ -29,66 +27,88 @@ class AppointmentLayoutManager {
 
     _getRenderingStrategyOptions() {
         const workspace = this.instance.getWorkSpace();
-        const key = this.instance.key;
         const { virtualScrollingDispatcher } = this.instance.getWorkSpace();
         const {
             cellCountInsideLeftVirtualCell,
             cellCountInsideTopVirtualRow
         } = virtualScrollingDispatcher;
-        const resourceManager = getResourceManager(key);
-        const groupCount = getGroupCount(resourceManager.loadedResources);
+        const groupCount = getGroupCount(this.instance.option('loadedResources'));
+        const DOMMetaData = workspace.getDOMElementsMetaData();
+        const allDayHeight = getAllDayHeight(
+            workspace.option('showAllDayPanel'),
+            workspace._isVerticalGroupedWorkSpace(),
+            DOMMetaData
+        );
+        const rowCount = workspace._getRowCount();
+        const { positionHelper, viewDataProvider } = workspace;
+        const visibleDayDuration = viewDataProvider.getVisibleDayDuration(
+            workspace.option('startDayHour'),
+            workspace.option('endDayHour'),
+            workspace.option('hoursInterval')
+        );
 
+        const cellDuration = getCellDuration(
+            workspace.type,
+            workspace.option('startDayHour'),
+            workspace.option('endDayHour'),
+            workspace.option('hoursInterval')
+        );
         return {
             resources: this.instance.option('resources'),
-            resourceDataAccessors: this.instance.resourceDataAccessors,
-
-            instance: this.instance,
-            key,
-            isRenovatedAppointments: this.modelProvider.isRenovatedAppointments,
-            viewRenderingStrategyName: this.viewRenderingStrategyName,
-            adaptivityEnabled: this.modelProvider.adaptivityEnabled,
-            rtlEnabled: this.modelProvider.rtlEnabled,
-            startDayHour: this.modelProvider.startDayHour,
-            endDayHour: this.modelProvider.endDayHour,
-            maxAppointmentsPerCell: this.modelProvider.maxAppointmentsPerCell,
-            agendaDuration: workspace.option('agendaDuration'),
-            currentDate: this.modelProvider.currentDate,
+            loadedResources: this.instance.option('loadedResources'),
+            getAppointmentColor: this.instance.createGetAppointmentColor(),
+            dataAccessors: this.instance._dataAccessors,
+            isRenovatedAppointments: this.instance.option('isRenovatedAppointments'),
+            appointmentRenderingStrategyName: this.appointmentRenderingStrategyName,
+            adaptivityEnabled: this.instance.option('adaptivityEnabled'),
+            rtlEnabled: this.instance.option('rtlEnabled'),
+            startDayHour: this.instance._getCurrentViewOption('startDayHour'),
+            endDayHour: this.instance._getCurrentViewOption('endDayHour'),
+            maxAppointmentsPerCell: this.instance._getCurrentViewOption('maxAppointmentsPerCell'),
+            currentDate: this.instance.option('currentDate'),
             isVirtualScrolling: this.instance.isVirtualScrolling(),
             leftVirtualCellCount: cellCountInsideLeftVirtualCell,
             topVirtualCellCount: cellCountInsideTopVirtualRow,
             intervalCount: workspace.option('intervalCount'),
             hoursInterval: workspace.option('hoursInterval'),
-            modelGroups: this.modelProvider.getCurrentViewOption('groups'),
+            showAllDayPanel: workspace.option('showAllDayPanel'),
+            isGroupedAllDayPanel: workspace.isGroupedAllDayPanel(),
+            groups: this.instance._getCurrentViewOption('groups'),
             groupCount,
-            dateTableOffset: this.instance.getWorkSpaceDateTableOffset(),
+            rowCount,
+            appointmentCountPerCell: this.instance.option('_appointmentCountPerCell'),
+            appointmentOffset: this.instance.option('_appointmentOffset'),
+            allowResizing: this.instance._allowResizing(),
+            allowAllDayResizing: this.instance._allowAllDayResizing(),
             startViewDate: workspace.getStartViewDate(),
             groupOrientation: workspace._getRealGroupOrientation(),
-            getIsGroupedByDate: () => workspace.isGroupedByDate(),
-            getCellWidth: () => workspace.getCellWidth(),
-            getCellHeight: () => workspace.getCellHeight(),
-            getAllDayHeight: () => workspace.getAllDayHeight(),
-            getResizableStep: () => workspace.positionHelper.getResizableStep(),
-            getVisibleDayDuration: () => workspace.getVisibleDayDuration(),
+            cellWidth: getCellWidth(DOMMetaData),
+            cellHeight: getCellHeight(DOMMetaData),
+            allDayHeight: allDayHeight,
+            resizableStep: positionHelper.getResizableStep(),
+            visibleDayDuration,
             // appointment settings
-            timeZoneCalculator: getTimeZoneCalculator(key),
-            resourceManager,
-            appointmentDataProvider: getAppointmentDataProvider(key),
-            timeZone: this.modelProvider.timeZone,
+            timeZoneCalculator: this.instance.timeZoneCalculator,
+            timeZone: this.instance.option('timeZone'),
             firstDayOfWeek: this.instance.getFirstDayOfWeek(),
-            viewStartDayHour: this.modelProvider.getCurrentViewOption('startDayHour'),
-            viewEndDayHour: this.modelProvider.getCurrentViewOption('endDayHour'),
+            viewStartDayHour: this.instance._getCurrentViewOption('startDayHour'),
+            viewEndDayHour: this.instance._getCurrentViewOption('endDayHour'),
             viewType: workspace.type,
             endViewDate: workspace.getEndViewDate(),
-            positionHelper: workspace.positionHelper,
+            positionHelper,
             isGroupedByDate: workspace.isGroupedByDate(),
-            cellDuration: workspace.getCellDuration(),
+            cellDuration,
+            cellDurationInMinutes: workspace.option('cellDuration'),
             viewDataProvider: workspace.viewDataProvider,
             supportAllDayRow: workspace.supportAllDayRow(),
             dateRange: workspace.getDateRange(),
             intervalDuration: workspace.getIntervalDuration(),
-            isVerticalOrientation: workspace.isVerticalOrientation(),
             allDayIntervalDuration: workspace.getIntervalDuration(true),
-            DOMMetaData: workspace.getDOMElementsMetaData(),
+            isVerticalGroupOrientation: workspace.isVerticalOrientation(),
+            DOMMetaData,
+            // agenda only
+            instance: this.instance,
+            agendaDuration: workspace.option('agendaDuration'),
         };
     }
 
@@ -98,10 +118,7 @@ class AppointmentLayoutManager {
         const {
             viewModel,
             positionMap
-        } = this.appointmentViewModel.generate({
-            filteredItems: items,
-            ...renderingStrategyOptions,
-        });
+        } = this.appointmentViewModel.generate(items, renderingStrategyOptions);
 
         this._positionMap = positionMap; // TODO get rid of this after remove old render
 
@@ -109,7 +126,7 @@ class AppointmentLayoutManager {
     }
 
     _isDataChanged(data) {
-        const appointmentDataProvider = this.instance.fire('getAppointmentDataProvider');
+        const appointmentDataProvider = this.instance.appointmentDataProvider;
 
         const updatedData = appointmentDataProvider.getUpdatedAppointment();
         return updatedData === data || appointmentDataProvider.getUpdatedAppointmentKeys().some(item => data[item.key] === item.value);
@@ -137,6 +154,7 @@ class AppointmentLayoutManager {
                 ...currentSetting,
                 columnIndex,
                 rowIndex,
+                positionByMap: undefined,
                 topVirtualCellCount: undefined,
                 leftVirtualCellCount: undefined,
                 leftVirtualWidth: undefined,
@@ -189,7 +207,7 @@ class AppointmentLayoutManager {
     }
 
     getRepaintedAppointments(currentAppointments, sourceAppointments) {
-        if(sourceAppointments.length === 0 || this.viewRenderingStrategyName === 'agenda') {
+        if(sourceAppointments.length === 0 || this.appointmentRenderingStrategyName === 'agenda') {
             return currentAppointments;
         }
 

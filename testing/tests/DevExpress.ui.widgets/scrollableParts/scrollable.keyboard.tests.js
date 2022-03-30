@@ -14,7 +14,7 @@ import {
 } from './scrollable.constants.js';
 
 const SCROLL_LINE_HEIGHT = 40;
-const isRenovation = !!Scrollable.IS_RENOVATED_WIDGET;
+const isRenovatedScrollable = !!Scrollable.IS_RENOVATED_WIDGET;
 
 QUnit.module('keyboard support', {
     beforeEach: function() {
@@ -40,7 +40,7 @@ QUnit.module('keyboard support', {
 const getKeyboardMock = ($scrollable) => {
     let keyboard;
 
-    if(isRenovation) {
+    if(isRenovatedScrollable) {
         keyboard = keyboardMock($scrollable);
         $scrollable.focus();
     } else {
@@ -282,7 +282,8 @@ if(devices.real().deviceType === 'desktop') {
                 QUnit.assert.deepEqual(scrollLocation, expectedLocation, 'scroll location');
             }
 
-            QUnit.testInActiveWindow(`Update vertical scroll location on tab: useNative - ${useNativeMode}, direction: ${scrollbarDirection}`, function(assert) {
+            QUnit.testInActiveWindow(`Update scroll location on tab: useNative - ${useNativeMode}, direction: ${scrollbarDirection}`, function(assert) {
+                this.clock.restore();
                 const done = assert.async();
 
                 const scrollableContainerSize = 200;
@@ -306,24 +307,16 @@ if(devices.real().deviceType === 'desktop') {
                     $contentContainer2.css('display', 'inline-block');
                 }
 
-                return new Promise((resolve) => {
-                    $scrollable.dxScrollable('option', 'onScroll', () => {
-                        setTimeout(() => {
-                            this.clock.tick(400);
-                            checkScrollLocation($scrollable, scrollbarDirection === 'vertical' ? { top: 100, left: 0 } : { top: 0, left: 100 });
-                            done();
-                        });
-                        this.clock.tick();
+                checkScrollLocation($scrollable, { top: 0, left: 0 });
 
-                        resolve();
-                    });
+                const keyboard = keyboardMock($contentContainer1);
+                $contentContainer2.focus();
+                keyboard.keyDown('tab');
 
-                    checkScrollLocation($scrollable, { top: 0, left: 0 });
-
-                    const keyboard = keyboardMock($contentContainer1);
-                    $contentContainer2.focus();
-                    keyboard.keyDown('tab');
-                });
+                setTimeout(() => {
+                    checkScrollLocation($scrollable, scrollbarDirection === 'vertical' ? { top: 100, left: 0 } : { top: 0, left: 100 });
+                    done();
+                }, 50);
             });
         });
     });

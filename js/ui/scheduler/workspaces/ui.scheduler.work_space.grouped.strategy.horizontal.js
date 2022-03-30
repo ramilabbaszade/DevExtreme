@@ -1,6 +1,6 @@
 
 import { getBoundingRect } from '../../../core/utils/position';
-import { FIRST_GROUP_CELL_CLASS, HORIZONTAL_GROUP_COUNT_CLASSES, LAST_GROUP_CELL_CLASS } from '../classes';
+import { FIRST_GROUP_CELL_CLASS, LAST_GROUP_CELL_CLASS } from '../classes';
 
 class HorizontalGroupedStrategy {
     constructor(workSpace) {
@@ -52,15 +52,6 @@ class HorizontalGroupedStrategy {
         return this._workSpace._getRowCount();
     }
 
-    getVerticalMax(groupIndex) {
-        const isVirtualScrolling = this._workSpace.isVirtualScrolling();
-        const correctedGroupIndex = isVirtualScrolling
-            ? groupIndex
-            : 0;
-
-        return this._workSpace.getMaxAllowedVerticalPosition(correctedGroupIndex);
-    }
-
     calculateTimeCellRepeatCount() {
         return 1;
     }
@@ -73,21 +64,8 @@ class HorizontalGroupedStrategy {
         return this._workSpace.getAllDayHeight();
     }
 
-    getAllDayTableHeight() {
-        return getBoundingRect(this._workSpace._$allDayTable.get(0)).height || 0;
-    }
-
     getGroupCountClass(groups) {
-        switch(groups?.length) {
-            case 1:
-                return HORIZONTAL_GROUP_COUNT_CLASSES[0];
-            case 2:
-                return HORIZONTAL_GROUP_COUNT_CLASSES[1];
-            case 3:
-                return HORIZONTAL_GROUP_COUNT_CLASSES[2];
-            default:
-                return undefined;
-        }
+        return undefined;
     }
 
     getLeftOffset() {
@@ -192,14 +170,6 @@ class HorizontalGroupedStrategy {
 
     getScrollableScrollTop(allDay) {
         return !allDay ? this._workSpace.getScrollable().scrollTop() : 0;
-    }
-
-    _getOffsetByAllDayPanel() {
-        return 0;
-    }
-
-    _getGroupTop() {
-        return 0;
     }
 
     // ---------------

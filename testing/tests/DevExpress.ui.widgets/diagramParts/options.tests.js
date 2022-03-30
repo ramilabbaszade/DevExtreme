@@ -45,6 +45,12 @@ QUnit.module('Options', {
         this.instance._diagramInstance.commandManager.getCommand(DiagramCommand.ZoomLevel).execute(1.5);
         assert.equal(this.instance.option('zoomLevel'), 1.5);
         assert.ok(this.onOptionChanged.called);
+
+        // T1044759
+        this.instance.repaint();
+        this.instance.option('zoomLevel', 1.2);
+        assert.equal(this.instance.option('zoomLevel'), 1.2);
+        assert.ok(this.onOptionChanged.called);
     });
     test('should change zoomLevel object property', function(assert) {
         assert.equal(this.instance._diagramInstance.settings.zoomLevel, 1);
@@ -361,10 +367,10 @@ QUnit.module('Options', {
         assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setType, undefined);
         assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getText, undefined);
         assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setText, undefined);
-        assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getChildren, undefined);
-        assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setChildren, undefined);
-        assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getContainerKey, undefined);
-        assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setContainerKey, undefined);
+        assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getChildren, undefined);
+        assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setChildren, undefined);
+        assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getContainerKey, undefined);
+        assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setContainerKey, undefined);
 
         assert.notEqual(this.instance._diagramInstance.documentDataSource.edgeDataImporter.getKey, undefined);
         assert.notEqual(this.instance._diagramInstance.documentDataSource.edgeDataImporter.setKey, undefined);
@@ -373,7 +379,20 @@ QUnit.module('Options', {
         assert.notEqual(this.instance._diagramInstance.documentDataSource.edgeDataImporter.getTo, undefined);
         assert.notEqual(this.instance._diagramInstance.documentDataSource.edgeDataImporter.setTo, undefined);
 
-        this.instance.option('nodes.containerKeyExpr', 'containerKey');
+        // nodes.containerKeyExpr = 'containerKey' by default
+        assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getContainerKey, undefined);
+        assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setContainerKey, undefined);
+        assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getChildren, undefined);
+        assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setChildren, undefined);
+
+        this.instance.option('nodes.containerChildrenExpr', 'children'); // should override default containerKeyExpr
+        assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getChildren, undefined);
+        assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setChildren, undefined);
+        assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getContainerKey, undefined);
+        assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setContainerKey, undefined);
+
+        this.instance.option('nodes.containerChildrenExpr', '');
+        this.instance.option('nodes.containerKeyExpr', 'containerId');
         assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getChildren, undefined);
         assert.equal(this.instance._diagramInstance.documentDataSource.nodeDataImporter.setChildren, undefined);
         assert.notEqual(this.instance._diagramInstance.documentDataSource.nodeDataImporter.getContainerKey, undefined);

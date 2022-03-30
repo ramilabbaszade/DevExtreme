@@ -12,7 +12,6 @@ import {
     asyncScrollTest,
     asyncWrapper,
 } from '../../helpers/scheduler/helpers.js';
-import { getAppointmentDataProvider } from 'ui/scheduler/instanceFactory';
 
 const supportedViews = ['day', 'week', 'workWeek', 'month']; // TODO: add timelines
 
@@ -90,7 +89,7 @@ module('Virtual scrolling integration', () => {
 
                     const { virtualScrollingDispatcher } = instance.getWorkSpace();
 
-                    virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                    instance.getWorkSpace().renderer.getRenderTimeout = () => -1;
 
                     const { pageSize: verticalPageSize } = virtualScrollingDispatcher.verticalVirtualScrolling;
                     const { pageSize: horizontalPageSize } = virtualScrollingDispatcher.horizontalVirtualScrolling;
@@ -184,37 +183,22 @@ module('Virtual scrolling integration', () => {
             });
         });
 
-        [
-            {
-                isRenovatedAppointments: true,
-                expected: -1
-            }, {
-                isRenovatedAppointments: false,
-                expected: 15
-            }
-        ].forEach(({ isRenovatedAppointments, expected }) => {
-            test(`appointment render timeout should be initialized correctly if isRenovatedAppointments is ${isRenovatedAppointments}`, function(assert) {
-                const instance = createWrapper({
-                    views: supportedViews,
-                    currentView: 'day',
-                    dataSource: [],
-                    scrolling: { mode: 'virtual' },
-                    height: 400,
-                    isRenovatedAppointments
-                }).instance;
+        test('appointment render timeout should be initialized correctly', function(assert) {
+            const instance = createWrapper({
+                views: supportedViews,
+                currentView: 'day',
+                dataSource: [],
+                scrolling: { mode: 'virtual' },
+                height: 400,
+            }).instance;
 
-                const workspace = instance.getWorkSpace();
-                const { virtualScrollingDispatcher } = workspace;
-                const { renderer } = virtualScrollingDispatcher;
+            const workspace = instance.getWorkSpace();
 
-                assert.equal(
-                    renderer.getRenderTimeout(),
-                    expected,
-                    'appointment render timeout is correct'
-                );
-            });
-
-
+            assert.equal(
+                workspace.renderer.getRenderTimeout(),
+                15,
+                'appointment render timeout is correct'
+            );
         });
     });
 
@@ -224,7 +208,6 @@ module('Virtual scrolling integration', () => {
                 this.scheduler = createWrapper(options);
                 this.scheduler.instance
                     .getWorkSpace()
-                    .virtualScrollingDispatcher
                     .renderer.getRenderTimeout = () => -1;
             };
         }
@@ -323,7 +306,7 @@ module('Virtual scrolling integration', () => {
                         const workspace = instance.getWorkSpace();
                         const scrollable = workspace.getScrollable();
 
-                        workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                        workspace.renderer.getRenderTimeout = () => -1;
 
                         return asyncWrapper(assert, promise => {
                             option.steps.forEach(step => {
@@ -448,7 +431,7 @@ module('Virtual scrolling integration', () => {
                         const workspace = instance.getWorkSpace();
                         const scrollable = workspace.getScrollable();
 
-                        workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                        workspace.renderer.getRenderTimeout = () => -1;
 
                         return asyncWrapper(assert, promise => {
                             option.steps.forEach(step => {
@@ -512,7 +495,7 @@ module('Virtual scrolling integration', () => {
                     const workspace = instance.getWorkSpace();
                     const scrollable = workspace.getScrollable();
 
-                    workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                    workspace.renderer.getRenderTimeout = () => -1;
 
                     return asyncWrapper(assert, promise => {
                         [
@@ -596,7 +579,7 @@ module('Virtual scrolling integration', () => {
                     const workspace = instance.getWorkSpace();
                     const scrollable = workspace.getScrollable();
 
-                    workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                    workspace.renderer.getRenderTimeout = () => -1;
 
                     return asyncWrapper(assert, promise => {
                         [
@@ -758,7 +741,7 @@ module('Virtual scrolling integration', () => {
                         const workspace = instance.getWorkSpace();
                         const scrollable = workspace.getScrollable();
 
-                        workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                        workspace.renderer.getRenderTimeout = () => -1;
 
                         return asyncWrapper(assert, promise => {
                             steps.forEach(({ offset, appointmentRects }) => {
@@ -883,7 +866,7 @@ module('Virtual scrolling integration', () => {
                         const workspace = instance.getWorkSpace();
                         const scrollable = workspace.getScrollable();
 
-                        workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                        workspace.renderer.getRenderTimeout = () => -1;
 
                         return asyncWrapper(assert, promise => {
                             option.steps.forEach(step => {
@@ -1036,7 +1019,7 @@ module('Virtual scrolling integration', () => {
                         const workspace = instance.getWorkSpace();
                         const scrollable = workspace.getScrollable();
 
-                        workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                        workspace.renderer.getRenderTimeout = () => -1;
 
                         return asyncWrapper(assert, promise => {
                             steps.forEach(({ appointmentRects, offset }) => {
@@ -1099,7 +1082,7 @@ module('Virtual scrolling integration', () => {
                     const workspace = instance.getWorkSpace();
                     const scrollable = workspace.getScrollable();
 
-                    workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                    workspace.renderer.getRenderTimeout = () => -1;
 
                     return asyncWrapper(assert, promise => {
                         [
@@ -1197,7 +1180,7 @@ module('Virtual scrolling integration', () => {
                     const { viewDataProvider } = workspace;
                     const scrollable = workspace.getScrollable();
 
-                    workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                    workspace.renderer.getRenderTimeout = () => -1;
 
                     return asyncWrapper(assert, promise => {
                         [
@@ -1384,7 +1367,7 @@ module('Virtual scrolling integration', () => {
                     height: 600
                 }).instance;
 
-                instance.getWorkSpace().virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                instance.getWorkSpace().renderer.getRenderTimeout = () => -1;
 
                 const scrollable = instance.getWorkSpace().getScrollable();
 
@@ -1426,9 +1409,7 @@ module('Virtual scrolling integration', () => {
                             assert,
                             promise,
                             () => {
-                                const { filteredItems } = getAppointmentDataProvider(instance.key);
-
-                                filteredItems.forEach((dataItem, index) => {
+                                instance.filteredItems.forEach((dataItem, index) => {
                                     const layoutManager = instance.getLayoutManager();
                                     const appointmentRenderingStrategy = layoutManager.getRenderingStrategyInstance();
                                     const settings = appointmentRenderingStrategy.generateAppointmentSettings(dataItem);
@@ -1492,7 +1473,7 @@ module('Virtual scrolling integration', () => {
 
                 const { instance } = scheduler;
 
-                instance.getWorkSpace().virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                instance.getWorkSpace().renderer.getRenderTimeout = () => -1;
 
                 const scrollable = instance.getWorkSpace().getScrollable();
 
@@ -1719,7 +1700,7 @@ module('Virtual scrolling integration', () => {
                 const { instance } = this.scheduler;
                 const scrollable = instance.getWorkSpaceScrollable();
 
-                instance.getWorkSpace().virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                instance.getWorkSpace().renderer.getRenderTimeout = () => -1;
 
                 return asyncWrapper(assert, promise => {
                     [
@@ -1885,7 +1866,7 @@ module('Virtual scrolling integration', () => {
 
             const { instance } = scheduler;
 
-            instance.getWorkSpace().virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+            instance.getWorkSpace().renderer.getRenderTimeout = () => -1;
 
             const scrollable = instance.getWorkSpace().getScrollable();
 
@@ -2042,7 +2023,7 @@ module('Virtual scrolling integration', () => {
                         height: 400
                     });
 
-                    const { filteredItems } = getAppointmentDataProvider(instance.key);
+                    const filteredItems = instance.filteredItems;
 
                     assert.equal(filteredItems.length, 3, 'Filtered items length is correct');
                     assert.deepEqual(filteredItems[0], data[0], 'Filtered item 0 is correct');
@@ -2106,7 +2087,7 @@ module('Virtual scrolling integration', () => {
                         height: 400
                     });
 
-                    const { filteredItems } = getAppointmentDataProvider(instance.key);
+                    const filteredItems = instance.filteredItems;
 
                     assert.equal(filteredItems.length, 3, 'Filtered items length is correct');
                     assert.deepEqual(filteredItems[0], data[0], 'Filtered item 0 is correct');
@@ -2173,7 +2154,7 @@ module('Virtual scrolling integration', () => {
                     width: 800
                 });
 
-                const { filteredItems } = getAppointmentDataProvider(instance.key);
+                const filteredItems = instance.filteredItems;
 
                 assert.equal(filteredItems.length, 2, 'Filtered items length is correct');
                 assert.deepEqual(filteredItems[0], data[0], 'Filtered item 0 is correct');
@@ -2238,7 +2219,7 @@ module('Virtual scrolling integration', () => {
                     width: 800
                 });
 
-                const { filteredItems } = getAppointmentDataProvider(instance.key);
+                const filteredItems = instance.filteredItems;
 
                 assert.equal(filteredItems.length, 3, 'Filtered items length is correct');
                 assert.deepEqual(filteredItems[0], data[0], 'Filtered item 0 is correct');
@@ -2283,7 +2264,7 @@ module('Virtual scrolling integration', () => {
                     height: 600
                 });
 
-                instance.getWorkSpace().virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                instance.getWorkSpace().renderer.getRenderTimeout = () => -1;
 
                 const scrollable = instance.getWorkSpace().getScrollable();
 
@@ -2301,7 +2282,7 @@ module('Virtual scrolling integration', () => {
                             assert,
                             promise,
                             () => {
-                                const { filteredItems } = getAppointmentDataProvider(instance.key);
+                                const filteredItems = instance.filteredItems;
 
                                 const { expectedDataIndices } = option;
                                 assert.equal(filteredItems.length, expectedDataIndices.length, 'Filtered items length is correct');
@@ -2384,7 +2365,6 @@ module('Virtual scrolling integration', () => {
 
                     this.instance
                         .getWorkSpace()
-                        .virtualScrollingDispatcher
                         .renderer.getRenderTimeout = () => -1;
                 };
             }
@@ -2409,7 +2389,7 @@ module('Virtual scrolling integration', () => {
                                 assert,
                                 promise,
                                 () => {
-                                    const { filteredItems } = getAppointmentDataProvider(this.instance.key);
+                                    const filteredItems = this.instance.filteredItems;
 
                                     assert.equal(filteredItems.length, expectedIndices.length, 'Filtered items length is correct');
 
@@ -2447,7 +2427,7 @@ module('Virtual scrolling integration', () => {
                                 assert,
                                 promise,
                                 () => {
-                                    const { filteredItems } = getAppointmentDataProvider(this.instance.key);
+                                    const filteredItems = this.instance.filteredItems;
 
                                     assert.equal(filteredItems.length, expectedIndices.length, `Filtered items length is correct if scrollOffset: ${option.y}`);
 
@@ -2500,7 +2480,7 @@ module('Virtual scrolling integration', () => {
                                 assert,
                                 promise,
                                 () => {
-                                    const { filteredItems } = getAppointmentDataProvider(this.instance.key);
+                                    const filteredItems = this.instance.filteredItems;
 
                                     assert.equal(filteredItems.length, expectedIndices.length, `ScrollY: ${option.y}. Filtered items length is correct`);
 
@@ -2552,7 +2532,7 @@ module('Virtual scrolling integration', () => {
                                 assert,
                                 promise,
                                 () => {
-                                    const { filteredItems } = getAppointmentDataProvider(this.instance.key);
+                                    const filteredItems = this.instance.filteredItems;
 
                                     assert.equal(
                                         filteredItems.length,
@@ -2604,7 +2584,7 @@ module('Virtual scrolling integration', () => {
                             assert,
                             promise,
                             () => {
-                                const { filteredItems } = getAppointmentDataProvider(this.instance.key);
+                                const filteredItems = this.instance.filteredItems;
 
                                 assert.equal(filteredItems.length, 1, 'Filtered items length is correct');
                                 assert.deepEqual(filteredItems[0], data[0], 'Filtered item is correct');
@@ -2728,7 +2708,6 @@ module('Virtual scrolling integration', () => {
 
                         this.instance
                             .getWorkSpace()
-                            .virtualScrollingDispatcher
                             .renderer.getRenderTimeout = () => -1;
                     };
                 }
@@ -2805,7 +2784,7 @@ module('Virtual scrolling integration', () => {
 
                                         assert.ok(true, `Scroll to x: ${offset.x}, y: ${offset.y}`);
 
-                                        const { filteredItems } = getAppointmentDataProvider(this.instance.key);
+                                        const filteredItems = this.instance.filteredItems;
 
                                         assert.equal(filteredItems.length, expectedIndices.length, 'Filtered items length is correct');
 
@@ -2871,7 +2850,7 @@ module('Virtual scrolling integration', () => {
                                 }]
                             });
 
-                            scheduler.instance.getWorkSpace().virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                            scheduler.instance.getWorkSpace().renderer.getRenderTimeout = () => -1;
 
                             return asyncWrapper(assert, promise => {
                                 [
@@ -2969,7 +2948,6 @@ module('Virtual scrolling integration', () => {
 
                 this.instance
                     .getWorkSpace()
-                    .virtualScrollingDispatcher
                     .renderer.getRenderTimeout = () => -1;
             };
         }
@@ -3114,7 +3092,7 @@ module('Virtual scrolling integration', () => {
             const workspace = this.instance.getWorkSpace();
             const scrollable = workspace.getScrollable();
 
-            workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+            workspace.renderer.getRenderTimeout = () => -1;
 
             return asyncWrapper(
                 assert,
@@ -3217,7 +3195,7 @@ module('Virtual scrolling integration', () => {
                 const workspace = scheduler.instance.getWorkSpace();
                 const scrollable = workspace.getScrollable();
 
-                workspace.virtualScrollingDispatcher.renderer.getRenderTimeout = () => -1;
+                workspace.renderer.getRenderTimeout = () => -1;
 
                 return asyncWrapper(assert, promise => {
                     promise = asyncScrollTest(

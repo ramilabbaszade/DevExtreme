@@ -15,30 +15,31 @@ import {
 } from './scrollable';
 
 import {
+  ElementOffset,
   ScrollOffset,
-} from './common/types.d';
+} from './common/types';
 
 import { ScrollViewProps } from './common/scrollview_props';
+import { ScrollViewLoadPanel } from './internal/load_panel';
 
 export const viewFunction = (viewModel: ScrollView): JSX.Element => {
   const {
     scrollableRef,
     reachBottomEnabled,
     props: {
-      useNative, activeStateUnit, children,
+      useNative, children,
       aria, disabled, width, height, visible, rtlEnabled,
       direction, showScrollbar, scrollByThumb, bounceEnabled,
       scrollByContent, useKeyboard, pullDownEnabled,
       useSimulatedScrollbar, inertiaEnabled,
       onScroll, onUpdated, onPullDown, onReachBottom, onStart, onEnd, onBounce,
-      pulledDownText, refreshingText, pullingDownText, reachBottomText,
+      pulledDownText, refreshingText, pullingDownText, reachBottomText, refreshStrategy,
     },
     restAttributes,
   } = viewModel;
 
   return (
     <Scrollable
-      activeStateUnit={activeStateUnit}
       useNative={useNative}
       classes="dx-scrollview"
       ref={scrollableRef}
@@ -57,13 +58,13 @@ export const viewFunction = (viewModel: ScrollView): JSX.Element => {
       onUpdated={onUpdated}
       onPullDown={onPullDown}
       onReachBottom={onReachBottom}
+      refreshStrategy={refreshStrategy}
       pulledDownText={pulledDownText}
       pullingDownText={pullingDownText}
       refreshingText={refreshingText}
       reachBottomText={reachBottomText}
       forceGeneratePockets
       needScrollViewContentWrapper
-      needScrollViewLoadPanel
       // Native
       useSimulatedScrollbar={useSimulatedScrollbar}
       // Simulated
@@ -74,6 +75,7 @@ export const viewFunction = (viewModel: ScrollView): JSX.Element => {
       onStart={onStart}
       onEnd={onEnd}
       onBounce={onBounce}
+      loadPanelTemplate={ScrollViewLoadPanel}
 
       // eslint-disable-next-line react/jsx-props-no-spreading
       {...restAttributes}
@@ -119,6 +121,11 @@ export class ScrollView extends JSXComponent<ScrollViewProps>() {
   }
 
   @Method()
+  container(): HTMLDivElement {
+    return this.scrollableRef.current!.container();
+  }
+
+  @Method()
   scrollBy(distance: number | Partial<ScrollOffset>): void {
     this.scrollableRef.current!.scrollBy(distance);
   }
@@ -129,7 +136,7 @@ export class ScrollView extends JSXComponent<ScrollViewProps>() {
   }
 
   @Method()
-  scrollToElement(element: HTMLElement, offset?: Partial<Omit<ClientRect, 'width' | 'height'>>): void {
+  scrollToElement(element: HTMLElement, offset?: ElementOffset): void {
     this.scrollableRef.current!.scrollToElement(element, offset);
   }
 
@@ -174,14 +181,6 @@ export class ScrollView extends JSXComponent<ScrollViewProps>() {
   }
 
   @Method()
-  /* istanbul ignore next */
-  // TODO: avoid using this method in List
-  isFull(): boolean {
-    return this.content().clientHeight > this.clientHeight();
-    // TODO: this.clientHeight() should be containerRef.current.clientHeight
-  }
-
-  @Method()
   startLoading(): void {
     this.scrollableRef.current!.startLoading();
   }
@@ -191,6 +190,7 @@ export class ScrollView extends JSXComponent<ScrollViewProps>() {
     this.scrollableRef.current!.finishLoading();
   }
 
+  @Method()
   updateHandler(): void {
     this.scrollableRef.current!.updateHandler();
   }
@@ -201,9 +201,4 @@ export class ScrollView extends JSXComponent<ScrollViewProps>() {
     }
     return this.props.reachBottomEnabled;
   }
-
-  // https://trello.com/c/6TBHZulk/2672-renovation-cannot-use-getter-to-get-access-to-components-methods-react
-  // get scrollable(): any {
-  //   return this.scrollableRef.current!;
-  // }
 }

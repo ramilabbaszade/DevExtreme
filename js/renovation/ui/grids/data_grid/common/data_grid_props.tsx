@@ -13,7 +13,7 @@ import type { dxLoadPanelAnimation } from '../../../../../ui/load_panel';
 import DxDataGrid from '../../../../../ui/data_grid';
 import type {
   Column,
-  RowObject,
+  Row,
   ColumnButtonClickEvent,
   ColumnButtonTemplateData,
   ColumnCustomizeTextArg,
@@ -71,6 +71,8 @@ import type {
   RowValidatingEvent,
   SelectionChangedEvent,
   ToolbarPreparingEvent,
+  EditCancelingEvent,
+  EditCanceledEvent,
 } from '../../../../../ui/data_grid';
 import { BaseWidgetProps } from '../../../common/base_props';
 
@@ -79,7 +81,7 @@ import { DxPromise } from '../../../../../core/utils/deferred'; // eslint-disabl
 import type { UserDefinedElement, DxElement } from '../../../../../core/element'; // eslint-disable-line import/named
 import type { template } from '../../../../../core/templates/template';
 import DataSource from '../../../../../data/data_source';
-import type { DataSourceOptions } from '../../../../../data/data_source';
+import type { Options as DataSourceOptions } from '../../../../../data/data_source';
 import type { Properties as PopupProperties } from '../../../../../ui/popup';
 import type {
   RequiredRule,
@@ -123,7 +125,7 @@ export class DataGridColumnButton {
   | boolean
   | ((options: {
     component?: DxDataGrid;
-    row?: RowObject;
+    row?: Row;
     column?: Column;
   }) => boolean);
 
@@ -132,7 +134,7 @@ export class DataGridColumnButton {
   | boolean
   | ((options: {
     component?: DxDataGrid;
-    row?: RowObject;
+    row?: Row;
     column?: Column;
   }) => boolean);
 }
@@ -219,7 +221,7 @@ export class DataGridColumn {
   @Event()
   calculateDisplayValue?: string | ((rowData: any) => any);
 
-  @Event()
+  @OneWay()
   calculateFilterExpression?: (
     filterValue: any,
     selectedFilterOperation: string,
@@ -330,7 +332,7 @@ export class DataGridColumn {
   | 'notcontains'
   | 'startswith';
 
-  @Event()
+  @OneWay()
   setCellValue?: (
     newData: any,
     value: any,
@@ -349,7 +351,7 @@ export class DataGridColumn {
   @OneWay()
   sortOrder?: 'asc' | 'desc';
 
-  @Event()
+  @OneWay()
   sortingMethod?: (value1: any, value2: any) => number;
 
   @OneWay()
@@ -480,12 +482,12 @@ export class DataGridEditing {
   @OneWay()
   allowDeleting?:
   | boolean
-  | ((options: { component?: DxDataGrid; row?: RowObject }) => boolean) = false;
+  | ((options: { component?: DxDataGrid; row?: Row }) => boolean) = false;
 
   @OneWay()
   allowUpdating?:
   | boolean
-  | ((options: { component?: DxDataGrid; row?: RowObject }) => boolean) = false;
+  | ((options: { component?: DxDataGrid; row?: Row }) => boolean) = false;
 
   @OneWay()
   confirmDelete? = true;
@@ -495,6 +497,9 @@ export class DataGridEditing {
 
   @OneWay()
   mode?: 'batch' | 'cell' | 'row' | 'form' | 'popup' = 'row';
+
+  @OneWay()
+  newRowPosition?: 'first' | 'last' | 'pageBottom' | 'pageTop' | 'viewportBottom' | 'viewportTop' = 'viewportTop';
 
   @OneWay()
   popup?: PopupProperties = {};
@@ -592,10 +597,19 @@ export class DataGridScrolling {
   columnRenderingThreshold?: number;
 
   @OneWay()
-  newMode?: boolean;
+  prerenderedRowChunkSize?: number;
 
   @OneWay()
-  minGap?: number;
+  legacyMode?: boolean;
+
+  @OneWay()
+  prerenderedRowCount?: number;
+
+  @OneWay()
+  preloadedRowCount?: number;
+
+  @OneWay()
+  renderAsync?: boolean;
 }
 
 @ComponentBindings()
@@ -1178,6 +1192,10 @@ export interface DataGridToolbarItem extends dxToolbarItem {
 @ComponentBindings()
 export class DataGridToolbar {
   @OneWay() items?: (DataGridDefaultToolbarItemName | DataGridToolbarItem)[];
+
+  @OneWay() visible?: boolean;
+
+  @OneWay() disabled?: boolean;
 }
 
 @ComponentBindings()
@@ -1186,6 +1204,7 @@ export class DataGridProps extends BaseWidgetProps /* implements Options */ {
 
   @Nested() editing?: DataGridEditing = {
     mode: 'row',
+    newRowPosition: 'viewportTop',
     refreshMode: 'full',
     allowAdding: false,
     allowUpdating: false,
@@ -1270,13 +1289,14 @@ export class DataGridProps extends BaseWidgetProps /* implements Options */ {
     columnPageSize: 5,
     columnRenderingThreshold: 300,
     useNative: 'auto',
-    newMode: true,
-    minGap: 1,
+    prerenderedRowChunkSize: 1,
+    legacyMode: false,
+    prerenderedRowCount: 1,
   };
 
   @Nested() selection?: DataGridSelection = {
     mode: 'none',
-    showCheckBoxesMode: 'onClick',
+    showCheckBoxesMode: isMaterial(current()) ? 'always' : 'onClick',
     allowSelectAll: true,
     selectAllMode: 'allPages',
     maxFilterLengthInRequest: 1500,
@@ -1436,11 +1456,13 @@ export class DataGridProps extends BaseWidgetProps /* implements Options */ {
 
   @Template() rowTemplate?: template | ((rowElement: DxElement, rowInfo: any) => any);
 
+  @Template() dataRowTemplate?: template | ((rowElement: DxElement, rowInfo: any) => any);
+
   @OneWay() customizeColumns?: (columns: Column[]) => any;
 
   @OneWay() customizeExportData?: (
     columns: Column[],
-    rows: RowObject[],
+    rows: Row[],
   ) => any;
 
   @OneWay() keyExpr?: string | string[];
@@ -1637,10 +1659,16 @@ export class DataGridProps extends BaseWidgetProps /* implements Options */ {
 
   @Event() onSaved?: (e: SavedEvent) => void;
 
+  @Event() onEditCanceling?: (e: EditCancelingEvent) => void;
+
+  @Event() onEditCanceled?: (e: EditCanceledEvent) => void;
+
   // private
   @OneWay() adaptColumnWidthByRatio?: boolean = true;
 
   @OneWay() regenerateColumnsByVisibleItems?: boolean = false;
 
   @OneWay() useLegacyKeyboardNavigation?: boolean = false;
+
+  @OneWay() useLegacyColumnButtonTemplate?: boolean = false;
 }

@@ -14,10 +14,6 @@
         if(isNoJQueryTest)
             return Url.Content("~/testing/helpers/noJQuery.js");
 
-        switch(Model.JQueryVersion) {
-            case "1": return Url.Content("~/node_modules/jquery.1/node_modules/jquery/dist/jquery.js");
-            case "2": return Url.Content("~/node_modules/jquery.2/node_modules/jquery/dist/jquery.js");
-        }
         return Url.Content("~/artifacts/js/jquery.js");
     }
 
@@ -42,7 +38,6 @@
 }
 <!DOCTYPE html>
 <head>
-    <meta http-equiv="X-UA-Compatible" content="IE=@Model.IEMode">
     <title>@Model.Title - QUnit test page</title>
     <link rel="stylesheet" href="@Url.ContentWithCacheBuster("~/node_modules/qunitjs/qunit/qunit.css")" />
     <script src="@Url.ContentWithCacheBuster("~/node_modules/qunitjs/qunit/qunit.js")"></script>
@@ -113,16 +108,6 @@
             });
 
             QUnit.config.urlConfig.push({
-                id: "jquery",
-                label: "jQuery",
-                tooltip: "Select jQuery version.",
-                value: {
-                    "2": "2.x",
-                    "1": "1.x"
-                }
-            });
-
-            QUnit.config.urlConfig.push({
                 id: "nojquery",
                 label: "No jQuery",
                 tooltip: "Don't use jQuery for widget rendering"
@@ -146,10 +131,9 @@
         })();
     </script>
 
-    <script src="@Url.ContentWithCacheBuster("~/node_modules/jquery.2/node_modules/jquery/dist/jquery.js")"></script>
+    <script src="@Url.ContentWithCacheBuster("~/node_modules/jquery/dist/jquery.js")"></script>
 
-    <script src="@Url.ContentWithCacheBuster("~/testing/helpers/sinon/sinon.js")"></script>
-    <script src="@Url.ContentWithCacheBuster("~/testing/helpers/sinon/sinon-timers-ie.js")"></script>
+    <script src="@Url.ContentWithCacheBuster("~/node_modules/sinon/pkg/sinon.js")"></script>
 
     <script src="@Url.ContentWithCacheBuster("~/node_modules/systemjs/dist/system.js")"></script>
     <script>
@@ -191,7 +175,12 @@
                     'inferno-extras': '@Url.Content("~/node_modules/inferno-extras/dist/index.cjs.js")',
                     'jszip': '@Url.Content("~/artifacts/js/jszip.js")',
                     '@@devextreme/vdom': '@Url.Content("~/node_modules/@devextreme/vdom")',
+                    '@@devextreme/runtime/common': '@Url.Content("~/node_modules/@devextreme/runtime/common")',
                     '@@devextreme/runtime/inferno': '@Url.Content("~/node_modules/@devextreme/runtime/inferno")',
+                    '@@devextreme/runtime/declarations': '@Url.Content("~/node_modules/@devextreme/runtime/declarations")',
+                    '@@devextreme/runtime/angular': '@Url.Content("~/node_modules/@devextreme/runtime/angular")',
+                    '@@devextreme/runtime/vue': '@Url.Content("~/node_modules/@devextreme/runtime/vue")',
+                    '@@devextreme/runtime/react': '@Url.Content("~/node_modules/@devextreme/runtime/react")',
                     'devextreme-quill': '@Url.Content("~/node_modules/devextreme-quill/dist/dx-quill.js")',
                     'devexpress-diagram': '@Url.Content("~/artifacts/js/dx-diagram.js")',
                     'devexpress-gantt': '@Url.Content("~/artifacts/js/dx-gantt.js")',
@@ -200,7 +189,7 @@
                     'jspdf': '@Url.Content("~/node_modules/jspdf/dist/jspdf.es.js")',
                     'jspdf-autotable': '@Url.Content("~/node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.js")',
                     'turndown': '@Url.Content("~/node_modules/turndown/lib/turndown.browser.umd.js")',
-                    'showdown': '@Url.Content("~/node_modules/showdown/dist/showdown.js")',
+                    'devextreme-showdown': '@Url.Content("~/node_modules/devextreme-showdown/dist/showdown.js")',
                     'rrule': '@Url.Content("~/node_modules/rrule/dist/es5/rrule.js")',
 
                     // Global CSS
@@ -215,13 +204,33 @@
                     'systemjs-babel-build': '@Url.Content("~/node_modules/systemjs-plugin-babel/systemjs-babel-browser.js")'
                 },
                 packages: {
-                    '@@devextreme/vdom': {
-                        main: './dist/cjs/index.js',
+                    '@@devextreme/runtime/common': {
+                        main: '../cjs/common/index.js',
                         defaultExtension: 'js',
                         format: 'cjs'
                     },
                     '@@devextreme/runtime/inferno': {
                         main: '../cjs/inferno/index.js',
+                        defaultExtension: 'js',
+                        format: 'cjs'
+                    },
+                    '@@devextreme/runtime/angular': {
+                        main: '../cjs/angular/index.js',
+                        defaultExtension: 'js',
+                        format: 'cjs'
+                    },
+                    '@@devextreme/runtime/react': {
+                        main: '../cjs/react/index.js',
+                        defaultExtension: 'js',
+                        format: 'cjs'
+                    },
+                    '@@devextreme/runtime/vue': {
+                        main: '../cjs/vue/index.js',
+                        defaultExtension: 'js',
+                        format: 'cjs'
+                    },
+                    '@@devextreme/runtime/declarations': {
+                        main: '../cjs/declarations/index.js',
                         defaultExtension: 'js',
                         format: 'cjs'
                     },
@@ -271,13 +280,6 @@
 
 <script>
     (function() {
-        // IE11 hack for promises error (http://stackoverflow.com/questions/35651193/ie11-promise-strange-behaviour)
-        jQuery.each([1, 2, 3, 5, 8, 13, 20, 40, 100], function(_, timeout) {
-            new Promise(function (resolve) {
-                window.setTimeout(resolve, timeout * 1000);
-            });
-        });
-
         var integrationImportPaths = @Html.Raw(Json.Serialize(GetJQueryIntegrationImports()));
 
         var imports = integrationImportPaths.map(function(importPath) {
@@ -290,10 +292,9 @@
 
         Promise.all(imports)
         .then(function() {
-            var isNotWebkitBrowser = window.navigator.userAgent.toLowerCase().indexOf("webkit") < 0,
-                isOldJQuery = !!@Json.Serialize(Model.JQueryVersion);
+            var isNotWebkitBrowser = window.navigator.userAgent.toLowerCase().indexOf("webkit") < 0;
 
-            if(@Json.Serialize(isServerSideTest) && (isNotWebkitBrowser || isOldJQuery)) {
+            if(@Json.Serialize(isServerSideTest) && isNotWebkitBrowser) {
                 return;
             }
 

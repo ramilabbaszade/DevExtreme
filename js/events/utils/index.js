@@ -27,16 +27,6 @@ const KEY_MAP = {
     'alt': 'alt',
     'control': 'control',
     'shift': 'shift',
-    // IE11:
-    'left': 'leftArrow',
-    'up': 'upArrow',
-    'right': 'rightArrow',
-    'down': 'downArrow',
-    'multiply': 'asterisk',
-    'spacebar': 'space',
-    'del': 'del',
-    'subtract': 'minus',
-    'esc': 'escape'
 };
 
 const LEGACY_KEY_CODES = {
@@ -197,18 +187,18 @@ export const fireEvent = props => {
 };
 
 export const normalizeKeyName = ({ key, which }) => {
+    const originalKey = key;
     const isKeySupported = !!key;
 
-    key = isKeySupported ? key : which;
-
-    if(key) {
+    if(key || which) {
         if(isKeySupported) {
-            key = KEY_MAP[key.toLowerCase()] || key;
-        } else {
-            key = LEGACY_KEY_CODES[key] || String.fromCharCode(key);
+            key = KEY_MAP[key.toLowerCase()];
+        }
+        if(!isKeySupported || !key && which) {
+            key = LEGACY_KEY_CODES[which] || String.fromCharCode(which);
         }
 
-        return key;
+        return key || originalKey;
     }
 };
 

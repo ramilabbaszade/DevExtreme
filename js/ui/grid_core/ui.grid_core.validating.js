@@ -1,11 +1,12 @@
+import { getOuterWidth, getWidth, getOuterHeight, setHeight } from '../../core/utils/size';
 import $ from '../../core/renderer';
 import eventsEngine from '../../events/core/events_engine';
 import modules from './ui.grid_core.modules';
 import gridCoreUtils from './ui.grid_core.utils';
 import { createObjectWithChanges } from '../../data/array_utils';
-import { deferUpdate, equalByValue } from '../../core/utils/common';
+import { deferUpdate, equalByValue, getKeyHash } from '../../core/utils/common';
 import { each } from '../../core/utils/iterator';
-import { isDefined, isEmptyObject } from '../../core/utils/type';
+import { isDefined, isEmptyObject, isObject } from '../../core/utils/type';
 import { extend } from '../../core/utils/extend';
 import { focused } from '../widget/selectors';
 import messageLocalization from '../../localization/message';
@@ -54,7 +55,6 @@ const VALIDATION_STATUS = {
 const EDIT_DATA_INSERT_TYPE = 'insert';
 const EDIT_DATA_REMOVE_TYPE = 'remove';
 const VALIDATION_CANCELLED = 'cancel';
-const NEW_SCROLLING_MODE = 'scrolling.newMode';
 
 const validationResultIsValid = function(result) {
     return isDefined(result) && result !== VALIDATION_CANCELLED;
@@ -71,8 +71,13 @@ const ValidatingController = modules.Controller.inherit((function() {
             this.createAction('onRowValidating');
 
             if(!this._validationState) {
-                this._validationState = [];
+                this.initValidationState();
             }
+        },
+
+        initValidationState() {
+            this._validationState = [];
+            this._validationStateCache = {};
         },
 
         _rowIsValidated: function(change) {
@@ -82,11 +87,22 @@ const ValidatingController = modules.Controller.inherit((function() {
         },
 
         _getValidationData: function(key, create) {
-            let validationData = this._validationState.filter(data => equalByValue(data.key, key))[0];
+            const keyHash = getKeyHash(key);
+            const isObjectKeyHash = isObject(keyHash);
+            let validationData;
+
+            if(isObjectKeyHash) {
+                validationData = this._validationState.filter(data => equalByValue(data.key, key))[0];
+            } else {
+                validationData = this._validationStateCache[keyHash];
+            }
 
             if(!validationData && create) {
                 validationData = { key, isValid: true };
                 this._validationState.push(validationData);
+                if(!isObjectKeyHash) {
+                    this._validationStateCache[keyHash] = validationData;
+                }
             }
 
             return validationData;
@@ -583,16 +599,15 @@ export const validatingModule = {
     extenders: {
         controllers: {
             editing: {
-                _addChange: function(options, row) {
-                    const index = this.callBase(options, row);
+                _addChange: function(changeParams) {
+                    const change = this.callBase.apply(this, arguments);
                     const validatingController = this.getController('validating');
 
-                    if(index >= 0 && options.type !== EDIT_DATA_REMOVE_TYPE) {
-                        const change = this.getChanges()[index];
-                        change && validatingController.updateValidationState(change);
+                    if(change && changeParams.type !== EDIT_DATA_REMOVE_TYPE) {
+                        validatingController.updateValidationState(change);
                     }
 
-                    return index;
+                    return change;
                 },
 
                 _handleChangesChange: function(args) {
@@ -642,21 +657,6 @@ export const validatingModule = {
                     }
 
                     this.callBase.apply(this, arguments);
-                },
-
-                _needInsertItem: function(change) {
-                    let result = this.callBase.apply(this, arguments);
-                    const { key, pageIndex } = change;
-                    const validationData = this.getController('validating')._getValidationData(key);
-                    const scrollingMode = this.option('scrolling.mode');
-                    const virtualMode = scrollingMode === 'virtual';
-                    const appendMode = scrollingMode === 'infinite';
-
-                    if(result && !validationData?.isValid && !virtualMode && !(appendMode && this.option(NEW_SCROLLING_MODE))) {
-                        result = pageIndex === this._pageIndex;
-                    }
-
-                    return result;
                 },
 
                 _prepareEditCell: function(params) {
@@ -882,7 +882,7 @@ export const validatingModule = {
                         }
 
                         if(shouldResetValidationState) {
-                            this.getController('validating')._validationState = [];
+                            this.getController('validating').initValidationState();
                         }
                     }
                 },
@@ -915,9 +915,7 @@ export const validatingModule = {
                 },
 
                 _beforeCancelEditData: function() {
-                    const validatingController = this.getController('validating');
-
-                    validatingController._validationState = [];
+                    this.getController('validating').initValidationState();
 
                     this.callBase();
                 },
@@ -1024,7 +1022,7 @@ export const validatingModule = {
                             return;
                         }
 
-                        let $tooltipElement = $container.find('.' + this.addWidgetPrefix(REVERT_TOOLTIP_CLASS));
+                        let $tooltipElement = this._rowsView.element().find('.' + this.addWidgetPrefix(REVERT_TOOLTIP_CLASS));
                         const $overlayContainer = $container.closest(`.${this.addWidgetPrefix(CONTENT_CLASS)}`);
 
                         $tooltipElement && $tooltipElement.remove();
@@ -1037,12 +1035,12 @@ export const validatingModule = {
                             visible: true,
                             width: 'auto',
                             height: 'auto',
-                            target: $container,
                             shading: false,
                             container: $overlayContainer,
                             propagateOutsideClick: true,
-                            closeOnOutsideClick: false,
+                            hideOnOutsideClick: false,
                             copyRootClassesToWrapper: true,
+                            _ignoreCopyRootClassesToWrapperDeprecation: true,
                             contentTemplate: () => {
                                 const $buttonElement = $('<div>').addClass(REVERT_BUTTON_CLASS);
                                 const buttonOptions = {
@@ -1060,7 +1058,8 @@ export const validatingModule = {
                                 offset: '1 0',
                                 collision: 'flip',
                                 boundaryOffset: '0 0',
-                                boundary: this._rowsView.element()
+                                boundary: this._rowsView.element(),
+                                of: $container
                             },
                             onPositioned: this._positionedHandler.bind(this)
                         };
@@ -1119,15 +1118,18 @@ export const validatingModule = {
                             errorMessageText += (errorMessageText.length ? '<br/>' : '') + encodeHtml(message);
                         });
 
+                        const invalidMessageClass = this.addWidgetPrefix(WIDGET_INVALID_MESSAGE_CLASS);
+
+                        this._rowsView.element().find('.' + invalidMessageClass).remove();
+
                         const $overlayElement = $('<div>')
                             .addClass(INVALID_MESSAGE_CLASS)
                             .addClass(INVALID_MESSAGE_ALWAYS_CLASS)
-                            .addClass(this.addWidgetPrefix(WIDGET_INVALID_MESSAGE_CLASS))
+                            .addClass(invalidMessageClass)
                             .html(errorMessageText)
                             .appendTo($cell);
 
                         const overlayOptions = {
-                            target: $cell,
                             container: $overlayContainer,
                             shading: false,
                             width: 'auto',
@@ -1135,8 +1137,9 @@ export const validatingModule = {
                             visible: true,
                             animation: false,
                             propagateOutsideClick: true,
-                            closeOnOutsideClick: false,
+                            hideOnOutsideClick: false,
                             copyRootClassesToWrapper: true,
+                            _ignoreCopyRootClassesToWrapperDeprecation: true,
                             position: {
                                 collision: 'flip',
                                 boundary: this._rowsView.element(),
@@ -1147,7 +1150,8 @@ export const validatingModule = {
                                     y: !isOverlayVisible && browser.mozilla ? -1 : 0
                                 },
                                 my: myPosition,
-                                at: atPosition
+                                at: atPosition,
+                                of: $cell
                             },
                             onPositioned: e => {
                                 this._positionedHandler(e, isOverlayVisible);
@@ -1170,7 +1174,7 @@ export const validatingModule = {
                         let position;
                         const visibleTableWidth = !isRevertButton && getWidthOfVisibleCells(this, options.element);
                         const $overlayContentElement = options.component.$content();
-                        const validationMessageWidth = $overlayContentElement.outerWidth(true);
+                        const validationMessageWidth = getOuterWidth($overlayContentElement, true);
                         const needMaxWidth = !isRevertButton && validationMessageWidth > visibleTableWidth;
                         const columnIndex = this._rowsView.getCellIndex($(options.element).closest('td'));
                         const boundaryNonFixedColumnsInfo = getBoundaryNonFixedColumnsInfo(fixedColumns);
@@ -1202,8 +1206,8 @@ export const validatingModule = {
                         const contentOffset = $content.offset();
                         const revertContentOffset = $revertContent.offset();
 
-                        if(contentOffset.top === revertContentOffset.top && contentOffset.left + $content.width() > revertContentOffset.left) {
-                            const left = $revertContent.width() + PADDING_BETWEEN_TOOLTIPS;
+                        if(contentOffset.top === revertContentOffset.top && contentOffset.left + getWidth($content) > revertContentOffset.left) {
+                            const left = getWidth($revertContent) + PADDING_BETWEEN_TOOLTIPS;
                             $content.css('left', revertContentOffset.left < $cell.offset().left ? -left : left);
                         }
                     },
@@ -1248,9 +1252,14 @@ export const validatingModule = {
                         if(showValidationMessage && $cell && column && validationResult && validationResult.brokenRules) {
                             const errorMessages = [];
                             validationResult.brokenRules.forEach(function(rule) {
-                                errorMessages.push(rule.message);
+                                if(rule.message) {
+                                    errorMessages.push(rule.message);
+                                }
                             });
-                            this._showValidationMessage($focus, errorMessages, column.alignment || 'left', revertTooltip);
+
+                            if(errorMessages.length) {
+                                this._showValidationMessage($focus, errorMessages, column.alignment || 'left', revertTooltip);
+                            }
                         }
 
                         !hideBorder && this._rowsView.element() && this._rowsView.updateFreeSpaceRowHeight();
@@ -1350,9 +1359,9 @@ export const validatingModule = {
                         $freeSpaceRowElements = that._getFreeSpaceRowElements($table);
                         $freeSpaceRowElement = $freeSpaceRowElements.first();
 
-                        if($freeSpaceRowElement && $rowElements.length === 1 && (!$freeSpaceRowElement.is(':visible') || $tooltipContent.outerHeight() > $freeSpaceRowElement.outerHeight())) {
+                        if($freeSpaceRowElement && $rowElements.length === 1 && (!$freeSpaceRowElement.is(':visible') || getOuterHeight($tooltipContent) > getOuterHeight($freeSpaceRowElement))) {
                             $freeSpaceRowElements.show();
-                            $freeSpaceRowElements.height($tooltipContent.outerHeight());
+                            setHeight($freeSpaceRowElements, getOuterHeight($tooltipContent));
                             return true;
                         }
                     }

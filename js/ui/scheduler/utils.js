@@ -1,9 +1,10 @@
+import { getOuterHeight, setHeight, setWidth } from '../../core/utils/size';
 import $ from '../../core/renderer';
-import { extend } from '../../core/utils/extend';
 import { each } from '../../core/utils/iterator';
-import { getResourceManager } from './instanceFactory';
 import { APPOINTMENT_SETTINGS_KEY } from './constants';
 import { getPublicElement } from '../../core/element';
+import { compileGetter, compileSetter } from '../../core/utils/data';
+import dateSerialization from '../../core/utils/date_serialization';
 
 export const utils = {
     dataAccessors: {
@@ -16,22 +17,74 @@ export const utils = {
             return settings?.info;
         },
 
-        combine: (key, dataAccessors) => { // TODO get rid of it and rework resourceManager
-            const result = extend(true, {}, dataAccessors);
-            const resourceManager = getResourceManager(key);
+        create: (
+            fields,
+            currentDataAccessors,
+            forceIsoDateParsing,
+            dateSerializationFormat
+        ) => {
+            const isDateField = (field) => field === 'startDate' || field === 'endDate';
+            const defaultDataAccessors = {
+                getter: {},
+                setter: {},
+                expr: {}
+            };
+            const dataAccessors = currentDataAccessors
+                ? { ...currentDataAccessors }
+                : defaultDataAccessors;
 
-            if(dataAccessors && resourceManager) {
-                each(resourceManager._dataAccessors, (type, accessor) => {
-                    result[type].resources = accessor;
-                });
-            }
+            each(fields, (name, expr) => {
+                if(expr) {
+                    const getter = compileGetter(expr);
+                    const setter = compileSetter(expr);
 
-            return result;
+                    let dateGetter;
+                    let dateSetter;
+                    let serializationFormat;
+
+                    if(isDateField(name)) {
+                        dateGetter = (object) => {
+                            let value = getter(object);
+                            if(forceIsoDateParsing) {
+                                value = dateSerialization.deserializeDate(value);
+                            }
+                            return value;
+                        };
+                        dateSetter = (object, value) => {
+                            if(dateSerializationFormat) {
+                                serializationFormat = dateSerializationFormat;
+                            } else if(forceIsoDateParsing && !serializationFormat) {
+                                const oldValue = getter(object);
+
+                                serializationFormat = dateSerialization.getDateSerializationFormat(oldValue);
+                            }
+
+                            const newValue = dateSerialization.serializeDate(
+                                value,
+                                serializationFormat
+                            );
+
+                            setter(object, newValue);
+                        };
+                    }
+                    dataAccessors.getter[name] = dateGetter || getter;
+                    dataAccessors.setter[name] = dateSetter || setter;
+                    dataAccessors.expr[`${name}Expr`] = expr;
+                } else {
+                    delete dataAccessors.getter[name];
+                    delete dataAccessors.setter[name];
+                    delete dataAccessors.expr[`${name}Expr`];
+                }
+            });
+
+            return dataAccessors;
         }
     },
     DOM: {
         getHeaderHeight: (header) => {
-            return header._$element && parseInt(header._$element.outerHeight(), 10);
+            return header
+                ? header._$element && parseInt(getOuterHeight(header._$element), 10)
+                : 0;
         },
     },
     renovation: {
@@ -50,8 +103,12 @@ export const utils = {
 
                 component.option(viewModel);
 
-                height && $element.height(height);
-                width && $element.width(width);
+                if(height) {
+                    setHeight($element, height);
+                }
+                if(width) {
+                    setWidth($element, width);
+                }
             }
         }
     }

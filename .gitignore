@@ -5,6 +5,7 @@
 /testing/bundlers/entry
 /testing/bundlers/devextreme*
 /testing/bundlers/.parcel-cache
+/testing/LastSuiteTime.txt
 /dotnet_packages
 /js/bundles/dx.custom.js
 /js/localization/default_messages.js
@@ -19,3 +20,4 @@ project.lock.json
 yarn.lock
 RawLog.txt
 .DS_Store
+testing/CompletedSuites.txt

@@ -32,7 +32,7 @@ export interface EditorOptions<TComponent> extends WidgetOptions<TComponent> {
      * @action
      * @public
      */
-    onValueChanged?: ((e: NativeEventInfo<TComponent> & ValueChangedInfo) => void);
+    onValueChanged?: ((e: NativeEventInfo<TComponent, Event> & ValueChangedInfo) => void);
     /**
      * @docid
      * @default false
@@ -84,8 +84,6 @@ export interface EditorOptions<TComponent> extends WidgetOptions<TComponent> {
 /**
  * @docid
  * @inherits Widget
- * @module ui/editor/editor
- * @export default
  * @hidden
  * @namespace DevExpress.ui
  */

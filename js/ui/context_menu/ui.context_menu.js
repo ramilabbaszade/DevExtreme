@@ -74,7 +74,7 @@ class ContextMenu extends MenuBase {
         return extend(super._getDefaultOptions(), {
             showEvent: DEFAULT_SHOW_EVENT,
 
-            closeOnOutsideClick: true,
+            hideOnOutsideClick: true,
 
             position: {
                 at: 'top left',
@@ -128,6 +128,13 @@ class ContextMenu extends MenuBase {
                 animation: null
             }
         }]);
+    }
+
+    _setDeprecatedOptions() {
+        super._setDeprecatedOptions();
+        extend(this._deprecatedOptions, {
+            'closeOnOutsideClick': { since: '22.2', alias: 'hideOnOutsideClick' }
+        });
     }
 
     _initActions() {
@@ -475,7 +482,7 @@ class ContextMenu extends MenuBase {
             focusStateEnabled: this.option('focusStateEnabled'),
             animation: this.option('animation'),
             innerOverlay: true,
-            closeOnOutsideClick: this._closeOnOutsideClickHandler.bind(this),
+            hideOnOutsideClick: (e) => this._hideOnOutsideClickHandler(e),
             propagateOutsideClick: true,
             hideOnParentScroll: true,
             deferRendering: false,
@@ -513,14 +520,20 @@ class ContextMenu extends MenuBase {
         this._actions.onHidden(arg);
     }
 
-    _closeOnOutsideClickHandler(e) {
-        const closeOnOutsideClick = this.option('closeOnOutsideClick');
+    _shouldHideOnOutsideClick(e) {
+        const { closeOnOutsideClick, hideOnOutsideClick } = this.option();
 
-        if(isFunction(closeOnOutsideClick)) {
+        if(isFunction(hideOnOutsideClick)) {
+            return hideOnOutsideClick(e);
+        } else if(isFunction(closeOnOutsideClick)) {
             return closeOnOutsideClick(e);
+        } else {
+            return hideOnOutsideClick || closeOnOutsideClick;
         }
+    }
 
-        if(!closeOnOutsideClick) {
+    _hideOnOutsideClickHandler(e) {
+        if(!this._shouldHideOnOutsideClick(e)) {
             return false;
         }
 
@@ -712,13 +725,13 @@ class ContextMenu extends MenuBase {
             return;
         }
 
+        this._updateSelectedItemOnClick(actionArgs);
+
         // T238943. Give the workaround with e.cancel and remove this hack
         const notCloseMenuOnItemClick = itemData && itemData.closeMenuOnClick === false;
         if(!itemData || itemData.disabled || notCloseMenuOnItemClick) {
             return;
         }
-
-        this._updateSelectedItemOnClick(actionArgs);
 
         if($submenu.length === 0) {
             const $prevSubmenu = $($itemElement.parents(`.${DX_SUBMENU_CLASS}`)[0]);
@@ -802,6 +815,7 @@ class ContextMenu extends MenuBase {
                 this._invalidate();
                 break;
             case 'closeOnOutsideClick':
+            case 'hideOnOutsideClick':
                 break;
             default:
                 super._optionChanged(args);
